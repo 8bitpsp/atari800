@@ -1,0 +1,61 @@
+PSPSDK=$(shell psp-config --pspsdk-path)
+
+PSPAPP=./psp
+DATA=$(PSPAPP)/data
+PSPLIB=$(PSPAPP)/psplib
+
+TARGET=atari800psp
+EXTRA_TARGETS=EBOOT.PBP
+PSP_EBOOT_TITLE=Atari 800 PSP 2.0.3.1
+#PSP_EBOOT_ICON=$(DATA)/atari800-icon.png
+
+BUILD_APP=antic.o atari.o binload.o cartridge.o cassette.o compfile.o \
+          cpu.o devices.o gtia.o log.o memory.o monitor.o pbi.o pia.o \
+          pokey.o rtime.o sio.o util.o statesav.o ui.o input.o screen.o \
+          pokeysnd.o colours.o sndsave.o mzpokeysnd.o remez.o ui_basic.o
+BUILD_PSPLIB=$(PSPLIB)/psp.o $(PSPLIB)/font.o $(PSPLIB)/image.o \
+             $(PSPLIB)/video.o $(PSPLIB)/audio.o $(PSPLIB)/fileio.o \
+             $(PSPLIB)/menu.o $(PSPLIB)/ui.o $(PSPLIB)/ctrl.o \
+             $(PSPLIB)/kybd.o $(PSPLIB)/perf.o $(PSPLIB)/util.o \
+             $(PSPLIB)/init.o
+BUILD_PSPAPP=atari_psp.o
+
+OBJS=$(BUILD_PSPLIB) $(BUILD_APP) $(BUILD_PSPAPP)
+
+CFLAGS=-O2 -G0 -Wall -DPSP 
+CXXFLAGS=$(CFLAGS) -fno-exceptions -fno-rtti
+ASFLAGS=$(CFLAGS)
+INCDIR=$(PSPLIB) ./cpu ./sound ./unzip
+LIBS=-lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc
+
+include $(PSPSDK)/lib/build.mak
+
+#PSPLIB dependencies
+
+$(PSPLIB)/audio.o:  $(PSPLIB)/audio.c $(PSPLIB)/audio.h
+$(PSPLIB)/perf.o:   $(PSPLIB)/perf.c $(PSPLIB)/perf.h
+$(PSPLIB)/ctrl.o:   $(PSPLIB)/ctrl.c $(PSPLIB)/ctrl.h
+$(PSPLIB)/fileio.o: $(PSPLIB)/fileio.c $(PSPLIB)/fileio.h
+$(PSPLIB)/font.o:   $(PSPLIB)/font.c $(PSPLIB)/font.h \
+                    $(PSPLIB)/stockfont.h
+$(PSPLIB)/image.o:  $(PSPLIB)/image.c $(PSPLIB)/image.h
+$(PSPLIB)/kybd.o:   $(PSPLIB)/kybd.c $(PSPLIB)/kybd.h \
+                    $(PSPLIB)/ctrl.c $(PSPLIB)/video.c \
+                    $(PSPLIB)/image.c $(PSPLIB)/font.c
+$(PSPLIB)/menu.o:   $(PSPLIB)/menu.c $(PSPLIB)/menu.h
+$(PSPLIB)/init.o:   $(PSPLIB)/init.c $(PSPLIB)/init.h
+$(PSPLIB)/psp.o:    $(PSPLIB)/psp.c $(PSPLIB)/psp.h \
+                    $(PSPLIB)/fileio.c
+$(PSPLIB)/ui.o:     $(PSPLIB)/ui.c $(PSPLIB)/ui.h \
+                    $(PSPLIB)/video.c $(PSPLIB)/menu.c \
+                    $(PSPLIB)/psp.c $(PSPLIB)/fileio.c \
+                    $(PSPLIB)/ctrl.c
+$(PSPLIB)/video.o:  $(PSPLIB)/video.c $(PSPLIB)/video.h \
+                    $(PSPLIB)/font.c $(PSPLIB)/image.c
+$(PSPLIB)/util.o:   $(PSPLIB)/util.c $(PSPLIB)/util.h \
+                    $(PSPLIB)/video.c $(PSPLIB)/fileio.c \
+										$(PSPLIB)/image.c
+$(PSPLIB)/stockfont.h: $(DATA)/genfont $(PSPLIB)/stockfont.fd
+	$< < $(word 2,$^) > $@
+$(DATA)/genfont: $(PSPLIB)/genfont.c
+	cc $< -o $@
