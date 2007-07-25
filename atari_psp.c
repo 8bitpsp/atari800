@@ -50,7 +50,7 @@ extern unsigned char audsrv[];
 extern unsigned int size_audsrv;
 //#endif
 
-PSP_MODULE_INFO("Atari 800 PSP", 0, 1, 1);
+PSP_MODULE_INFO(PSP_APP_NAME, 0, 1, 1);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 
 // define to use T0 and T1 timers
