@@ -21,7 +21,7 @@ BUILD_PSPLIB=$(PSPLIB)/psp.o $(PSPLIB)/font.o $(PSPLIB)/image.o \
              $(PSPLIB)/menu.o $(PSPLIB)/ui.o $(PSPLIB)/ctrl.o \
              $(PSPLIB)/kybd.o $(PSPLIB)/perf.o $(PSPLIB)/util.o \
              $(PSPLIB)/init.o
-BUILD_PSPAPP=atari_psp.o
+BUILD_PSPAPP=atari_psp.o $(PSPAPP)/menu.o $(PSPAPP)/emulate.o
 
 OBJS=$(BUILD_PSPLIB) $(BUILD_APP) $(BUILD_PSPAPP)
 
