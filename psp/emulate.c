@@ -24,6 +24,9 @@
 
 #include "emulate.h"
 
+#define SCREEN_BUFFER_WIDTH 512
+const int ScreenBufferSkip = 512 - ATARI_WIDTH;
+
 extern unsigned char audsrv[];
 extern unsigned int size_audsrv;
 
@@ -32,6 +35,11 @@ extern unsigned int size_usbd;
 
 extern unsigned char ps2kbd[];
 extern unsigned int size_ps2kbd;
+
+static int ScreenX;
+static int ScreenY;
+static int ScreenW;
+static int ScreenH;
 
 static PspFpsCounter FpsCounter;
 
@@ -84,13 +92,29 @@ int Atari_Exit(int run_monitor)
 	return FALSE;
 }
 
+/* Copies the atari screen buffer to the image buffer */
+static void Copy_Screen_Buffer()
+{
+  int i, j;
+  u8 *screen, *image;
+
+  screen = (u8*)atari_screen;
+  image = (u8*)Screen->Pixels;
+
+  for (i = 0; i < ATARI_HEIGHT; i++)
+  {
+    for (j = 0; j < ATARI_WIDTH; j++)
+      *image++ = *screen++;
+    image += ScreenBufferSkip;
+  }
+}
+
 void Atari_DisplayScreen(void)
 {
+  Copy_Screen_Buffer();
+
   pspVideoBegin();
-	void *pix = Screen->Pixels; /* Copy the pointer */
-	Screen->Pixels = atari_screen; /* Replace with the pointer to screen */
-  pspVideoPutImage(Screen, 0, 0, Screen->Viewport.Width, Screen->Viewport.Height);
-	Screen->Pixels = pix; /* Restore pointer */
+  pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
   static char fps_display[32];
   sprintf(fps_display, " %3.02f", pspPerfGetFps(&FpsCounter));
@@ -746,11 +770,12 @@ int Atari_ReadDir(char *fullpath, char *filename, int *isdir,
 int InitEmulation(int *argc, char **argv)
 {
   /* Create screen buffer */
-  if (!(Screen = pspImageCreate(ATARI_WIDTH, ATARI_HEIGHT, PSP_IMAGE_INDEXED)))
-    return 0;
+  if (!(Screen = pspImageCreateVram(SCREEN_BUFFER_WIDTH, 
+  	ATARI_HEIGHT, PSP_IMAGE_INDEXED)))
+    	return 0;
 
-  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
   Screen->Viewport.Width = 336;
+  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
 
   /* Initialize palette */
   int i, c;
@@ -772,6 +797,11 @@ int InitEmulation(int *argc, char **argv)
 
 void RunEmulation()
 {
+  ScreenW = Screen->Viewport.Width;
+  ScreenH = Screen->Viewport.Height;
+  ScreenX = (SCR_WIDTH >> 1) - (Screen->Viewport.Width >> 1);
+  ScreenY = (SCR_HEIGHT >> 1) - (Screen->Viewport.Height >> 1);
+
   /* Start emulation - main loop*/
   while (!ExitPSP)
   {
