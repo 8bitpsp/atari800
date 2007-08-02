@@ -30,7 +30,7 @@ BASE_DEFS=-DPSP -DPSP_APP_VER=\"$(PSP_APP_VER)\" -DPSP_APP_NAME="\"$(PSP_APP_NAM
 CFLAGS=-O2 -G0 -Wall $(BASE_DEFS) $(DEFINES)
 CXXFLAGS=$(CFLAGS) -fno-exceptions -fno-rtti
 ASFLAGS=$(CFLAGS)
-INCDIR=$(PSPLIB)
+INCDIR=$(PSPLIB) $(PSPAPP)
 LIBS=-lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc
 
 include $(PSPSDK)/lib/build.mak

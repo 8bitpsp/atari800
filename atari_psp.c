@@ -57,6 +57,8 @@ int main(int argc, char **argv)
 
   /* Show the menu */
   InitMenu(&argc, argv);
+  DisplayMenu();
+  TrashMenu();
 
   /* Release PSP resources */
   pspAudioShutdown();
