@@ -36,6 +36,8 @@ extern unsigned int size_usbd;
 extern unsigned char ps2kbd[];
 extern unsigned int size_ps2kbd;
 
+extern EmulatorOptions Options;
+
 static int ScreenX;
 static int ScreenY;
 static int ScreenW;
@@ -44,6 +46,8 @@ static int ScreenH;
 static PspFpsCounter FpsCounter;
 
 PspImage *Screen;
+
+static SceCtrlData ButtonPad;
 
 double Atari_time(void)
 {
@@ -131,20 +135,16 @@ void Atari_DisplayScreen(void)
 
 int Atari_Keyboard(void)
 {
-  SceCtrlData pad;
-  if (pspCtrlPollControls(&pad))
-  {
-    if (pad.Buttons & PSP_CTRL_START)
-      return AKEY_WARMSTART;
-    else if (pad.Buttons & PSP_CTRL_LEFT)
-      return AKEY_LEFT;
-    else if (pad.Buttons & PSP_CTRL_RIGHT)
-      return AKEY_RIGHT;
-    else if (pad.Buttons & PSP_CTRL_UP)
-      return AKEY_UP;
-    else if (pad.Buttons & PSP_CTRL_DOWN)
-      return AKEY_DOWN;
-  }
+  if (ButtonPad.Buttons & PSP_CTRL_START)
+    return AKEY_WARMSTART;
+  else if (ButtonPad.Buttons & PSP_CTRL_LEFT)
+    return AKEY_LEFT;
+  else if (ButtonPad.Buttons & PSP_CTRL_RIGHT)
+    return AKEY_RIGHT;
+  else if (ButtonPad.Buttons & PSP_CTRL_UP)
+    return AKEY_UP;
+  else if (ButtonPad.Buttons & PSP_CTRL_DOWN)
+    return AKEY_DOWN;
 
   return AKEY_NONE;
 /*
@@ -640,10 +640,9 @@ int Atari_PORT(int num)
 
 int Atari_TRIG(int num)
 {
-  SceCtrlData pad;
-  if (num == 0 && pspCtrlPollControls(&pad))
+  if (num == 0)
   {
-    if (pad.Buttons & PSP_CTRL_CROSS)
+    if (ButtonPad.Buttons & PSP_CTRL_CROSS)
       return 0;
   }
   return 1;
@@ -797,15 +796,46 @@ int InitEmulation(int *argc, char **argv)
 
 void RunEmulation()
 {
+  float ratio;
+
+  pspImageClear(Screen, 0);
+
+  /* Recompute screen size/position */
+  switch (Options.DisplayMode)
+  {
+  default:
+  case DISPLAY_MODE_UNSCALED:
+    ScreenW = Screen->Viewport.Width;
+    ScreenH = Screen->Viewport.Height;
+    break;
+  case DISPLAY_MODE_FIT_HEIGHT:
+    ratio = (float)SCR_HEIGHT / (float)Screen->Viewport.Height;
+    ScreenW = (float)Screen->Viewport.Width * ratio - 2;
+    ScreenH = SCR_HEIGHT;
+    break;
+  case DISPLAY_MODE_FILL_SCREEN:
+    ScreenW = SCR_WIDTH - 3;
+    ScreenH = SCR_HEIGHT;
+    break;
+  }
+
+  ScreenX = (SCR_WIDTH / 2) - (ScreenW / 2);
+  ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
   ScreenW = Screen->Viewport.Width;
   ScreenH = Screen->Viewport.Height;
-  ScreenX = (SCR_WIDTH >> 1) - (Screen->Viewport.Width >> 1);
-  ScreenY = (SCR_HEIGHT >> 1) - (Screen->Viewport.Height >> 1);
 
   /* Start emulation - main loop*/
   while (!ExitPSP)
   {
+    pspCtrlPollControls(&ButtonPad);
+    /* TODO */
+    if ((ButtonPad.Buttons & (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER))
+      == (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER))
+        break;
+    /* TODO: try commenting this line out - if I'm right, it should still
+       register keyboard presses */
     key_code = Atari_Keyboard();
+    /* TODO: implement frame skipping and frequency manipulation */
     Atari800_Frame();
     if (display_screen)
       Atari_DisplayScreen();
