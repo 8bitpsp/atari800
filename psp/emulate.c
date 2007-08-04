@@ -38,6 +38,7 @@ extern unsigned int size_ps2kbd;
 
 extern EmulatorOptions Options;
 
+static int ClearScreen;
 static int ScreenX;
 static int ScreenY;
 static int ScreenW;
@@ -118,17 +119,29 @@ void Atari_DisplayScreen(void)
   Copy_Screen_Buffer();
 
   pspVideoBegin();
+  
+  /* Clear the buffer first, if necessary */
+  if (ClearScreen >= 0)
+  {
+    ClearScreen--;
+    pspVideoClearScreen();
+  }
+
+  /* Blit screen */
   pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
-  static char fps_display[32];
-  sprintf(fps_display, " %3.02f", pspPerfGetFps(&FpsCounter));
+  if (Options.ShowFps)
+  {
+    static char fps_display[32];
+    sprintf(fps_display, " %3.02f", pspPerfGetFps(&FpsCounter));
 
-  int width = pspFontGetTextWidth(&PspStockFont, fps_display);
-  int height = pspFontGetLineHeight(&PspStockFont);
+    int width = pspFontGetTextWidth(&PspStockFont, fps_display);
+    int height = pspFontGetLineHeight(&PspStockFont);
 
-  pspVideoFillRect(SCR_WIDTH - width, 0, SCR_WIDTH, height, PSP_COLOR_BLACK);
-  pspVideoPrint(&PspStockFont, SCR_WIDTH - width, 0, fps_display, PSP_COLOR_WHITE);
-
+    pspVideoFillRect(SCR_WIDTH - width, 0, SCR_WIDTH, height, PSP_COLOR_BLACK);
+    pspVideoPrint(&PspStockFont, SCR_WIDTH - width, 0, fps_display, PSP_COLOR_WHITE);
+  }
+  
   pspVideoEnd();
   pspVideoSwapBuffers();
 }
@@ -622,17 +635,16 @@ if (machine_type != MACHINE_5200 || ui_is_active) {
 
 int Atari_PORT(int num)
 {
-	int ret = 0xff;
-  SceCtrlData pad;
-  if (num == 0 && pspCtrlPollControls(&pad))
+  int ret = 0xff;
+  if (num == 0)
   {
-    if (pad.Buttons & PSP_CTRL_ANALLEFT)
+    if (ButtonPad.Buttons & PSP_CTRL_ANALLEFT)
       ret &= 0xf0 | STICK_LEFT;
-    else if (pad.Buttons & PSP_CTRL_ANALRIGHT)
+    else if (ButtonPad.Buttons & PSP_CTRL_ANALRIGHT)
       ret &= 0xf0 | STICK_RIGHT;
-    else if (pad.Buttons & PSP_CTRL_ANALUP)
+    else if (ButtonPad.Buttons & PSP_CTRL_ANALUP)
       ret &= 0xf0 | STICK_FORWARD;
-    else if (pad.Buttons & PSP_CTRL_ANALDOWN)
+    else if (ButtonPad.Buttons & PSP_CTRL_ANALDOWN)
       ret &= 0xf0 | STICK_BACK;
   }
   return ret;
@@ -703,67 +715,15 @@ void Sound_Continue(void)
 
 #endif /* SOUND */
 
-// char dir_path[FILENAME_MAX];
-
-// XXX: use followup calls to get directory entries one-by-one?
-
-// #define MAX_FILES_PER_DIR 1000
-
-//static mcTable mcDir[MAX_FILES_PER_DIR];
-
 int Atari_OpenDir(const char *filename)
 {
   return FALSE;
-/*
-	// TODO: support other devices
-	if (strncmp(filename, "mc0:/", 5) != 0)
-		return FALSE;
-	dir_n = mcGetDir(0, 0, filename + 4, 0 /* followup flag *, MAX_FILES_PER_DIR, mcDir);
-	mcSync(0,NULL,&dir_n);
-	if (dir_n < 0)
-		return FALSE;
-	dir_i = 0;
-	// XXX: does it know (and needs to know) that "mc0:/" is a root directory?
-	Util_splitpath(filename, dir_path, NULL);
-	return TRUE;
-*/
 }
 
 int Atari_ReadDir(char *fullpath, char *filename, int *isdir,
                   int *readonly, int *size, char *timetext)
 {
   return FALSE;
-/*
-	const mcTable *p;
-	if (dir_i >= dir_n)
-		return FALSE;
-	p = mcDir + dir_i;
-	if (fullpath != NULL)
-		Util_catpath(fullpath, dir_path, p->name);
-	if (filename != NULL)
-		strcpy(filename, p->name);
-	if (isdir != NULL)
-		*isdir = (p->attrFile & MC_ATTR_SUBDIR) ? TRUE : FALSE;
-	if (readonly != NULL)
-		*readonly = (p->attrFile & MC_ATTR_WRITEABLE) ? FALSE : TRUE; // XXX: MC_ATTR_PROTECTED ?
-	if (size != NULL)
-		*size = (int) (p->fileSizeByte);
-	if (timetext != NULL) {
-		// FIXME: adjust from GMT to local time
-		int hour = p->_modify.hour;
-		char ampm = 'a';
-		if (hour >= 12) {
-			hour -= 12;
-			ampm = 'p';
-		}
-		if (hour == 0)
-			hour = 12;
-		sprintf(timetext, "%2d-%02d-%02d %2d:%02d%c",
-			p->_modify.month, p->_modify.day, p->_modify.year % 100, hour, p->_modify.sec, ampm);
-	}
-	dir_i++;
-	return TRUE;
-*/
 }
 
 int InitEmulation(int *argc, char **argv)
@@ -821,8 +781,7 @@ void RunEmulation()
 
   ScreenX = (SCR_WIDTH / 2) - (ScreenW / 2);
   ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
-  ScreenW = Screen->Viewport.Width;
-  ScreenH = Screen->Viewport.Height;
+  ClearScreen = 1;
 
   /* Start emulation - main loop*/
   while (!ExitPSP)
@@ -832,10 +791,8 @@ void RunEmulation()
     if ((ButtonPad.Buttons & (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER))
       == (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER))
         break;
-    /* TODO: try commenting this line out - if I'm right, it should still
-       register keyboard presses */
     key_code = Atari_Keyboard();
-    /* TODO: implement frame skipping and frequency manipulation */
+    /* TODO: implement frame skipping, vsync and frequency manipulation */
     Atari800_Frame();
     if (display_screen)
       Atari_DisplayScreen();

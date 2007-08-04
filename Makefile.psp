@@ -36,3 +36,4 @@ LIBS=-lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc
 include $(PSPSDK)/lib/build.mak
 
 include $(PSPLIB)/build.mak
+

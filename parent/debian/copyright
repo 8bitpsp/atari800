@@ -1,0 +1,9 @@
+This is a Debian prepackaged version of the atari800 emulator.
+
+This package was put together by Dale Scheetz <dwarf@polaris.net>, using
+sources from:
+	http://atari800.sourceforge.net/
+
+The following copyright applies to this package:
+
+GPLv2 (see /usr/share/common-licenses/GPL-2)

@@ -1,0 +1,17 @@
+Source: atari800
+Section: contrib/otherosfs
+Priority: optional
+Maintainer: Antonin Kral <A.Kral@sh.cvut.cz>
+Build-Depends: libx11-dev, libxext-dev, libxt-dev, x-dev, libsdl1.2-dev, libncurses-dev, zlib1g-dev
+Standards-Version: 3.7.2
+
+Package: atari800
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: Atari emulator for X/curses/SDL
+ This is an Atari emulator that can use X, plain curses or SDL.
+ It can emulate the Atari 800, 800XL, 130XE, and 5200 systems.
+ .
+ The Atari Operating System ROMs are not available with this package, due to
+ copyright. You'll have to either make copies of them from an old Atari
+ computer, or see README.Debian for other ways to obtain them.

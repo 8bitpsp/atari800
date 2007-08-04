@@ -7,13 +7,13 @@
 
 typedef struct
 {
-  char  ShowFps;
-  char  ControlMode;
-  short ClockFreq;
-  char  DisplayMode;
-  char  VSync;
-  char  UpdateFreq;
-  char  Frameskip;
+  int ShowFps;
+  int ControlMode;
+  int ClockFreq;
+  int DisplayMode;
+  int VSync;
+  int UpdateFreq;
+  int Frameskip;
 } EmulatorOptions;
 
 int InitEmulation(int *argc, char **argv);
