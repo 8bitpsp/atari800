@@ -8,6 +8,7 @@
 
 #include "statesav.h"
 #include "atari.h"
+#include "input.h"
 
 #include "video.h"
 #include "image.h"
@@ -60,7 +61,7 @@ GameConfig DefaultGameConfig =
     0,                /* R Trigger    */
     0,                /* Select       */
     0,                /* Start        */
-    SPC|SPC_MENU,     /* L+R Triggers */
+    SPC|-AKEY_EXIT,    /* L+R Triggers */
     0,                /* Start+Select */
   }
 };
@@ -171,10 +172,38 @@ static const PspMenuOptionDef
   ButtonMapOptions[] = {
     /* Unmapped */
     { "None", (void*)0 },
-    /* Special */
-    { "Special: Open Menu", (void*)(SPC|SPC_MENU) },  
-    /* Joystick */
-//    { "Soft Reset (SMS)",    (void*)(SYS|INPUT_RESET) },
+    /* Special keys */
+    { "Special: Open Menu",   (void*)(SPC|-AKEY_EXIT)      },
+    { "Special: Warm Reboot", (void*)(SPC|-AKEY_WARMSTART) },
+    { "Special: Cold Reboot", (void*)(SPC|-AKEY_COLDSTART) },
+    { "Special: Start",       (void*)(SPC|-AKEY_START)     },
+    { "Special: Select",      (void*)(SPC|-AKEY_SELECT)    },
+    { "Special: Option",      (void*)(SPC|-AKEY_OPTION)    },
+    /* Keyboard */
+    { "Keyboard Up",   (void*)(KBD|AKEY_UP)    }, 
+    { "Keyboard Down", (void*)(KBD|AKEY_DOWN)  },
+    { "Keyboard Left", (void*)(KBD|AKEY_LEFT)  }, 
+    { "Keyboard Right",(void*)(KBD|AKEY_RIGHT) },
+    /* Keyboard: digits */
+    { "1",(void*)(KBD|AKEY_1) }, { "2",(void*)(KBD|AKEY_2) },
+    { "3",(void*)(KBD|AKEY_3) }, { "4",(void*)(KBD|AKEY_4) },
+    { "5",(void*)(KBD|AKEY_5) }, { "6",(void*)(KBD|AKEY_6) },
+    { "7",(void*)(KBD|AKEY_7) }, { "8",(void*)(KBD|AKEY_8) },
+    { "9",(void*)(KBD|AKEY_9) }, { "0",(void*)(KBD|AKEY_0) },
+    /* Keyboard: letters */
+    { "A",(void*)(KBD|AKEY_A) }, { "B",(void*)(KBD|AKEY_B) },
+    { "C",(void*)(KBD|AKEY_C) }, { "D",(void*)(KBD|AKEY_D) },
+    { "E",(void*)(KBD|AKEY_E) }, { "F",(void*)(KBD|AKEY_F) },
+    { "G",(void*)(KBD|AKEY_G) }, { "H",(void*)(KBD|AKEY_H) },
+    { "I",(void*)(KBD|AKEY_I) }, { "J",(void*)(KBD|AKEY_J) },
+    { "K",(void*)(KBD|AKEY_K) }, { "L",(void*)(KBD|AKEY_L) },
+    { "M",(void*)(KBD|AKEY_M) }, { "N",(void*)(KBD|AKEY_N) },
+    { "O",(void*)(KBD|AKEY_O) }, { "P",(void*)(KBD|AKEY_P) },
+    { "Q",(void*)(KBD|AKEY_Q) }, { "R",(void*)(KBD|AKEY_R) },
+    { "S",(void*)(KBD|AKEY_S) }, { "T",(void*)(KBD|AKEY_T) },
+    { "U",(void*)(KBD|AKEY_U) }, { "V",(void*)(KBD|AKEY_V) },
+    { "W",(void*)(KBD|AKEY_W) }, { "X",(void*)(KBD|AKEY_X) },
+    { "Y",(void*)(KBD|AKEY_Y) }, { "Z",(void*)(KBD|AKEY_Z) },
     /* End */
     { NULL, NULL } };
 

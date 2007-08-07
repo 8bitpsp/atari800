@@ -30,11 +30,11 @@ void TrashEmulation();
 #define MAP_BUTTON_LRTRIGGERS  16
 #define MAP_BUTTON_STARTSELECT 17
 
-#define JOY 0x10000
-#define SYS 0x20000
-#define SPC 0x40000
+#define CODE_MASK(x) (x & 0xff)
 
-#define SPC_MENU 1
+#define JOY 0x100
+#define KBD 0x200
+#define SPC 0x400
 
 typedef struct
 {

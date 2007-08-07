@@ -39,6 +39,9 @@ extern unsigned int size_ps2kbd;
 extern EmulatorConfig Config;
 extern GameConfig ActiveGameConfig;
 
+extern const u64 ButtonMask[];
+extern const int ButtonMapId[];
+
 static int ClearScreen;
 static int ScreenX;
 static int ScreenY;
@@ -50,6 +53,8 @@ static PspFpsCounter FpsCounter;
 PspImage *Screen;
 
 static SceCtrlData ButtonPad;
+
+static int ParseInput();
 
 double Atari_time(void)
 {
@@ -149,6 +154,8 @@ void Atari_DisplayScreen(void)
 
 int Atari_Keyboard(void)
 {
+  return key_code;
+/*
   if (ButtonPad.Buttons & PSP_CTRL_START)
     return AKEY_WARMSTART;
   else if (ButtonPad.Buttons & PSP_CTRL_LEFT)
@@ -788,16 +795,59 @@ void RunEmulation()
   while (!ExitPSP)
   {
     pspCtrlPollControls(&ButtonPad);
-    /* TODO */
-    if ((ButtonPad.Buttons & (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER))
-      == (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER))
-        break;
-    key_code = Atari_Keyboard();
+
+    /* Check input */
+    if (ParseInput()) break;
+
+    //key_code = Atari_Keyboard();
     /* TODO: implement frame skipping, vsync and frequency manipulation */
     Atari800_Frame();
     if (display_screen)
       Atari_DisplayScreen();
   }
+}
+#include "ui.h"
+int ParseInput()
+{
+  /* DEBUGGING
+  if ((pad.Buttons & (PSP_CTRL_SELECT | PSP_CTRL_START))
+    == (PSP_CTRL_SELECT | PSP_CTRL_START))
+      pspUtilSaveVramSeq(ScreenshotPath, "game");
+  //*/
+
+  /* Parse input */
+  int i, on, code;
+  key_code = AKEY_NONE;
+
+  for (i = 0; ButtonMapId[i] >= 0; i++)
+  {
+    code = ActiveGameConfig.ButtonConfig[ButtonMapId[i]];
+    on = (ButtonPad.Buttons & ButtonMask[i]) == ButtonMask[i];
+
+    /* Check to see if a button set is pressed. If so, unset it, so it */
+    /* doesn't trigger any other combination presses. */
+    if (on) ButtonPad.Buttons &= ~ButtonMask[i];
+
+    if (code & KBD && key_code == AKEY_NONE)
+    {
+      if (on) key_code = CODE_MASK(code);
+    }
+    else if (code & SPC)
+    {
+      int inverted = -(int)CODE_MASK(code);
+      switch (inverted)
+      {
+      case AKEY_EXIT:
+        if (on) return 1;
+        break;
+      default:
+        if (on && key_code == AKEY_NONE) 
+          key_code = inverted;
+      }
+    }
+  }
+
+  return 0;
 }
 
 void TrashEmulation()
