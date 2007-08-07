@@ -19,13 +19,11 @@
 #include "fileio.h"
 
 #define TAB_QUICKLOAD 0
-/*
-#define TAB_CONTROL   2
-*/
 #define TAB_STATE     1
-#define TAB_OPTION    2
-#define TAB_SYSTEM    3
-#define TAB_ABOUT     4
+#define TAB_CONTROL   2
+#define TAB_OPTION    3
+#define TAB_SYSTEM    4
+#define TAB_ABOUT     5
 #define TAB_MAX       TAB_SYSTEM
 
 #define OPTION_DISPLAY_MODE 1
@@ -39,7 +37,65 @@
 #define SYSTEM_SCRNSHOT     1
 #define SYSTEM_RESET        2
 
-EmulatorOptions Options;
+EmulatorConfig Config;
+GameConfig ActiveGameConfig;
+
+/* Default configuration */
+GameConfig DefaultGameConfig =
+{
+  {
+    0,     /* Analog Up    */
+    0,   /* Analog Down  */
+    0,   /* Analog Left  */
+    0,  /* Analog Right */
+    0,     /* D-pad Up     */
+    0,   /* D-pad Down   */
+    0,   /* D-pad Left   */
+    0,  /* D-pad Right  */
+    0,/* Square       */
+    0,/* Cross        */
+    0,                /* Circle       */
+    0,                /* Triangle     */
+    0,                /* L Trigger    */
+    0,                /* R Trigger    */
+    0,                /* Select       */
+    0,                /* Start        */
+    SPC|SPC_MENU,     /* L+R Triggers */
+    0,                /* Start+Select */
+  }
+};
+
+/* Button masks */
+const u64 ButtonMask[] = 
+{
+  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, 
+  PSP_CTRL_START    | PSP_CTRL_SELECT,
+  PSP_CTRL_ANALUP,    PSP_CTRL_ANALDOWN,
+  PSP_CTRL_ANALLEFT,  PSP_CTRL_ANALRIGHT,
+  PSP_CTRL_UP,        PSP_CTRL_DOWN,
+  PSP_CTRL_LEFT,      PSP_CTRL_RIGHT,
+  PSP_CTRL_SQUARE,    PSP_CTRL_CROSS,
+  PSP_CTRL_CIRCLE,    PSP_CTRL_TRIANGLE,
+  PSP_CTRL_LTRIGGER,  PSP_CTRL_RTRIGGER,
+  PSP_CTRL_SELECT,    PSP_CTRL_START,
+  0 /* End */
+};
+
+/* Button map ID's */
+const int ButtonMapId[] = 
+{
+  MAP_BUTTON_LRTRIGGERS, 
+  MAP_BUTTON_STARTSELECT,
+  MAP_ANALOG_UP,       MAP_ANALOG_DOWN,
+  MAP_ANALOG_LEFT,     MAP_ANALOG_RIGHT,
+  MAP_BUTTON_UP,       MAP_BUTTON_DOWN,
+  MAP_BUTTON_LEFT,     MAP_BUTTON_RIGHT,
+  MAP_BUTTON_SQUARE,   MAP_BUTTON_CROSS,
+  MAP_BUTTON_CIRCLE,   MAP_BUTTON_TRIANGLE,
+  MAP_BUTTON_LTRIGGER, MAP_BUTTON_RTRIGGER,
+  MAP_BUTTON_SELECT,   MAP_BUTTON_START,
+  -1 /* End */
+};
 
 extern PspImage *Screen;
 
@@ -74,9 +130,7 @@ static const char *TabLabel[] =
 {
   "Game",
   "Save/Load",
-/*
   "Controls",
-*/
   "Options",
   "System",
   "About"
@@ -113,6 +167,15 @@ static const PspMenuOptionDef
   ControlModeOptions[] = {
     { "\026\242\020 cancels, \026\241\020 confirms (US)", (void*)0 },
     { "\026\241\020 cancels, \026\242\020 confirms (Japan)", (void*)1 },
+    { NULL, NULL } },
+  ButtonMapOptions[] = {
+    /* Unmapped */
+    { "None", (void*)0 },
+    /* Special */
+    { "Special: Open Menu", (void*)(SPC|SPC_MENU) },  
+    /* Joystick */
+//    { "Soft Reset (SMS)",    (void*)(SYS|INPUT_RESET) },
+    /* End */
     { NULL, NULL } };
 
 /* Menu definitions */
@@ -138,6 +201,47 @@ static const PspMenuItemDef
       ControlModeOptions,  -1, "\026\250\020 Change OK and Cancel button mapping" },
     { NULL, NULL }
   },
+  ControlMenuDef[] = {
+    { "\026"PSP_CHAR_ANALUP,     (void*)MAP_ANALOG_UP,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALDOWN,   (void*)MAP_ANALOG_DOWN,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALLEFT,   (void*)MAP_ANALOG_LEFT,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALRIGHT,  (void*)MAP_ANALOG_RIGHT,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_UP,         (void*)MAP_BUTTON_UP,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_DOWN,       (void*)MAP_BUTTON_DOWN,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_LEFT,       (void*)MAP_BUTTON_LEFT,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_RIGHT,      (void*)MAP_BUTTON_RIGHT,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_SQUARE,     (void*)MAP_BUTTON_SQUARE,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_CROSS,      (void*)MAP_BUTTON_CROSS,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_CIRCLE,     (void*)MAP_BUTTON_CIRCLE,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_TRIANGLE,   (void*)MAP_BUTTON_TRIANGLE,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_LTRIGGER,   (void*)MAP_BUTTON_LTRIGGER,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_RTRIGGER,   (void*)MAP_BUTTON_RTRIGGER,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_SELECT,     (void*)MAP_BUTTON_SELECT,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_START,      (void*)MAP_BUTTON_START,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER,
+                           (void*)MAP_BUTTON_LRTRIGGERS,
+      ButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT,
+                           (void*)MAP_BUTTON_STARTSELECT,
+      ButtonMapOptions, -1, ControlHelpText },
+    { NULL, NULL }
+  },
   SystemMenuDef[] = {
     { "\tSystem", NULL, NULL, -1, NULL },
     { "Reset",            (void*)SYSTEM_RESET,
@@ -148,6 +252,9 @@ static const PspMenuItemDef
   };
 
 /* Function declarations */
+static void InitGameConfig();
+static int LoadGameConfig();
+static int SaveGameConfig();
 static void LoadOptions();
 static int  SaveOptions();
 static void InitOptionDefaults();
@@ -229,6 +336,16 @@ PspUiMenu SystemUiMenu =
   OnMenuItemChanged,     /* OnItemChanged() */
 };
 
+PspUiMenu ControlUiMenu =
+{
+  NULL,                  /* PspMenu */
+  OnGenericRender,       /* OnRender() */
+  OnMenuOk,              /* OnOk() */
+  OnGenericCancel,       /* OnCancel() */
+  OnMenuButtonPress,     /* OnButtonPress() */
+  OnMenuItemChanged,     /* OnItemChanged() */
+};
+
 void InitMenu(int *argc, char **argv)
 {
   /* Reset variables */
@@ -269,6 +386,10 @@ void InitMenu(int *argc, char **argv)
   SystemUiMenu.Menu = pspMenuCreate();
   pspMenuLoad(SystemUiMenu.Menu, SystemMenuDef);
 
+  /* Initialize control menu */
+  ControlUiMenu.Menu = pspMenuCreate();
+  pspMenuLoad(ControlUiMenu.Menu, ControlMenuDef);
+
   /* Initialize paths */
   SaveStatePath 
     = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen(SaveStateDir) + 2));
@@ -277,6 +398,9 @@ void InitMenu(int *argc, char **argv)
     = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
   sprintf(ScreenshotPath, "%s%s/", pspGetAppDirectory(), ScreenshotDir);
 
+  /* Load default configuration */
+  LoadGameConfig();
+
   /* Initialize UI components */
   UiMetric.Background = Background;
   UiMetric.Font = &PspStockFont;
@@ -284,8 +408,8 @@ void InitMenu(int *argc, char **argv)
   UiMetric.Top = 24;
   UiMetric.Right = 472;
   UiMetric.Bottom = 250;
-  UiMetric.OkButton = (!Options.ControlMode) ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
-  UiMetric.CancelButton = (!Options.ControlMode) ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
+  UiMetric.OkButton = (!Config.ControlMode) ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
+  UiMetric.CancelButton = (!Config.ControlMode) ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
   UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
   UiMetric.ScrollbarBgColor = 0x44ffffff;
   UiMetric.ScrollbarWidth = 10;
@@ -313,9 +437,7 @@ void InitMenu(int *argc, char **argv)
 
 void DisplayMenu()
 {
-  /*
   int i;
-  */
   PspMenuItem *item;
 
   /* Menu loop */
@@ -337,29 +459,35 @@ void DisplayMenu()
     case TAB_STATE:
       DisplayStateTab();
       break;
+    case TAB_CONTROL:
+      /* Load current button mappings */
+      for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
+        pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
+      pspUiOpenMenu(&ControlUiMenu, NULL);
+      break;
     case TAB_OPTION:
       /* Init menu options */
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_DISPLAY_MODE);
-      pspMenuSelectOptionByValue(item, (void*)Options.DisplayMode);
+      pspMenuSelectOptionByValue(item, (void*)Config.DisplayMode);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu,
         (void*)OPTION_SYNC_FREQ);
-      pspMenuSelectOptionByValue(item, (void*)Options.UpdateFreq);
+      pspMenuSelectOptionByValue(item, (void*)Config.UpdateFreq);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_FRAMESKIP);
-      pspMenuSelectOptionByValue(item, (void*)(int)Options.Frameskip);
+      pspMenuSelectOptionByValue(item, (void*)(int)Config.Frameskip);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu,
         (void*)OPTION_VSYNC);
-      pspMenuSelectOptionByValue(item, (void*)Options.VSync);
+      pspMenuSelectOptionByValue(item, (void*)Config.VSync);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_CLOCK_FREQ);
-      pspMenuSelectOptionByValue(item, (void*)Options.ClockFreq);
+      pspMenuSelectOptionByValue(item, (void*)Config.ClockFreq);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_SHOW_FPS);
-      pspMenuSelectOptionByValue(item, (void*)Options.ShowFps);
+      pspMenuSelectOptionByValue(item, (void*)Config.ShowFps);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_CONTROL_MODE);
-      pspMenuSelectOptionByValue(item, (void*)Options.ControlMode);
+      pspMenuSelectOptionByValue(item, (void*)Config.ControlMode);
 
       pspUiOpenMenu(&OptionUiMenu, NULL);
       break;
@@ -374,7 +502,7 @@ void DisplayMenu()
     if (!ExitPSP)
     {
       /* Set clock frequency during emulation */
-      pspSetClockFrequency(Options.ClockFreq);
+      pspSetClockFrequency(Config.ClockFreq);
       /* Set buttons to normal mode */
       pspCtrlSetPollingMode(PSP_CTRL_NORMAL);
 
@@ -455,13 +583,13 @@ void LoadOptions()
   else
   {
     /* Load values */
-    Options.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", DISPLAY_MODE_UNSCALED);
-    Options.UpdateFreq = pspInitGetInt(init, "Video", "Update Frequency", 0);
-    Options.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 1);
-    Options.VSync = pspInitGetInt(init, "Video", "VSync", 0);
-    Options.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
-    Options.ShowFps = pspInitGetInt(init, "Video", "Show FPS", 0);
-    Options.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
+    Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", DISPLAY_MODE_UNSCALED);
+    Config.UpdateFreq = pspInitGetInt(init, "Video", "Update Frequency", 0);
+    Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 1);
+    Config.VSync = pspInitGetInt(init, "Video", "VSync", 0);
+    Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
+    Config.ShowFps = pspInitGetInt(init, "Video", "Show FPS", 0);
+    Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
 
     if (GamePath) free(GamePath);
     GamePath = pspInitGetString(init, "File", "Game Path", NULL);
@@ -482,13 +610,13 @@ static int SaveOptions()
   PspInit *init = pspInitCreate();
 
   /* Set values */
-  pspInitSetInt(init, "Video", "Display Mode", Options.DisplayMode);
-  pspInitSetInt(init, "Video", "Update Frequency", Options.UpdateFreq);
-  pspInitSetInt(init, "Video", "Frameskip", Options.Frameskip);
-  pspInitSetInt(init, "Video", "VSync", Options.VSync);
-  pspInitSetInt(init, "Video", "PSP Clock Frequency",Options.ClockFreq);
-  pspInitSetInt(init, "Video", "Show FPS", Options.ShowFps);
-  pspInitSetInt(init, "Menu", "Control Mode", Options.ControlMode);
+  pspInitSetInt(init, "Video", "Display Mode", Config.DisplayMode);
+  pspInitSetInt(init, "Video", "Update Frequency", Config.UpdateFreq);
+  pspInitSetInt(init, "Video", "Frameskip", Config.Frameskip);
+  pspInitSetInt(init, "Video", "VSync", Config.VSync);
+  pspInitSetInt(init, "Video", "PSP Clock Frequency",Config.ClockFreq);
+  pspInitSetInt(init, "Video", "Show FPS", Config.ShowFps);
+  pspInitSetInt(init, "Menu", "Control Mode", Config.ControlMode);
 
   if (GamePath) pspInitSetString(init, "File", "Game Path", GamePath);
 
@@ -505,13 +633,13 @@ static int SaveOptions()
 /* Initialize options to system defaults */
 void InitOptionDefaults()
 {
-  Options.ControlMode = 0;
-  Options.DisplayMode = DISPLAY_MODE_UNSCALED;
-  Options.UpdateFreq = 0;
-  Options.Frameskip = 1;
-  Options.VSync = 0;
-  Options.ClockFreq = 222;
-  Options.ShowFps = 0;
+  Config.ControlMode = 0;
+  Config.DisplayMode = DISPLAY_MODE_UNSCALED;
+  Config.UpdateFreq = 0;
+  Config.Frameskip = 1;
+  Config.VSync = 0;
+  Config.ClockFreq = 222;
+  Config.ShowFps = 0;
   GamePath = NULL;
 }
 
@@ -643,33 +771,38 @@ void OnSystemRender(const void *uiobject, const void *item_obj)
 int  OnMenuItemChanged(const struct PspUiMenu *uimenu, 
   PspMenuItem* item, const PspMenuOption* option)
 {
-  if (uimenu == &OptionUiMenu)
+  if (uimenu == &ControlUiMenu)
+  {
+    ActiveGameConfig.ButtonConfig[(int)item->Userdata] 
+      = (unsigned int)option->Value;
+  }
+  else if (uimenu == &OptionUiMenu)
   {
     switch((int)item->Userdata)
     {
     case OPTION_DISPLAY_MODE:
-      Options.DisplayMode = (int)option->Value;
+      Config.DisplayMode = (int)option->Value;
       break;
     case OPTION_SYNC_FREQ:
-      Options.UpdateFreq = (int)option->Value;
+      Config.UpdateFreq = (int)option->Value;
       break;
     case OPTION_FRAMESKIP:
-      Options.Frameskip = (int)option->Value;
+      Config.Frameskip = (int)option->Value;
       break;
     case OPTION_VSYNC:
-      Options.VSync = (int)option->Value;
+      Config.VSync = (int)option->Value;
       break;
     case OPTION_CLOCK_FREQ:
-      Options.ClockFreq = (int)option->Value;
+      Config.ClockFreq = (int)option->Value;
       break;
     case OPTION_SHOW_FPS:
-      Options.ShowFps = (int)option->Value;
+      Config.ShowFps = (int)option->Value;
       break;
     case OPTION_CONTROL_MODE:
-      Options.ControlMode = (int)option->Value;
-      UiMetric.OkButton = (Options.ControlMode) 
+      Config.ControlMode = (int)option->Value;
+      UiMetric.OkButton = (Config.ControlMode) 
         ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
-      UiMetric.CancelButton = (Options.ControlMode) 
+      UiMetric.CancelButton = (Config.ControlMode) 
         ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
       break;
     }
@@ -682,7 +815,15 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
 {
   const char *game_name;
   
-  if (uimenu == &SystemUiMenu)
+  if (uimenu == &ControlUiMenu)
+  {
+    /* Save to MS */
+    if (SaveGameConfig())
+      pspUiAlert("Changes saved");
+    else
+      pspUiAlert("ERROR: Changes not saved");
+  }
+  else if (uimenu == &SystemUiMenu)
   {
     switch ((int)((const PspMenuItem*)sel_item)->Userdata)
     {
@@ -716,6 +857,24 @@ int  OnMenuButtonPress(const struct PspUiMenu *uimenu,
   PspMenuItem* sel_item, 
   u32 button_mask)
 {
+  if (uimenu == &ControlUiMenu)
+  {
+    if (button_mask & PSP_CTRL_TRIANGLE)
+    {
+      PspMenuItem *item;
+      int i;
+
+      /* Load default mapping */
+      InitGameConfig();
+
+      /* Modify the menu */
+      for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
+        pspMenuSelectOptionByValue(item, (void*)DefaultGameConfig.ButtonConfig[i]);
+
+      return 0;
+    }
+  }
+
   return OnGenericButtonPress(NULL, NULL, button_mask);
 }
 
@@ -917,6 +1076,64 @@ int OnQuickloadOk(const void *browser, const void *path)
   return 1;
 }
 
+/* Initialize game configuration */
+static void InitGameConfig()
+{
+  memcpy(&ActiveGameConfig, &DefaultGameConfig, sizeof(GameConfig));
+}
+
+/* Load game configuration */
+static int LoadGameConfig()
+{
+  char *path;
+  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen("controlhack.bin") + 6))))
+    return 0;
+  sprintf(path, "%s%s.cnf", pspGetAppDirectory(), "controlhack.bin");
+
+  /* Open file for reading */
+  FILE *file = fopen(path, "r");
+  free(path);
+
+  /* If no configuration, load defaults */
+  if (!file)
+  {
+    InitGameConfig();
+    return 1;
+  }
+
+  /* Read contents of struct */
+  int nread = fread(&ActiveGameConfig, sizeof(GameConfig), 1, file);
+  fclose(file);
+
+  if (nread != 1)
+  {
+    InitGameConfig();
+    return 0;
+  }
+
+  return 1;
+}
+
+/* Save game configuration */
+static int SaveGameConfig()
+{
+  char *path;
+  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen("controlhack.bin") + 6))))
+    return 0;
+  sprintf(path, "%s%s.cnf", pspGetAppDirectory(), "controlhack.bin");
+
+  /* Open file for writing */
+  FILE *file = fopen(path, "w");
+  free(path);
+  if (!file) return 0;
+
+  /* Write contents of struct */
+  int nwritten = fwrite(&ActiveGameConfig, sizeof(GameConfig), 1, file);
+  fclose(file);
+
+  return (nwritten == 1);
+}
+
 void TrashMenu()
 {
   /* Save options */
@@ -936,5 +1153,6 @@ void TrashMenu()
 
   if (SaveStateGallery.Menu) pspMenuDestroy(SaveStateGallery.Menu);
   if (OptionUiMenu.Menu) pspMenuDestroy(OptionUiMenu.Menu);
+  if (ControlUiMenu.Menu) pspMenuDestroy(ControlUiMenu.Menu);
 }
 

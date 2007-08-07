@@ -36,7 +36,8 @@ extern unsigned int size_usbd;
 extern unsigned char ps2kbd[];
 extern unsigned int size_ps2kbd;
 
-extern EmulatorOptions Options;
+extern EmulatorConfig Config;
+extern GameConfig ActiveGameConfig;
 
 static int ClearScreen;
 static int ScreenX;
@@ -130,7 +131,7 @@ void Atari_DisplayScreen(void)
   /* Blit screen */
   pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
-  if (Options.ShowFps)
+  if (Config.ShowFps)
   {
     static char fps_display[32];
     sprintf(fps_display, " %3.02f", pspPerfGetFps(&FpsCounter));
@@ -761,7 +762,7 @@ void RunEmulation()
   pspImageClear(Screen, 0);
 
   /* Recompute screen size/position */
-  switch (Options.DisplayMode)
+  switch (Config.DisplayMode)
   {
   default:
   case DISPLAY_MODE_UNSCALED:
