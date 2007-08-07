@@ -54,6 +54,9 @@ PspImage *Screen;
 
 static SceCtrlData ButtonPad;
 
+static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
+static int TrigState[4] = { 0, 0, 0, 0 };
+
 static int ParseInput();
 
 double Atari_time(void)
@@ -155,517 +158,16 @@ void Atari_DisplayScreen(void)
 int Atari_Keyboard(void)
 {
   return key_code;
-/*
-  if (ButtonPad.Buttons & PSP_CTRL_START)
-    return AKEY_WARMSTART;
-  else if (ButtonPad.Buttons & PSP_CTRL_LEFT)
-    return AKEY_LEFT;
-  else if (ButtonPad.Buttons & PSP_CTRL_RIGHT)
-    return AKEY_RIGHT;
-  else if (ButtonPad.Buttons & PSP_CTRL_UP)
-    return AKEY_UP;
-  else if (ButtonPad.Buttons & PSP_CTRL_DOWN)
-    return AKEY_DOWN;
-
-  return AKEY_NONE;
-/*
-	int new_pad = PadButtons();
-	PS2KbdRawKey key;
-	key_consol = CONSOL_NONE;
-
-	if (ui_is_active) {
-		if (new_pad & PAD_CROSS)
-			return AKEY_RETURN;
-		if (new_pad & PAD_CIRCLE)
-			return AKEY_ESCAPE;
-		if (new_pad & PAD_LEFT)
-			return AKEY_LEFT;
-		if (new_pad & PAD_RIGHT)
-			return AKEY_RIGHT;
-		if (new_pad & PAD_UP)
-			return AKEY_UP;
-		if (new_pad & PAD_DOWN)
-			return AKEY_DOWN;
-		if (new_pad & PAD_L1)
-		    return AKEY_COLDSTART;
-		if (new_pad & PAD_R1)
-			return AKEY_WARMSTART;
-	}
-	//PAD_CROSS is used for Atari_TRIG().
-	if (new_pad & PAD_TRIANGLE)
-		return AKEY_UI;
-	if (new_pad & PAD_SQUARE)
-		return AKEY_SPACE;
-	if (new_pad & PAD_CIRCLE)
-		return AKEY_RETURN;
-	if (new_pad & PAD_L1)
-		return AKEY_COLDSTART;
-	if (new_pad & PAD_R1)
-		return AKEY_WARMSTART;
-	if (machine_type == MACHINE_5200) {
-		if (new_pad & PAD_START)
-			return AKEY_5200_START;
-	}
-	else {
-		if (new_pad & PAD_START)
-			key_consol ^= CONSOL_START;
-		if (new_pad & PAD_SELECT)
-			key_consol ^= CONSOL_SELECT;
-		if (new_pad & PAD_CROSS)
-			return AKEY_HELP;
-	}
-if (machine_type != MACHINE_5200 || ui_is_active) {
-
-	while (PS2KbdReadRaw(&key) != 0) {
-		if (key.state == PS2KBD_RAWKEY_DOWN) {
-			switch (key.key) {
-			case EOF:
-				Atari800_Exit(FALSE);
-				exit(0);
-			    break;
-			case 0x28:
-				return AKEY_RETURN;
-			case 0x29:
-				return AKEY_ESCAPE;
-			case 0x2A:
-				return AKEY_BACKSPACE;
-			case 0x2B:
-				return AKEY_TAB;
-			case 0x2C:
-				return AKEY_SPACE;
-			case 0x46://Print Screen Button
-				return AKEY_SCREENSHOT;
-			case 0x4F:
-			    return AKEY_RIGHT;
-			case 0x50:
-			    return AKEY_LEFT;
-			case 0x51:
-			    return AKEY_DOWN;
-			case 0x52:
-			    return AKEY_UP;
-			case 0x58:
-			    return AKEY_RETURN;
-
-			case 0xE0:
-				PS2KbdCONTROL = 1;
-				return AKEY_NONE;
-			case 0xE4:
-				PS2KbdCONTROL = 1;
-				return AKEY_NONE;
-			case 0xE1:
-				PS2KbdSHIFT = 1;
-				return AKEY_NONE;
-			case 0xE2:
-				PS2KbdALT = 1;
-				return AKEY_NONE;
-			case 0xE5:
-				PS2KbdSHIFT = 1;
-				return AKEY_NONE;
-			case 0xE6:
-				PS2KbdALT = 1;
-				return AKEY_NONE;
-			default:
-				break;
-			}
-		}
-
-		if ((key.state == PS2KBD_RAWKEY_DOWN) && !PS2KbdSHIFT && !PS2KbdALT) {
-			switch (key.key) {
-			case 0x1E:
-				return AKEY_1;
-			case 0X1F:
-				return AKEY_2;
-			case 0x20:
-				return AKEY_3;
-			case 0x21:
-				return AKEY_4;
-			case 0x22:
-				return AKEY_5;
-			case 0x23:
-				return AKEY_6;
-			case 0x24:
-				return AKEY_7;
-			case 0x25:
-				return AKEY_8;
-			case 0x26:
-				return AKEY_9;
-			case 0x27:
-				return AKEY_0;
-			case 0x2D:
-				return AKEY_MINUS;
-			case 0x2E:
-				return AKEY_EQUAL;
-			case 0x2F:
-				return AKEY_BRACKETLEFT;
-			case 0x30:
-				return AKEY_BRACKETRIGHT;
-			case 0x31:
-				return AKEY_BACKSLASH;
-			case 0x33:
-				return AKEY_SEMICOLON;
-			case 0x34:
-				return AKEY_QUOTE;
-			case 0x35:
-				return AKEY_ATARI;
-			case 0x36:
-				return AKEY_COMMA;
-			case 0x37:
-				return AKEY_FULLSTOP;
-			case 0x38:
-				return AKEY_SLASH;
-			case 0x3A://F1
-				return AKEY_UI;
-			case 0x3E://F5
-				return AKEY_WARMSTART;
-			case 0x42://F9
-				return AKEY_EXIT;
-			case 0x43://F10
-				return AKEY_SCREENSHOT;
-			default:
-				break;
-			}
-		}
-		if ((key.state == PS2KBD_RAWKEY_DOWN) && PS2KbdSHIFT && !PS2KbdCONTROL && !PS2KbdALT) {
-			switch (key.key) {
-			case 0x4:
-				return AKEY_A;
-			case 0x5:
-				return AKEY_B;
-			case 0x6:
-				return AKEY_C;
-			case 0x7:
-				return AKEY_D;
-			case 0x8:
-				return AKEY_E;
-			case 0x9:
-				return AKEY_F;
-			case 0xA:
-				return AKEY_G;
-			case 0xB:
-				return AKEY_H;
-			case 0xC:
-				return AKEY_I;
-			case 0xD:
-				return AKEY_J;
-			case 0xE:
-				return AKEY_K;
-			case 0xF:
-				return AKEY_L;
-			case 0x10:
-				return AKEY_M;
-			case 0x11:
-				return AKEY_N;
-			case 0x12:
-				return AKEY_O;
-			case 0x13:
-				return AKEY_P;
-			case 0x14:
-				return AKEY_Q;
-			case 0x15:
-				return AKEY_R;
-			case 0x16:
-				return AKEY_S;
-			case 0x17:
-				return AKEY_T;
-			case 0x18:
-				return AKEY_U;
-			case 0x19:
-				return AKEY_V;
-			case 0x1A:
-				return AKEY_W;
-			case 0x1B:
-				return AKEY_X;
-			case 0x1C:
-				return AKEY_Y;
-			case 0x1D:
-				return AKEY_Z;
-			case 0x1E:
-				return AKEY_EXCLAMATION;
-			case 0X1F:
-				return AKEY_AT;
-			case 0x20:
-				return AKEY_HASH;
-			case 0x21:
-				return AKEY_DOLLAR;
-			case 0x22:
-				return AKEY_PERCENT;
-			case 0x23:
-//				return AKEY_CIRCUMFLEX;
-				return AKEY_CARET;
-			case 0x24:
-				return AKEY_AMPERSAND;
-			case 0x25:
-				return AKEY_ASTERISK;
-			case 0x26:
-				return AKEY_PARENLEFT;
-			case 0x27:
-				return AKEY_PARENRIGHT;
-			case 0x2B:
-				return AKEY_SETTAB;
-			case 0x2D:
-				return AKEY_UNDERSCORE;
-			case 0x2E:
-				return AKEY_PLUS;
-			case 0x31:
-				return AKEY_BAR;
-			case 0x33:
-				return AKEY_COLON;
-			case 0x34:
-				return AKEY_DBLQUOTE;
-			case 0x36:
-				return AKEY_LESS;
-			case 0x37:
-				return AKEY_GREATER;
-			case 0x38:
-				return AKEY_QUESTION;
-			case 0x3E://Shift+F5
-				return AKEY_COLDSTART;
-			case 0x43://Shift+F10
-				return AKEY_SCREENSHOT_INTERLACE;
-			case 0x49://Shift+Insert key
-				return AKEY_INSERT_LINE;
-			case 0x4C://Shift+Backspace Key
-				return AKEY_DELETE_LINE;
-			default:
-				break;
-			}
-		}
-		if ((key.state == PS2KBD_RAWKEY_DOWN) && !PS2KbdSHIFT && !PS2KbdCONTROL && !PS2KbdALT) {
-			switch (key.key) {
-			case 0x4:
-				return AKEY_a;
-			case 0x5:
-				return AKEY_b;
-			case 0x6:
-				return AKEY_c;
-			case 0x7:
-				return AKEY_d;
-			case 0x8:
-				return AKEY_e;
-			case 0x9:
-				return AKEY_f;
-			case 0xA:
-				return AKEY_g;
-			case 0xB:
-				return AKEY_h;
-			case 0xC:
-				return AKEY_i;
-			case 0xD:
-				return AKEY_j;
-			case 0xE:
-				return AKEY_k;
-			case 0xF:
-				return AKEY_l;
-			case 0x10:
-				return AKEY_m;
-			case 0x11:
-				return AKEY_n;
-			case 0x12:
-				return AKEY_o;
-			case 0x13:
-				return AKEY_p;
-			case 0x14:
-				return AKEY_q;
-			case 0x15:
-				return AKEY_r;
-			case 0x16:
-				return AKEY_s;
-			case 0x17:
-				return AKEY_t;
-			case 0x18:
-				return AKEY_u;
-			case 0x19:
-				return AKEY_v;
-			case 0x1A:
-				return AKEY_w;
-			case 0x1B:
-				return AKEY_x;
-			case 0x1C:
-				return AKEY_y;
-			case 0x1D:
-				return AKEY_z;
-			case 0x49:
-				return AKEY_INSERT_CHAR;
-			case 0x4C:
-				return AKEY_DELETE_CHAR;
-			default:
-				break;
-			}
-		}
-		if ((key.state == PS2KBD_RAWKEY_DOWN) && PS2KbdCONTROL && !PS2KbdALT) {
-			switch(key.key) {
-			case 0x4:
-				return AKEY_CTRL_a;
-			case 0x5:
-				return AKEY_CTRL_b;
-			case 0x6:
-				return AKEY_CTRL_c;
-			case 0x7:
-				return AKEY_CTRL_d;
-			case 0x8:
-				return AKEY_CTRL_e;
-			case 0x9:
-				return AKEY_CTRL_f;
-			case 0xA:
-				return AKEY_CTRL_g;
-			case 0xB:
-				return AKEY_CTRL_h;
-			case 0xC:
-				return AKEY_CTRL_i;
-			case 0xD:
-				return AKEY_CTRL_j;
-			case 0xE:
-				return AKEY_CTRL_k;
-			case 0xF:
-				return AKEY_CTRL_l;
-			case 0x10:
-				return AKEY_CTRL_m;
-			case 0x11:
-				return AKEY_CTRL_n;
-			case 0x12:
-				return AKEY_CTRL_o;
-			case 0x13:
-				return AKEY_CTRL_p;
-			case 0x14:
-				return AKEY_CTRL_q;
-			case 0x15:
-				return AKEY_CTRL_r;
-			case 0x16:
-				return AKEY_CTRL_s;
-			case 0x17:
-				return AKEY_CTRL_t;
-			case 0x18:
-				return AKEY_CTRL_u;
-			case 0x19:
-				return AKEY_CTRL_v;
-			case 0x1A:
-				return AKEY_CTRL_w;
-			case 0x1B:
-				return AKEY_CTRL_x;
-			case 0x1C:
-				return AKEY_CTRL_y;
-			case 0x1D:
-				return AKEY_CTRL_z;
-			case 0x1E:
-				return AKEY_CTRL_1;
-			case 0x1F:
-				return AKEY_CTRL_2;
-			case 0x20:
-				return AKEY_CTRL_3;
-			case 0x21:
-				return AKEY_CTRL_4;
-			case 0x22:
-				return AKEY_CTRL_5;
-			case 0x23:
-				return AKEY_CTRL_6;
-			case 0x24:
-				return AKEY_CTRL_7;
-			case 0x25:
-				return AKEY_CTRL_8;
-			case 0x26:
-				return AKEY_CTRL_9;
-			case 0x27:
-				return AKEY_CTRL_0;
-			case 0x2B:
-				return AKEY_CLRTAB;
-			case 0x33:
-				return AKEY_SEMICOLON | AKEY_CTRL;
-			case 0x36:
-				return AKEY_LESS | AKEY_CTRL;
-			case 0x37:
-				return AKEY_GREATER | AKEY_CTRL;
-			default:
-				break;
-			}
-		}
-		if ((key.state == PS2KBD_RAWKEY_DOWN) && PS2KbdALT) {
-			switch(key.key) {
-			//case dcr ylsa
-			case 0x7:
-				alt_function = MENU_DISK;
-				return AKEY_UI;
-			case 0x6:
-				alt_function = MENU_CARTRIDGE;
-				return AKEY_UI;
-			case 0x15:
-				alt_function = MENU_RUN;
-				return AKEY_UI;
-			case 0x1C:
-				alt_function = MENU_SYSTEM;
-				return AKEY_UI;
-			case 0xF:
-				alt_function = MENU_LOADSTATE;
-				return AKEY_UI;
-			case 0x16:
-				alt_function = MENU_SAVESTATE;
-				return AKEY_UI;
-			case 0x4:
-				alt_function = MENU_ABOUT;
-				return AKEY_UI;
-			default:
-				break;
-			}
-		}
-
-
-		if (key.state == PS2KBD_RAWKEY_UP) {
-			switch (key.key) {
-			case 0x39:
-
-			return AKEY_CAPSTOGGLE;
-			case 0xE0:
-				PS2KbdCONTROL = 0;
-				return AKEY_NONE;
-			case 0xE4:
-				PS2KbdCONTROL = 0;
-				return AKEY_NONE;
-			case 0xE1:
-				PS2KbdSHIFT = 0;
-				return AKEY_NONE;
-			case 0xE2:
-				PS2KbdALT = 0;
-				return AKEY_NONE;
-			case 0xE5:
-				PS2KbdSHIFT = 0;
-				return AKEY_NONE;
-			case 0xE6:
-				PS2KbdALT = 0;
-				return AKEY_NONE;
-			default:
-				break;
-			}
-		}
-	}
-}
-	return AKEY_NONE;
-*/
 }
 
 int Atari_PORT(int num)
 {
-  int ret = 0xff;
-  if (num == 0)
-  {
-    if (ButtonPad.Buttons & PSP_CTRL_ANALLEFT)
-      ret &= 0xf0 | STICK_LEFT;
-    else if (ButtonPad.Buttons & PSP_CTRL_ANALRIGHT)
-      ret &= 0xf0 | STICK_RIGHT;
-    else if (ButtonPad.Buttons & PSP_CTRL_ANALUP)
-      ret &= 0xf0 | STICK_FORWARD;
-    else if (ButtonPad.Buttons & PSP_CTRL_ANALDOWN)
-      ret &= 0xf0 | STICK_BACK;
-  }
-  return ret;
+  return JoyState[num];
 }
 
 int Atari_TRIG(int num)
 {
-  if (num == 0)
-  {
-    if (ButtonPad.Buttons & PSP_CTRL_CROSS)
-      return 0;
-  }
-  return 1;
+  return TrigState[num];
 }
 
 #ifdef SOUND
@@ -799,14 +301,13 @@ void RunEmulation()
     /* Check input */
     if (ParseInput()) break;
 
-    //key_code = Atari_Keyboard();
     /* TODO: implement frame skipping, vsync and frequency manipulation */
     Atari800_Frame();
     if (display_screen)
       Atari_DisplayScreen();
   }
 }
-#include "ui.h"
+
 int ParseInput()
 {
   /* DEBUGGING
@@ -814,11 +315,16 @@ int ParseInput()
     == (PSP_CTRL_SELECT | PSP_CTRL_START))
       pspUtilSaveVramSeq(ScreenshotPath, "game");
   //*/
+  int i, on, code, key_ctrl;
+
+  /* Clear keyboard and joystick flags */
+  key_code = AKEY_NONE;
+  key_consol = CONSOL_NONE;
+  JoyState[0] = 0xff;
+  TrigState[0] = 0;
+  key_shift = key_ctrl = 0;
 
   /* Parse input */
-  int i, on, code;
-  key_code = AKEY_NONE;
-
   for (i = 0; ButtonMapId[i] >= 0; i++)
   {
     code = ActiveGameConfig.ButtonConfig[ButtonMapId[i]];
@@ -828,11 +334,34 @@ int ParseInput()
     /* doesn't trigger any other combination presses. */
     if (on) ButtonPad.Buttons &= ~ButtonMask[i];
 
-    if (code & KBD && key_code == AKEY_NONE)
+    if (code & JOY)      /* Joystick */
+    {
+      if (on) JoyState[0] &= 0xf0 | CODE_MASK(code);
+    }
+    else if (code & TRG) /* Trigger */
+    {
+      if (on) TrigState[0] = CODE_MASK(code);
+    }
+    else if (code & KBD) /* Keyboard */
     {
       if (on) key_code = CODE_MASK(code);
     }
-    else if (code & SPC)
+    else if (code & CSL) /* Console */
+    {
+      if (on) key_consol ^= CODE_MASK(code);
+    }
+    else if (code & STA) /* State-based (shift/ctrl) */
+    {
+      if (on)
+      {
+        switch (CODE_MASK(code))
+        {
+        case AKEY_SHFT: key_shift = 1; break;
+        case AKEY_CTRL: key_ctrl  = 1; break;
+        }
+      }
+    }
+    else if (code & SPC) /* Emulator-specific */
     {
       int inverted = -(int)CODE_MASK(code);
       switch (inverted)
@@ -843,6 +372,20 @@ int ParseInput()
       default:
         if (on && key_code == AKEY_NONE) 
           key_code = inverted;
+      }
+    }
+
+    if (key_code != AKEY_NONE)
+    {
+      if (machine_type == MACHINE_5200)
+      {
+        if (!(key_code == AKEY_5200_HASH || key_code == AKEY_5200_ASTERISK))
+          key_code ^= (key_shift) ? AKEY_SHFT : 0;
+      }
+      else
+      {
+        key_code ^= (key_shift) ? AKEY_SHFT : 0;
+        key_code ^= (key_ctrl)  ? AKEY_CTRL : 0;
       }
     }
   }

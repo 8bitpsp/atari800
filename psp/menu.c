@@ -41,28 +41,51 @@
 EmulatorConfig Config;
 GameConfig ActiveGameConfig;
 
-/* Default configuration */
-GameConfig DefaultGameConfig =
+/* Default configurations */
+GameConfig DefaultComputerConfig =
 {
   {
-    0,     /* Analog Up    */
-    0,   /* Analog Down  */
-    0,   /* Analog Left  */
-    0,  /* Analog Right */
-    0,     /* D-pad Up     */
-    0,   /* D-pad Down   */
-    0,   /* D-pad Left   */
-    0,  /* D-pad Right  */
-    0,/* Square       */
-    0,/* Cross        */
-    0,                /* Circle       */
-    0,                /* Triangle     */
-    0,                /* L Trigger    */
-    0,                /* R Trigger    */
-    0,                /* Select       */
-    0,                /* Start        */
+    JOY|STICK_FORWARD, /* Analog Up    */
+    JOY|STICK_BACK,    /* Analog Down  */
+    JOY|STICK_LEFT,    /* Analog Left  */
+    JOY|STICK_RIGHT,   /* Analog Right */
+    KBD|AKEY_UP,       /* D-pad Up     */
+    KBD|AKEY_DOWN,     /* D-pad Down   */
+    KBD|AKEY_LEFT,     /* D-pad Left   */
+    KBD|AKEY_RIGHT,    /* D-pad Right  */
+    0,                 /* Square       */
+    TRG|1,             /* Cross        */
+    KBD|AKEY_SPACE,    /* Circle       */
+    0,                 /* Triangle     */
+    0,                 /* L Trigger    */
+    0,                 /* R Trigger    */
+    CSL|CONSOL_SELECT, /* Select       */
+    CSL|CONSOL_START,  /* Start        */
     SPC|-AKEY_EXIT,    /* L+R Triggers */
-    0,                /* Start+Select */
+    0,                 /* Start+Select */
+  }
+},
+DefaultConsoleConfig = 
+{
+  {
+    JOY|STICK_FORWARD,    /* Analog Up    */
+    JOY|STICK_BACK,       /* Analog Down  */
+    JOY|STICK_LEFT,       /* Analog Left  */
+    JOY|STICK_RIGHT,      /* Analog Right */
+    JOY|STICK_FORWARD,    /* D-pad Up     */
+    JOY|STICK_BACK,       /* D-pad Down   */
+    JOY|STICK_LEFT,       /* D-pad Left   */
+    JOY|STICK_RIGHT,      /* D-pad Right  */
+    0,                    /* Square       */
+    TRG|1,                /* Cross        */
+    0,                    /* Circle       */
+    0,                    /* Triangle     */
+    0,                    /* L Trigger    */
+    0,                    /* R Trigger    */
+    KBD|AKEY_5200_PAUSE,  /* Select       */
+    KBD|AKEY_5200_START,  /* Start        */
+    SPC|-AKEY_EXIT,       /* L+R Triggers */
+    0,                    /* Start+Select */
   }
 };
 
@@ -169,21 +192,41 @@ static const PspMenuOptionDef
     { "\026\242\020 cancels, \026\241\020 confirms (US)", (void*)0 },
     { "\026\241\020 cancels, \026\242\020 confirms (Japan)", (void*)1 },
     { NULL, NULL } },
-  ButtonMapOptions[] = {
+  ComputerButtonMapOptions[] = {
     /* Unmapped */
     { "None", (void*)0 },
     /* Special keys */
-    { "Special: Open Menu",   (void*)(SPC|-AKEY_EXIT)      },
-    { "Special: Warm Reboot", (void*)(SPC|-AKEY_WARMSTART) },
-    { "Special: Cold Reboot", (void*)(SPC|-AKEY_COLDSTART) },
-    { "Special: Start",       (void*)(SPC|-AKEY_START)     },
-    { "Special: Select",      (void*)(SPC|-AKEY_SELECT)    },
-    { "Special: Option",      (void*)(SPC|-AKEY_OPTION)    },
+    { "Special: Open Menu", (void*)(SPC|-AKEY_EXIT)      },
+    /* Console */
+    { "Console: Reset",  (void*)(SPC|-AKEY_WARMSTART) },
+    { "Console: Option", (void*)(CSL|CONSOL_OPTION)   },
+    { "Console: Select", (void*)(CSL|CONSOL_SELECT)   },
+    { "Console: Start",  (void*)(CSL|CONSOL_START)    },
+    { "Console: Help",   (void*)(SPC|-AKEY_HELP)      },
+    /* Joystick */
+    { "Joystick: Up",   (void*)(JOY|STICK_FORWARD) },
+    { "Joystick: Down", (void*)(JOY|STICK_BACK)    },
+    { "Joystick: Left", (void*)(JOY|STICK_LEFT)    },
+    { "Joystick: Up",   (void*)(JOY|STICK_RIGHT)   },
+    { "Joystick: Fire", (void*)(TRG|1) },
     /* Keyboard */
-    { "Keyboard Up",   (void*)(KBD|AKEY_UP)    }, 
-    { "Keyboard Down", (void*)(KBD|AKEY_DOWN)  },
-    { "Keyboard Left", (void*)(KBD|AKEY_LEFT)  }, 
-    { "Keyboard Right",(void*)(KBD|AKEY_RIGHT) },
+    { "Keyboard: Up",   (void*)(KBD|AKEY_UP)    }, 
+    { "Keyboard: Down", (void*)(KBD|AKEY_DOWN)  },
+    { "Keyboard: Left", (void*)(KBD|AKEY_LEFT)  }, 
+    { "Keyboard: Right",(void*)(KBD|AKEY_RIGHT) },
+    /* Keyboard: Function keys */
+    { "F1",(void*)(KBD|AKEY_F1) }, { "F2",(void*)(KBD|AKEY_F2) },
+    { "F3",(void*)(KBD|AKEY_F3) }, { "F4",(void*)(KBD|AKEY_F4) },
+    /* Keyboard: misc */
+    { "Space",       (void*)(KBD|AKEY_SPACE) }, 
+    { "Return",      (void*)(KBD|AKEY_RETURN) },
+    { "Tab",         (void*)(KBD|AKEY_TAB) }, 
+    { "Backspace",   (void*)(KBD|AKEY_BACKSPACE) },
+    { "Escape",      (void*)(KBD|AKEY_ESCAPE) },
+    { "Toggle CAPS", (void*)(KBD|AKEY_CAPSTOGGLE) },
+    { "Atari Key",   (void*)(KBD|AKEY_ATARI) },
+    { "Shift",       (void*)(STA|AKEY_SHFT) },
+    { "Control",     (void*)(STA|AKEY_CTRL) },
     /* Keyboard: digits */
     { "1",(void*)(KBD|AKEY_1) }, { "2",(void*)(KBD|AKEY_2) },
     { "3",(void*)(KBD|AKEY_3) }, { "4",(void*)(KBD|AKEY_4) },
@@ -191,19 +234,50 @@ static const PspMenuOptionDef
     { "7",(void*)(KBD|AKEY_7) }, { "8",(void*)(KBD|AKEY_8) },
     { "9",(void*)(KBD|AKEY_9) }, { "0",(void*)(KBD|AKEY_0) },
     /* Keyboard: letters */
-    { "A",(void*)(KBD|AKEY_A) }, { "B",(void*)(KBD|AKEY_B) },
-    { "C",(void*)(KBD|AKEY_C) }, { "D",(void*)(KBD|AKEY_D) },
-    { "E",(void*)(KBD|AKEY_E) }, { "F",(void*)(KBD|AKEY_F) },
-    { "G",(void*)(KBD|AKEY_G) }, { "H",(void*)(KBD|AKEY_H) },
-    { "I",(void*)(KBD|AKEY_I) }, { "J",(void*)(KBD|AKEY_J) },
-    { "K",(void*)(KBD|AKEY_K) }, { "L",(void*)(KBD|AKEY_L) },
-    { "M",(void*)(KBD|AKEY_M) }, { "N",(void*)(KBD|AKEY_N) },
-    { "O",(void*)(KBD|AKEY_O) }, { "P",(void*)(KBD|AKEY_P) },
-    { "Q",(void*)(KBD|AKEY_Q) }, { "R",(void*)(KBD|AKEY_R) },
-    { "S",(void*)(KBD|AKEY_S) }, { "T",(void*)(KBD|AKEY_T) },
-    { "U",(void*)(KBD|AKEY_U) }, { "V",(void*)(KBD|AKEY_V) },
-    { "W",(void*)(KBD|AKEY_W) }, { "X",(void*)(KBD|AKEY_X) },
-    { "Y",(void*)(KBD|AKEY_Y) }, { "Z",(void*)(KBD|AKEY_Z) },
+    { "A",(void*)(KBD|AKEY_a) }, { "B",(void*)(KBD|AKEY_b) },
+    { "C",(void*)(KBD|AKEY_c) }, { "D",(void*)(KBD|AKEY_d) },
+    { "E",(void*)(KBD|AKEY_e) }, { "F",(void*)(KBD|AKEY_f) },
+    { "G",(void*)(KBD|AKEY_g) }, { "H",(void*)(KBD|AKEY_h) },
+    { "I",(void*)(KBD|AKEY_i) }, { "J",(void*)(KBD|AKEY_j) },
+    { "K",(void*)(KBD|AKEY_k) }, { "L",(void*)(KBD|AKEY_l) },
+    { "M",(void*)(KBD|AKEY_m) }, { "N",(void*)(KBD|AKEY_n) },
+    { "O",(void*)(KBD|AKEY_o) }, { "P",(void*)(KBD|AKEY_p) },
+    { "Q",(void*)(KBD|AKEY_q) }, { "R",(void*)(KBD|AKEY_r) },
+    { "S",(void*)(KBD|AKEY_s) }, { "T",(void*)(KBD|AKEY_t) },
+    { "U",(void*)(KBD|AKEY_u) }, { "V",(void*)(KBD|AKEY_v) },
+    { "W",(void*)(KBD|AKEY_w) }, { "X",(void*)(KBD|AKEY_x) },
+    { "Y",(void*)(KBD|AKEY_y) }, { "Z",(void*)(KBD|AKEY_z) },
+    /* Keyboard: symbols */
+    {"< (less than)",   (void*)(KBD|AKEY_LESS) },
+    {"> (greater than)",(void*)(KBD|AKEY_GREATER) },
+    {"= (equals)",      (void*)(KBD|AKEY_EQUAL) },
+    {"+ (plus)",        (void*)(KBD|AKEY_PLUS) },
+    {"* (asterisk)",    (void*)(KBD|AKEY_ASTERISK) },
+    {"/ (slash)",       (void*)(KBD|AKEY_SLASH) },
+    {": (colon)",       (void*)(KBD|AKEY_COLON) },
+    {"; (semicolon)",   (void*)(KBD|AKEY_SEMICOLON) },
+    {", (comma)",       (void*)(KBD|AKEY_COMMA) }, 
+    {". (period)",      (void*)(KBD|AKEY_FULLSTOP) },
+    {"_ (underscore)",  (void*)(KBD|AKEY_UNDERSCORE) },
+    /* End */
+    { NULL, NULL } },
+  ConsoleButtonMapOptions[] = {
+    /* Unmapped */
+    { "None", (void*)0 },
+    /* Special keys */
+    { "Special: Open Menu", (void*)(SPC|-AKEY_EXIT)  },
+    /* Console */
+    { "Console: Start", (void*)(KBD|AKEY_5200_START) },
+    { "Console: Pause", (void*)(KBD|AKEY_5200_PAUSE) },
+    { "Console: Reset", (void*)(KBD|AKEY_5200_RESET) },
+    /* Keypad */
+    { "1",(void*)(KBD|AKEY_5200_1) }, { "2",(void*)(KBD|AKEY_5200_2) },
+    { "3",(void*)(KBD|AKEY_5200_3) }, { "4",(void*)(KBD|AKEY_5200_4) },
+    { "5",(void*)(KBD|AKEY_5200_5) }, { "6",(void*)(KBD|AKEY_5200_6) },
+    { "7",(void*)(KBD|AKEY_5200_7) }, { "8",(void*)(KBD|AKEY_5200_8) },
+    { "9",(void*)(KBD|AKEY_5200_9) }, { "0",(void*)(KBD|AKEY_5200_0) },
+    { "*",(void*)(KBD|AKEY_5200_ASTERISK) },
+    { "#",(void*)(KBD|AKEY_5200_HASH) },
     /* End */
     { NULL, NULL } };
 
@@ -230,45 +304,86 @@ static const PspMenuItemDef
       ControlModeOptions,  -1, "\026\250\020 Change OK and Cancel button mapping" },
     { NULL, NULL }
   },
-  ControlMenuDef[] = {
+  ComputerControlMenuDef[] = {
     { "\026"PSP_CHAR_ANALUP,     (void*)MAP_ANALOG_UP,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_ANALDOWN,   (void*)MAP_ANALOG_DOWN,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_ANALLEFT,   (void*)MAP_ANALOG_LEFT,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_ANALRIGHT,  (void*)MAP_ANALOG_RIGHT,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_UP,         (void*)MAP_BUTTON_UP,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_DOWN,       (void*)MAP_BUTTON_DOWN,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_LEFT,       (void*)MAP_BUTTON_LEFT,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_RIGHT,      (void*)MAP_BUTTON_RIGHT,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_SQUARE,     (void*)MAP_BUTTON_SQUARE,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_CROSS,      (void*)MAP_BUTTON_CROSS,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_CIRCLE,     (void*)MAP_BUTTON_CIRCLE,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_TRIANGLE,   (void*)MAP_BUTTON_TRIANGLE,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_LTRIGGER,   (void*)MAP_BUTTON_LTRIGGER,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_RTRIGGER,   (void*)MAP_BUTTON_RTRIGGER,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_SELECT,     (void*)MAP_BUTTON_SELECT,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_START,      (void*)MAP_BUTTON_START,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER,
                            (void*)MAP_BUTTON_LRTRIGGERS,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT,
                            (void*)MAP_BUTTON_STARTSELECT,
-      ButtonMapOptions, -1, ControlHelpText },
+      ComputerButtonMapOptions, -1, ControlHelpText },
+    { NULL, NULL }
+  },
+  ConsoleControlMenuDef[] = {
+    { "\026"PSP_CHAR_ANALUP,     (void*)MAP_ANALOG_UP,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALDOWN,   (void*)MAP_ANALOG_DOWN,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALLEFT,   (void*)MAP_ANALOG_LEFT,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALRIGHT,  (void*)MAP_ANALOG_RIGHT,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_UP,         (void*)MAP_BUTTON_UP,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_DOWN,       (void*)MAP_BUTTON_DOWN,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_LEFT,       (void*)MAP_BUTTON_LEFT,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_RIGHT,      (void*)MAP_BUTTON_RIGHT,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_SQUARE,     (void*)MAP_BUTTON_SQUARE,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_CROSS,      (void*)MAP_BUTTON_CROSS,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_CIRCLE,     (void*)MAP_BUTTON_CIRCLE,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_TRIANGLE,   (void*)MAP_BUTTON_TRIANGLE,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_LTRIGGER,   (void*)MAP_BUTTON_LTRIGGER,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_RTRIGGER,   (void*)MAP_BUTTON_RTRIGGER,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_SELECT,     (void*)MAP_BUTTON_SELECT,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_START,      (void*)MAP_BUTTON_START,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER,
+                           (void*)MAP_BUTTON_LRTRIGGERS,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT,
+                           (void*)MAP_BUTTON_STARTSELECT,
+      ConsoleButtonMapOptions, -1, ControlHelpText },
     { NULL, NULL }
   },
   SystemMenuDef[] = {
@@ -417,14 +532,14 @@ void InitMenu(int *argc, char **argv)
 
   /* Initialize control menu */
   ControlUiMenu.Menu = pspMenuCreate();
-  pspMenuLoad(ControlUiMenu.Menu, ControlMenuDef);
+  pspMenuLoad(ControlUiMenu.Menu, ComputerControlMenuDef);
 
   /* Initialize paths */
-  SaveStatePath 
-    = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen(SaveStateDir) + 2));
+  SaveStatePath = (char*)malloc(sizeof(char) 
+    * (strlen(pspGetAppDirectory()) + strlen(SaveStateDir) + 2));
   sprintf(SaveStatePath, "%s%s/", pspGetAppDirectory(), SaveStateDir);
-  ScreenshotPath 
-    = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
+  ScreenshotPath = (char*)malloc(sizeof(char) 
+    * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
   sprintf(ScreenshotPath, "%s%s/", pspGetAppDirectory(), ScreenshotDir);
 
   /* Load default configuration */
@@ -437,8 +552,10 @@ void InitMenu(int *argc, char **argv)
   UiMetric.Top = 24;
   UiMetric.Right = 472;
   UiMetric.Bottom = 250;
-  UiMetric.OkButton = (!Config.ControlMode) ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
-  UiMetric.CancelButton = (!Config.ControlMode) ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
+  UiMetric.OkButton = (!Config.ControlMode) 
+    ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
+  UiMetric.CancelButton = (!Config.ControlMode) 
+    ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
   UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
   UiMetric.ScrollbarBgColor = 0x44ffffff;
   UiMetric.ScrollbarWidth = 10;
@@ -597,7 +714,8 @@ static void DisplayStateTab()
 /* Load options */
 void LoadOptions()
 {
-  char *path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen(OptionsFile) + 1));
+  char *path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
+    + strlen(OptionsFile) + 1));
   sprintf(path, "%s%s", pspGetAppDirectory(), OptionsFile);
 
   /* Initialize INI structure */
@@ -612,7 +730,8 @@ void LoadOptions()
   else
   {
     /* Load values */
-    Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", DISPLAY_MODE_UNSCALED);
+    Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", 
+      DISPLAY_MODE_UNSCALED);
     Config.UpdateFreq = pspInitGetInt(init, "Video", "Update Frequency", 0);
     Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 1);
     Config.VSync = pspInitGetInt(init, "Video", "VSync", 0);
@@ -632,7 +751,8 @@ void LoadOptions()
 /* Save options */
 static int SaveOptions()
 {
-  char *path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen(OptionsFile) + 1));
+  char *path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
+    + strlen(OptionsFile) + 1));
   sprintf(path, "%s%s", pspGetAppDirectory(), OptionsFile);
 
   /* Initialize INI structure */
@@ -898,7 +1018,7 @@ int  OnMenuButtonPress(const struct PspUiMenu *uimenu,
 
       /* Modify the menu */
       for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
-        pspMenuSelectOptionByValue(item, (void*)DefaultGameConfig.ButtonConfig[i]);
+        pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
 
       return 0;
     }
@@ -1006,8 +1126,7 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery,
       PspMenuItem *sel, 
       u32 button_mask)
 {
-  if (button_mask & PSP_CTRL_SQUARE 
-    || button_mask & PSP_CTRL_TRIANGLE)
+  if (button_mask & PSP_CTRL_SQUARE || button_mask & PSP_CTRL_TRIANGLE)
   {
     char *path;
     char caption[32];
@@ -1016,14 +1135,16 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery,
     PspMenuItem *item = pspMenuFindItemByUserdata(gallery->Menu, sel->Userdata);
 
     path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
-    sprintf(path, "%s%s.s%02i", SaveStatePath, config_name, (int)item->Userdata);
+    sprintf(path, "%s%s.s%02i", 
+      SaveStatePath, config_name, (int)item->Userdata);
 
     do /* not a real loop; flow control construct */
     {
       if (button_mask & PSP_CTRL_SQUARE)
       {
-        if (pspFileIoCheckIfExists(path) && !pspUiConfirm("Overwrite existing state?"))
-          break;
+        if (pspFileIoCheckIfExists(path) 
+          && !pspUiConfirm("Overwrite existing state?"))
+            break;
 
         pspUiFlashMessage("Saving, please wait ...");
 
@@ -1108,15 +1229,19 @@ int OnQuickloadOk(const void *browser, const void *path)
 /* Initialize game configuration */
 static void InitGameConfig()
 {
-  memcpy(&ActiveGameConfig, &DefaultGameConfig, sizeof(GameConfig));
+  GameConfig *DefaultConfig = (machine_type == MACHINE_5200) 
+    ? &DefaultConsoleConfig : &DefaultComputerConfig;
+
+  memcpy(&ActiveGameConfig, DefaultConfig, sizeof(GameConfig));
 }
 
 /* Load game configuration */
 static int LoadGameConfig()
 {
   char *path;
-  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen("controlhack.bin") + 6))))
-    return 0;
+  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
+    + strlen("controlhack.bin") + 6))))
+      return 0;
   sprintf(path, "%s%s.cnf", pspGetAppDirectory(), "controlhack.bin");
 
   /* Open file for reading */
@@ -1147,8 +1272,9 @@ static int LoadGameConfig()
 static int SaveGameConfig()
 {
   char *path;
-  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) + strlen("controlhack.bin") + 6))))
-    return 0;
+  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
+    + strlen("controlhack.bin") + 6))))
+      return 0;
   sprintf(path, "%s%s.cnf", pspGetAppDirectory(), "controlhack.bin");
 
   /* Open file for writing */

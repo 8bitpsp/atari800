@@ -32,9 +32,12 @@ void TrashEmulation();
 
 #define CODE_MASK(x) (x & 0xff)
 
-#define JOY 0x100
-#define KBD 0x200
-#define SPC 0x400
+#define JOY 0x0100 /* Joystick */
+#define TRG 0x0200 /* Trigger */
+#define KBD 0x0400 /* Keyboard */
+#define CSL 0x0800 /* Console */
+#define STA 0x1000 /* State-based (shift/ctrl) */
+#define SPC 0x2000 /* Emulator-reserved */
 
 typedef struct
 {
