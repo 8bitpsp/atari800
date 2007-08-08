@@ -33,7 +33,7 @@
 #include "psp.h"
 #include "ctrl.h"
 
-#include "menu.h"
+#include "psp/menu.h"
 
 PSP_MODULE_INFO(PSP_APP_NAME, 0, 1, 1);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 {
   /* Initialize PSP */
   pspInit(argv[0]);
-  pspAudioInit(512);
+  pspAudioInit(896);
   pspCtrlInit();
   pspVideoInit();
 
@@ -56,7 +56,7 @@ int main(int argc, char **argv)
   pspStartCallbackThread();
 
   /* Show the menu */
-  InitMenu(&argc, argv);
+  InitMenu();
   DisplayMenu();
   TrashMenu();
 

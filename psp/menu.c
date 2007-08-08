@@ -37,6 +37,7 @@
 
 #define SYSTEM_SCRNSHOT     1
 #define SYSTEM_RESET        2
+#define SYSTEM_MACHINE_TYPE 3
 
 EmulatorConfig Config;
 GameConfig ActiveGameConfig;
@@ -191,6 +192,12 @@ static const PspMenuOptionDef
   ControlModeOptions[] = {
     { "\026\242\020 cancels, \026\241\020 confirms (US)", (void*)0 },
     { "\026\241\020 cancels, \026\242\020 confirms (Japan)", (void*)1 },
+    { NULL, NULL } },
+  MachineTypeOptions[] = {
+    { "OS A", (void*)MACHINE_OSA },
+    { "OS B", (void*)MACHINE_OSB },
+    { "XL/XE", (void*)MACHINE_XLXE },
+    { "5200", (void*)MACHINE_5200 },
     { NULL, NULL } },
   ComputerButtonMapOptions[] = {
     /* Unmapped */
@@ -393,11 +400,13 @@ static const PspMenuItemDef
     { NULL, NULL }
   },
   SystemMenuDef[] = {
+    { "\tHardware", NULL, NULL, -1, NULL },
+    { "Machine type",     (void*)SYSTEM_MACHINE_TYPE,
+      MachineTypeOptions, -1, "\026\250\020 Change emulated machine" },
     { "\tSystem", NULL, NULL, -1, NULL },
-    { "Reset",            (void*)SYSTEM_RESET,
-      NULL,             -1, "\026\001\020 Reset" },
-    { "Save screenshot",  (void*)SYSTEM_SCRNSHOT,
-      NULL,             -1, "\026\001\020 Save screenshot" },
+    { "Reset", (void*)SYSTEM_RESET, NULL, -1, "\026\001\020 Reset" },
+    { "Save screenshot",  (void*)SYSTEM_SCRNSHOT, NULL, -1,
+      "\026\001\020 Save screenshot" },
     { NULL, NULL }
   };
 
@@ -496,7 +505,7 @@ PspUiMenu ControlUiMenu =
   OnMenuItemChanged,     /* OnItemChanged() */
 };
 
-void InitMenu(int *argc, char **argv)
+void InitMenu()
 {
   /* Reset variables */
   TabIndex = TAB_ABOUT;
@@ -508,8 +517,8 @@ void InitMenu(int *argc, char **argv)
   /* Initialize options */
   LoadOptions();
 
-  if (!InitEmulation(argc, argv))
-    return;
+  /* Initialize emulation */
+  if (!InitEmulation()) return;
 
   /* Load the background image */
   Background = pspImageLoadPng("background.png");
@@ -644,6 +653,9 @@ void DisplayMenu()
       pspUiOpenMenu(&OptionUiMenu, NULL);
       break;
     case TAB_SYSTEM:
+      item = pspMenuFindItemByUserdata(SystemUiMenu.Menu,
+        (void*)SYSTEM_MACHINE_TYPE);
+      pspMenuSelectOptionByValue(item, (void*)machine_type);
       pspUiOpenMenu(&SystemUiMenu, NULL);
       break;
     case TAB_ABOUT:
@@ -744,6 +756,7 @@ void LoadOptions()
     Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
     Config.ShowFps = pspInitGetInt(init, "Video", "Show FPS", 0);
     Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
+    machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
 
     if (GamePath) free(GamePath);
     GamePath = pspInitGetString(init, "File", "Game Path", NULL);
@@ -772,6 +785,7 @@ static int SaveOptions()
   pspInitSetInt(init, "Video", "PSP Clock Frequency",Config.ClockFreq);
   pspInitSetInt(init, "Video", "Show FPS", Config.ShowFps);
   pspInitSetInt(init, "Menu", "Control Mode", Config.ControlMode);
+  pspInitSetInt(init, "System", "Machine Type", machine_type);
 
   if (GamePath) pspInitSetString(init, "File", "Game Path", GamePath);
 
@@ -795,6 +809,7 @@ void InitOptionDefaults()
   Config.VSync = 0;
   Config.ClockFreq = 222;
   Config.ShowFps = 0;
+  machine_type = MACHINE_XLXE;
   GamePath = NULL;
 }
 
@@ -930,6 +945,21 @@ int  OnMenuItemChanged(const struct PspUiMenu *uimenu,
   {
     ActiveGameConfig.ButtonConfig[(int)item->Userdata] 
       = (unsigned int)option->Value;
+  }
+  else if (uimenu == &SystemUiMenu)
+  {
+    switch((int)item->Userdata)
+    {
+    case SYSTEM_MACHINE_TYPE:
+      if ((int)option->Value == machine_type 
+        || !pspUiConfirm("This will reset the system. Proceed?"))
+          break;
+
+      /* Reset the system */
+      machine_type = (int)option->Value;
+      Atari800_InitialiseMachine();
+      break;
+    }
   }
   else if (uimenu == &OptionUiMenu)
   {
@@ -1215,19 +1245,30 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery,
 
 int OnQuickloadOk(const void *browser, const void *path)
 {
-  if (LoadedGame) free(LoadedGame);
-
+  /* Load the game */
   if (!Atari800_OpenFile(path, 1, 1, 0))
   { 
     pspUiAlert("Error loading file"); 
     return 0; 
   }
 
+  /* Reinitialize the control menu to reflect console or computer */
+  pspMenuLoad(ControlUiMenu.Menu, 
+    (machine_type == MACHINE_5200) 
+      ? ConsoleControlMenuDef : ComputerControlMenuDef);
+      
+  /* TODO: load proper control set */
+  InitGameConfig();
+
+  /* Reset loaded game */
+  if (LoadedGame) free(LoadedGame);
   LoadedGame = strdup(path);
 
+  /* Reset current game path */
   if (GamePath) free(GamePath);
   GamePath = pspFileIoGetParentDirectory(LoadedGame);
 
+  /* Return to the emulator */
   ResumeEmulation = 1;
   return 1;
 }

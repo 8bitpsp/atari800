@@ -5,7 +5,7 @@
 #define DISPLAY_MODE_FIT_HEIGHT  1
 #define DISPLAY_MODE_FILL_SCREEN 2
 
-int InitEmulation(int *argc, char **argv);
+int InitEmulation();
 void RunEmulation();
 void TrashEmulation();
 

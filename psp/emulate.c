@@ -25,20 +25,9 @@
 #include "emulate.h"
 
 #define SCREEN_BUFFER_WIDTH 512
-const int ScreenBufferSkip = 512 - ATARI_WIDTH;
-
-extern unsigned char audsrv[];
-extern unsigned int size_audsrv;
-
-extern unsigned char usbd[];
-extern unsigned int size_usbd;
-
-extern unsigned char ps2kbd[];
-extern unsigned int size_ps2kbd;
 
 extern EmulatorConfig Config;
 extern GameConfig ActiveGameConfig;
-
 extern const u64 ButtonMask[];
 extern const int ButtonMapId[];
 
@@ -47,49 +36,58 @@ static int ScreenX;
 static int ScreenY;
 static int ScreenW;
 static int ScreenH;
-
 static PspFpsCounter FpsCounter;
+static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
+static int TrigState[4] = { 1, 1, 1, 1 };
+static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - ATARI_WIDTH;
 
 PspImage *Screen;
 
-static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
-static int TrigState[4] = { 1, 1, 1, 1 };
-
 static int ParseInput();
+static void Copy_Screen_Buffer();
+static void AudioCallback(void* buf, unsigned int *length, void *userdata);
 
-double Atari_time(void)
+/* Initialize emulation */
+int InitEmulation()
 {
-	static double fake_timer = 0;
-	return fake_timer++;
+  /* Create screen buffer */
+  if (!(Screen = pspImageCreateVram(SCREEN_BUFFER_WIDTH, 
+  	ATARI_HEIGHT, PSP_IMAGE_INDEXED)))
+    	return 0;
+
+  Screen->Viewport.Width = 336;
+  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
+
+  /* Initialize palette */
+  int i, c;
+  for (i = 0; i < 256; i++)
+  {
+    c = colortable[i];
+    Screen->Palette[i] = 
+      RGB((c & 0x00ff0000) >> 16,
+          (c & 0x0000ff00) >> 8,
+          (c & 0x000000ff));
+  }
+
+  /* Initialize performance counter */
+  pspPerfInitFps(&FpsCounter);
+
+  /* Initialize emulator */
+  if (!Atari800_Initialise(0, NULL))
+  {
+    pspImageDestroy(Screen);
+    return 0;
+  }
+
+  return 1;
 }
 
-void Atari_sleep(double s)
+/* Release emulation resources */
+void TrashEmulation()
 {
-/* TODO */
-/*
-	if (ui_is_active){
-	        int i,ret;
-	        for (i=0;i<s * 100.0;i++){
-	
-			ee_sema_t sema;
-	                sema.attr = 0;
-	                sema.count = 0;
-	                sema.init_count = 0;
-	                sema.max_count = 1;
-	                ret = CreateSema(&sema);
-	                if (ret <= 0) {
-	                        //could not create sema, strange!  continue anyway.
-	                        return;
-	                }
-	
-	                iSignalSema(ret);
-	                WaitSema(ret);
-	                DeleteSema(ret);
-	        }
-	}
-*/
+  pspImageDestroy(Screen);
+  Atari800_Exit(FALSE);
 }
-
 
 void Atari_Initialise(int *argc, char *argv[])
 {
@@ -105,11 +103,12 @@ int Atari_Exit(int run_monitor)
 }
 
 /* Copies the atari screen buffer to the image buffer */
-static void Copy_Screen_Buffer()
+void Copy_Screen_Buffer()
 {
   int i, j;
   u8 *screen, *image;
 
+  /* TODO: copy only the middle 336 columns */
   screen = (u8*)atari_screen;
   image = (u8*)Screen->Pixels;
 
@@ -172,53 +171,35 @@ int Atari_TRIG(int num)
 
 void Sound_Initialise(int *argc, char *argv[])
 {
-/*
-  if (audsrv_init() != 0)
-    Aprint("failed to initialize audsrv: %s", audsrv_get_error_string());
-  else {
-    struct audsrv_fmt_t format;
-    format.bits = 8;
-    format.freq = 44100;
-    format.channels = 1;
-    audsrv_set_format(&format);
-    audsrv_set_volume(MAX_VOLUME);
-    Pokey_sound_init(FREQ_17_EXACT, 44100, 1, 0);
-  }
-*/
+  Pokey_sound_init(FREQ_17_EXACT, 44100, 1, 0);
 }
 
-void Sound_Update(void)
+void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
-/*
   static char buffer[44100 / 50];
   unsigned int nsamples = (tv_mode == TV_NTSC) ? (44100 / 60) : (44100 / 50);
   Pokey_process(buffer, nsamples);
-  audsrv_wait_audio(nsamples);
-  audsrv_play_audio(buffer, nsamples);
-*/
+
+  PspSample *OutBuf = (PspSample*)buf;
+  int i;
+
+  /* TODO: test sound rate when TV mode is switched - currently hardcoded */
+  /* to PAL */
+  for(i = 0; i < nsamples; i++) 
+    OutBuf[i].Left = OutBuf[i].Right = buffer[i];
+}
+void Sound_Update(void)
+{
 }
 
 void Sound_Pause(void)
 {
-/*
-  audsrv_stop_audio();
-*/
+  pspAudioSetChannelCallback(0, NULL, 0);
 }
 
 void Sound_Continue(void)
 {
-/*
-  if (audsrv_init() != 0)
-    Aprint("failed to initialize audsrv: %s", audsrv_get_error_string());
-  else {
-    struct audsrv_fmt_t format;
-    format.bits = 8;
-    format.freq = 44100;
-    format.channels = 1;
-    audsrv_set_format(&format);
-    audsrv_set_volume(MAX_VOLUME);
-  }
-*/
+  pspAudioSetChannelCallback(0, AudioCallback, 0);
 }
 
 #endif /* SOUND */
@@ -229,39 +210,12 @@ int Atari_OpenDir(const char *filename)
 }
 
 int Atari_ReadDir(char *fullpath, char *filename, int *isdir,
-                  int *readonly, int *size, char *timetext)
+  int *readonly, int *size, char *timetext)
 {
   return FALSE;
 }
 
-int InitEmulation(int *argc, char **argv)
-{
-  /* Create screen buffer */
-  if (!(Screen = pspImageCreateVram(SCREEN_BUFFER_WIDTH, 
-  	ATARI_HEIGHT, PSP_IMAGE_INDEXED)))
-    	return 0;
-
-  Screen->Viewport.Width = 336;
-  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
-
-  /* Initialize palette */
-  int i, c;
-  for (i = 0; i < 256; i++)
-  {
-    c = colortable[i];
-    Screen->Palette[i] = 
-      RGB((c & 0x00ff0000) >> 16,
-          (c & 0x0000ff00) >> 8,
-          (c & 0x000000ff));
-  }
-
-  /* Initialize performance counter */
-  pspPerfInitFps(&FpsCounter);
-
-  /* Initialize emulator */
-  return Atari800_Initialise(argc, argv);
-}
-
+/* Run emulation */
 void RunEmulation()
 {
   float ratio;
@@ -278,11 +232,11 @@ void RunEmulation()
     break;
   case DISPLAY_MODE_FIT_HEIGHT:
     ratio = (float)SCR_HEIGHT / (float)Screen->Viewport.Height;
-    ScreenW = (float)Screen->Viewport.Width * ratio - 2;
+    ScreenW = (float)Screen->Viewport.Width * ratio;
     ScreenH = SCR_HEIGHT;
     break;
   case DISPLAY_MODE_FILL_SCREEN:
-    ScreenW = SCR_WIDTH - 3;
+    ScreenW = SCR_WIDTH;
     ScreenH = SCR_HEIGHT;
     break;
   }
@@ -291,13 +245,16 @@ void RunEmulation()
   ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
   ClearScreen = 1;
 
+  /* Reset emulation preferences */
+  refresh_rate = Config.Frameskip + 1;
+
   /* Start emulation - main loop*/
   while (!ExitPSP)
   {
     /* Check input */
     if (ParseInput()) break;
 
-    /* TODO: implement frame skipping, vsync and frequency manipulation */
+    /* TODO: implement vsync and frequency manipulation */
     Atari800_Frame();
     if (display_screen)
       Atari_DisplayScreen();
@@ -313,6 +270,7 @@ int ParseInput()
   TrigState[0] = 1;
   key_shift = 0;
 
+  /* Get PSP input */
   static SceCtrlData pad;
   if (!pspCtrlPollControls(&pad))
     return 0;
@@ -394,10 +352,5 @@ int ParseInput()
   }
 
   return 0;
-}
-
-void TrashEmulation()
-{
-  pspImageDestroy(Screen);
 }
 
