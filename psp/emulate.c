@@ -52,10 +52,8 @@ static PspFpsCounter FpsCounter;
 
 PspImage *Screen;
 
-static SceCtrlData ButtonPad;
-
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
-static int TrigState[4] = { 0, 0, 0, 0 };
+static int TrigState[4] = { 1, 1, 1, 1 };
 
 static int ParseInput();
 
@@ -296,8 +294,6 @@ void RunEmulation()
   /* Start emulation - main loop*/
   while (!ExitPSP)
   {
-    pspCtrlPollControls(&ButtonPad);
-
     /* Check input */
     if (ParseInput()) break;
 
@@ -310,29 +306,35 @@ void RunEmulation()
 
 int ParseInput()
 {
+  /* Clear keyboard and joystick state */
+  key_code = AKEY_NONE;
+  key_consol = CONSOL_NONE;
+  JoyState[0] = 0xff;
+  TrigState[0] = 1;
+  key_shift = 0;
+
+  static SceCtrlData pad;
+  if (!pspCtrlPollControls(&pad))
+    return 0;
+
   /* DEBUGGING
   if ((pad.Buttons & (PSP_CTRL_SELECT | PSP_CTRL_START))
     == (PSP_CTRL_SELECT | PSP_CTRL_START))
       pspUtilSaveVramSeq(ScreenshotPath, "game");
   //*/
+
   int i, on, code, key_ctrl;
 
-  /* Clear keyboard and joystick flags */
-  key_code = AKEY_NONE;
-  key_consol = CONSOL_NONE;
-  JoyState[0] = 0xff;
-  TrigState[0] = 0;
-  key_shift = key_ctrl = 0;
-
   /* Parse input */
+  key_ctrl = 0;
   for (i = 0; ButtonMapId[i] >= 0; i++)
   {
     code = ActiveGameConfig.ButtonConfig[ButtonMapId[i]];
-    on = (ButtonPad.Buttons & ButtonMask[i]) == ButtonMask[i];
+    on = (pad.Buttons & ButtonMask[i]) == ButtonMask[i];
 
     /* Check to see if a button set is pressed. If so, unset it, so it */
     /* doesn't trigger any other combination presses. */
-    if (on) ButtonPad.Buttons &= ~ButtonMask[i];
+    if (on) pad.Buttons &= ~ButtonMask[i];
 
     if (code & JOY)      /* Joystick */
     {
@@ -379,13 +381,14 @@ int ParseInput()
     {
       if (machine_type == MACHINE_5200)
       {
-        if (!(key_code == AKEY_5200_HASH || key_code == AKEY_5200_ASTERISK))
-          key_code ^= (key_shift) ? AKEY_SHFT : 0;
+        if (key_shift && 
+          !(key_code == AKEY_5200_HASH || key_code == AKEY_5200_ASTERISK))
+            key_code |= AKEY_SHFT;
       }
       else
       {
-        key_code ^= (key_shift) ? AKEY_SHFT : 0;
-        key_code ^= (key_ctrl)  ? AKEY_CTRL : 0;
+        if (key_shift) key_code |= AKEY_SHFT;
+        if (key_ctrl)  key_code |= AKEY_CTRL;
       }
     }
   }

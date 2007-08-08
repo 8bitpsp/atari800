@@ -54,7 +54,7 @@ GameConfig DefaultComputerConfig =
     KBD|AKEY_LEFT,     /* D-pad Left   */
     KBD|AKEY_RIGHT,    /* D-pad Right  */
     0,                 /* Square       */
-    TRG|1,             /* Cross        */
+    TRG|0,             /* Cross        */
     KBD|AKEY_SPACE,    /* Circle       */
     0,                 /* Triangle     */
     0,                 /* L Trigger    */
@@ -77,7 +77,7 @@ DefaultConsoleConfig =
     JOY|STICK_LEFT,       /* D-pad Left   */
     JOY|STICK_RIGHT,      /* D-pad Right  */
     0,                    /* Square       */
-    TRG|1,                /* Cross        */
+    TRG|0,                /* Cross        */
     0,                    /* Circle       */
     0,                    /* Triangle     */
     0,                    /* L Trigger    */
@@ -208,7 +208,7 @@ static const PspMenuOptionDef
     { "Joystick: Down", (void*)(JOY|STICK_BACK)    },
     { "Joystick: Left", (void*)(JOY|STICK_LEFT)    },
     { "Joystick: Up",   (void*)(JOY|STICK_RIGHT)   },
-    { "Joystick: Fire", (void*)(TRG|1) },
+    { "Joystick: Fire", (void*)(TRG|0) },
     /* Keyboard */
     { "Keyboard: Up",   (void*)(KBD|AKEY_UP)    }, 
     { "Keyboard: Down", (void*)(KBD|AKEY_DOWN)  },
@@ -270,6 +270,12 @@ static const PspMenuOptionDef
     { "Console: Start", (void*)(KBD|AKEY_5200_START) },
     { "Console: Pause", (void*)(KBD|AKEY_5200_PAUSE) },
     { "Console: Reset", (void*)(KBD|AKEY_5200_RESET) },
+    /* Joystick */
+    { "Joystick: Up",   (void*)(JOY|STICK_FORWARD) },
+    { "Joystick: Down", (void*)(JOY|STICK_BACK)    },
+    { "Joystick: Left", (void*)(JOY|STICK_LEFT)    },
+    { "Joystick: Up",   (void*)(JOY|STICK_RIGHT)   },
+    { "Joystick: Fire", (void*)(TRG|0) },
     /* Keypad */
     { "1",(void*)(KBD|AKEY_5200_1) }, { "2",(void*)(KBD|AKEY_5200_2) },
     { "3",(void*)(KBD|AKEY_5200_3) }, { "4",(void*)(KBD|AKEY_5200_4) },
