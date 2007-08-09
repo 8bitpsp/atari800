@@ -73,7 +73,9 @@ int InitEmulation()
   pspPerfInitFps(&FpsCounter);
 
   /* Initialize emulator */
-  if (!Atari800_Initialise(0, NULL))
+  int foo = 1;
+  char *bar[] = { "ms0:/PSP/GAME/__SCE__atari800psp/EBOOT.PBP" };
+  if (!Atari800_Initialise(&foo, bar))
   {
     pspImageDestroy(Screen);
     return 0;
@@ -185,8 +187,8 @@ void AudioCallback(void* buf, unsigned int *length, void *userdata)
 
   /* TODO: test sound rate when TV mode is switched - currently hardcoded */
   /* to PAL */
-  for(i = 0; i < nsamples; i++) 
-    OutBuf[i].Left = OutBuf[i].Right = buffer[i];
+  for(i = 0; i < (nsamples < *length) ? nsamples : *length; i++) 
+    OutBuf[i].Left = OutBuf[i].Right = (short)buffer[i] << 8;
 }
 void Sound_Update(void)
 {
@@ -247,6 +249,7 @@ void RunEmulation()
 
   /* Reset emulation preferences */
   refresh_rate = Config.Frameskip + 1;
+pspAudioSetChannelCallback(0, AudioCallback, 0);
 
   /* Start emulation - main loop*/
   while (!ExitPSP)

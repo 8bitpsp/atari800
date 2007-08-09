@@ -10,7 +10,7 @@ PSP_APP_VER=2.0.3.1
 TARGET=atari800psp
 EXTRA_TARGETS=EBOOT.PBP
 PSP_EBOOT_TITLE=$(PSP_APP_NAME) $(PSP_APP_VER)
-#PSP_EBOOT_ICON=$(DATA)/atari800-icon.png
+PSP_EBOOT_ICON=$(DATA)/atari800-icon.png
 
 BUILD_APP=antic.o atari.o binload.o cartridge.o cassette.o compfile.o \
           cpu.o devices.o gtia.o log.o memory.o monitor.o pbi.o pia.o \
