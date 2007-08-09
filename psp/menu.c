@@ -39,6 +39,10 @@
 #define SYSTEM_RESET        2
 #define SYSTEM_MACHINE_TYPE 3
 
+#define M_TYPE(machine, ram) ((ram) << 8 | ((machine) & 0xff))
+#define MACHINE(mtype)       ((mtype) & 0xff)
+#define RAM(mtype)           ((mtype) >> 8)
+
 EmulatorConfig Config;
 GameConfig ActiveGameConfig;
 
@@ -194,10 +198,12 @@ static const PspMenuOptionDef
     { "\026\241\020 cancels, \026\242\020 confirms (Japan)", (void*)1 },
     { NULL, NULL } },
   MachineTypeOptions[] = {
-    { "OS A", (void*)MACHINE_OSA },
-    { "OS B", (void*)MACHINE_OSB },
-    { "XL/XE", (void*)MACHINE_XLXE },
-    { "5200", (void*)MACHINE_5200 },
+    { "800",                 (void*)M_TYPE(MACHINE_OSB,  48) },
+    { "800 XL",              (void*)M_TYPE(MACHINE_XLXE, 64) },
+    { "130 XE",              (void*)M_TYPE(MACHINE_XLXE, 128) },
+    { "320 XE (Compy Shop)", (void*)M_TYPE(MACHINE_XLXE, RAM_320_COMPY_SHOP) },
+    { "320 XE (Rambo)",      (void*)M_TYPE(MACHINE_XLXE, RAM_320_RAMBO) },
+    { "5200",                (void*)M_TYPE(MACHINE_5200, 16) },
     { NULL, NULL } },
   ComputerButtonMapOptions[] = {
     /* Unmapped */
@@ -414,10 +420,13 @@ static const PspMenuItemDef
 static void InitGameConfig();
 static int LoadGameConfig();
 static int SaveGameConfig();
+
 static void LoadOptions();
 static int  SaveOptions();
 static void InitOptionDefaults();
+
 static void DisplayStateTab();
+
 static PspImage* LoadStateIcon(const char *path);
 static int LoadState(const char *path);
 static PspImage* SaveState(const char *path, PspImage *icon);
@@ -507,6 +516,41 @@ PspUiMenu ControlUiMenu =
 
 void InitMenu()
 {
+  /* Initialize UI components */
+  UiMetric.Background = Background;
+  UiMetric.Font = &PspStockFont;
+  UiMetric.Left = 8;
+  UiMetric.Top = 24;
+  UiMetric.Right = 472;
+  UiMetric.Bottom = 250;
+  UiMetric.OkButton = (!Config.ControlMode) 
+    ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
+  UiMetric.CancelButton = (!Config.ControlMode) 
+    ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
+  UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
+  UiMetric.ScrollbarBgColor = 0x44ffffff;
+  UiMetric.ScrollbarWidth = 10;
+  UiMetric.DialogBorderColor = PSP_COLOR_GRAY;
+  UiMetric.DialogBgColor = PSP_COLOR_DARKGRAY;
+  UiMetric.TextColor = PSP_COLOR_GRAY;
+  UiMetric.SelectedColor = PSP_COLOR_YELLOW;
+  UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x44);
+  UiMetric.StatusBarColor = PSP_COLOR_WHITE;
+  UiMetric.BrowserFileColor = PSP_COLOR_GRAY;
+  UiMetric.BrowserDirectoryColor = PSP_COLOR_YELLOW;
+  UiMetric.GalleryIconsPerRow = 5;
+  UiMetric.GalleryIconMarginWidth = 8;
+  UiMetric.MenuItemMargin = 20;
+  UiMetric.MenuSelOptionBg = PSP_COLOR_BLACK;
+  UiMetric.MenuOptionBoxColor = PSP_COLOR_GRAY;
+  UiMetric.MenuOptionBoxBg = COLOR(0, 0, 33, 0xBB);
+  UiMetric.MenuDecorColor = PSP_COLOR_YELLOW;
+  UiMetric.DialogFogColor = COLOR(0, 0, 0, 88);
+  UiMetric.TitlePadding = 4;
+  UiMetric.TitleColor = PSP_COLOR_WHITE;
+  UiMetric.MenuFps = 30;
+  UiMetric.TabBgColor = COLOR(0x74,0x74,0xbe,0xff);
+
   /* Reset variables */
   TabIndex = TAB_ABOUT;
   Background = NULL;
@@ -517,8 +561,12 @@ void InitMenu()
   /* Initialize options */
   LoadOptions();
 
-  /* Initialize emulation */
-  if (!InitEmulation()) return;
+  /* Initialize emulation - pokey init takes time, so warn user */
+  pspUiFlashMessage("Initializing emulation.\nPlease wait");
+  pspSetClockFrequency(333); /* Temporarily speed up clock freq */
+  int init = InitEmulation();
+  pspSetClockFrequency(222); /* Restore to normal */
+  if (!init) return;
 
   /* Load the background image */
   Background = pspImageLoadPng("background.png");
@@ -559,41 +607,6 @@ void InitMenu()
 
   /* Load default configuration */
   LoadGameConfig();
-
-  /* Initialize UI components */
-  UiMetric.Background = Background;
-  UiMetric.Font = &PspStockFont;
-  UiMetric.Left = 8;
-  UiMetric.Top = 24;
-  UiMetric.Right = 472;
-  UiMetric.Bottom = 250;
-  UiMetric.OkButton = (!Config.ControlMode) 
-    ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
-  UiMetric.CancelButton = (!Config.ControlMode) 
-    ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
-  UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
-  UiMetric.ScrollbarBgColor = 0x44ffffff;
-  UiMetric.ScrollbarWidth = 10;
-  UiMetric.DialogBorderColor = PSP_COLOR_GRAY;
-  UiMetric.DialogBgColor = PSP_COLOR_DARKGRAY;
-  UiMetric.TextColor = PSP_COLOR_GRAY;
-  UiMetric.SelectedColor = PSP_COLOR_YELLOW;
-  UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x44);
-  UiMetric.StatusBarColor = PSP_COLOR_WHITE;
-  UiMetric.BrowserFileColor = PSP_COLOR_GRAY;
-  UiMetric.BrowserDirectoryColor = PSP_COLOR_YELLOW;
-  UiMetric.GalleryIconsPerRow = 5;
-  UiMetric.GalleryIconMarginWidth = 8;
-  UiMetric.MenuItemMargin = 20;
-  UiMetric.MenuSelOptionBg = PSP_COLOR_BLACK;
-  UiMetric.MenuOptionBoxColor = PSP_COLOR_GRAY;
-  UiMetric.MenuOptionBoxBg = COLOR(0, 0, 33, 0xBB);
-  UiMetric.MenuDecorColor = PSP_COLOR_YELLOW;
-  UiMetric.DialogFogColor = COLOR(0, 0, 0, 88);
-  UiMetric.TitlePadding = 4;
-  UiMetric.TitleColor = PSP_COLOR_WHITE;
-  UiMetric.MenuFps = 30;
-  UiMetric.TabBgColor = COLOR(0x74,0x74,0xbe,0xff);
 }
 
 void DisplayMenu()
@@ -951,13 +964,17 @@ int  OnMenuItemChanged(const struct PspUiMenu *uimenu,
     switch((int)item->Userdata)
     {
     case SYSTEM_MACHINE_TYPE:
-      if ((int)option->Value == machine_type 
-        || !pspUiConfirm("This will reset the system. Proceed?"))
-          break;
+      if ((MACHINE((int)option->Value) == machine_type 
+        && RAM((int)option->Value) == ram_size)
+          || !pspUiConfirm("This will reset the system. Proceed?")) break;
 
-      /* Reset the system */
-      machine_type = (int)option->Value;
+      /* Reconfigure machine type & RAM size */
+      machine_type = MACHINE((int)option->Value);
+      ram_size = RAM((int)option->Value);
+
+      /* Reinitialize system */
       Atari800_InitialiseMachine();
+      Coldstart();
       break;
     }
   }

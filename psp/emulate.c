@@ -178,17 +178,19 @@ void Sound_Initialise(int *argc, char *argv[])
 
 void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
-  static char buffer[44100 / 50];
-  unsigned int nsamples = (tv_mode == TV_NTSC) ? (44100 / 60) : (44100 / 50);
-  Pokey_process(buffer, nsamples);
+  static char buffer[896 << 1];
+  Pokey_process(buffer, *length << 1);
 
   PspSample *OutBuf = (PspSample*)buf;
-  int i;
+  int i, j;
 
   /* TODO: test sound rate when TV mode is switched - currently hardcoded */
   /* to PAL */
-  for(i = 0; i < (nsamples < *length) ? nsamples : *length; i++) 
-    OutBuf[i].Left = OutBuf[i].Right = (short)buffer[i] << 8;
+  for(i = 0, j = 0; i < *length; i++, j+=2) 
+  {
+    OutBuf[i].Left = (short)buffer[j] << 8;
+    OutBuf[i].Right = (short)buffer[j + 1] << 8;
+  }
 }
 void Sound_Update(void)
 {
