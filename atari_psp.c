@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 {
   /* Initialize PSP */
   pspInit(argv[0]);
-  pspAudioInit(896);
+  pspAudioInit(PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 50));
   pspCtrlInit();
   pspVideoInit();
 

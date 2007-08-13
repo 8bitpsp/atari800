@@ -517,7 +517,6 @@ PspUiMenu ControlUiMenu =
 void InitMenu()
 {
   /* Initialize UI components */
-  UiMetric.Background = Background;
   UiMetric.Font = &PspStockFont;
   UiMetric.Left = 8;
   UiMetric.Top = 24;
@@ -562,14 +561,13 @@ void InitMenu()
   LoadOptions();
 
   /* Initialize emulation - pokey init takes time, so warn user */
-  pspUiFlashMessage("Initializing emulation.\nPlease wait");
-  pspSetClockFrequency(333); /* Temporarily speed up clock freq */
+  pspUiFlashMessage("Initializing emulation\nPlease wait...");
   int init = InitEmulation();
-  pspSetClockFrequency(222); /* Restore to normal */
   if (!init) return;
 
   /* Load the background image */
   Background = pspImageLoadPng("background.png");
+  UiMetric.Background = Background;
 
   /* Init NoSaveState icon image */
   NoSaveIcon=pspImageCreate(168, 120, PSP_IMAGE_16BPP);
@@ -634,10 +632,17 @@ void DisplayMenu()
       DisplayStateTab();
       break;
     case TAB_CONTROL:
+
+		  /* Reinitialize the control menu to reflect console or computer */
+		  pspMenuLoad(ControlUiMenu.Menu, 
+		    (machine_type == MACHINE_5200) 
+		      ? ConsoleControlMenuDef : ComputerControlMenuDef);
+
       /* Load current button mappings */
       for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
         pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
       pspUiOpenMenu(&ControlUiMenu, NULL);
+
       break;
     case TAB_OPTION:
       /* Init menu options */
@@ -668,7 +673,7 @@ void DisplayMenu()
     case TAB_SYSTEM:
       item = pspMenuFindItemByUserdata(SystemUiMenu.Menu,
         (void*)SYSTEM_MACHINE_TYPE);
-      pspMenuSelectOptionByValue(item, (void*)machine_type);
+      pspMenuSelectOptionByValue(item, (void*)(M_TYPE(machine_type, ram_size)));
       pspUiOpenMenu(&SystemUiMenu, NULL);
       break;
     case TAB_ABOUT:
@@ -961,20 +966,33 @@ int  OnMenuItemChanged(const struct PspUiMenu *uimenu,
   }
   else if (uimenu == &SystemUiMenu)
   {
+    unsigned int curr_system;
+
     switch((int)item->Userdata)
     {
     case SYSTEM_MACHINE_TYPE:
       if ((MACHINE((int)option->Value) == machine_type 
         && RAM((int)option->Value) == ram_size)
-          || !pspUiConfirm("This will reset the system. Proceed?")) break;
+          || !pspUiConfirm("This will reset the system. Proceed?")) return 0;
+
+      curr_system = M_TYPE(machine_type, ram_size);
 
       /* Reconfigure machine type & RAM size */
       machine_type = MACHINE((int)option->Value);
       ram_size = RAM((int)option->Value);
 
-      /* Reinitialize system */
-      Atari800_InitialiseMachine();
+      /* Attempt reinitializing the system */
+      if (!Atari800_InitialiseMachine())
+      {
+        pspUiAlert("Cannot switch to selected system - reverting back");
+        machine_type = MACHINE(curr_system);
+        ram_size = RAM(curr_system);
+	      Coldstart();
+        return 0;
+      }
+
       Coldstart();
+      InitGameConfig();
       break;
     }
   }
@@ -1016,7 +1034,7 @@ int  OnMenuItemChanged(const struct PspUiMenu *uimenu,
 int OnMenuOk(const void *uimenu, const void* sel_item)
 {
   const char *game_name;
-  
+
   if (uimenu == &ControlUiMenu)
   {
     /* Save to MS */
@@ -1269,11 +1287,6 @@ int OnQuickloadOk(const void *browser, const void *path)
     return 0; 
   }
 
-  /* Reinitialize the control menu to reflect console or computer */
-  pspMenuLoad(ControlUiMenu.Menu, 
-    (machine_type == MACHINE_5200) 
-      ? ConsoleControlMenuDef : ComputerControlMenuDef);
-      
   /* TODO: load proper control set */
   InitGameConfig();
 

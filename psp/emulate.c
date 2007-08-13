@@ -31,14 +31,18 @@ extern GameConfig ActiveGameConfig;
 extern const u64 ButtonMask[];
 extern const int ButtonMapId[];
 
+extern UBYTE cim_encountered;
+
 static int ClearScreen;
 static int ScreenX;
 static int ScreenY;
 static int ScreenW;
 static int ScreenH;
+static int SoundReady;
 static PspFpsCounter FpsCounter;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
 static int TrigState[4] = { 1, 1, 1, 1 };
+static char SoundBuffer[SOUND_FREQ / 50];
 static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - ATARI_WIDTH;
 
 PspImage *Screen;
@@ -73,9 +77,8 @@ int InitEmulation()
   pspPerfInitFps(&FpsCounter);
 
   /* Initialize emulator */
-  int foo = 1;
-  char *bar[] = { "ms0:/PSP/GAME/__SCE__atari800psp/EBOOT.PBP" };
-  if (!Atari800_Initialise(&foo, bar))
+  int foo = 0;
+  if (!Atari800_Initialise(&foo, NULL))
   {
     pspImageDestroy(Screen);
     return 0;
@@ -94,6 +97,7 @@ void TrashEmulation()
 void Atari_Initialise(int *argc, char *argv[])
 {
 #ifdef SOUND
+  SoundReady = 0;
 	Sound_Initialise(argc, argv);
 #endif
 }
@@ -101,7 +105,7 @@ void Atari_Initialise(int *argc, char *argv[])
 int Atari_Exit(int run_monitor)
 {
 	Aflushlog();
-	return FALSE;
+	return (cim_encountered) ? TRUE : FALSE;
 }
 
 /* Copies the atari screen buffer to the image buffer */
@@ -173,27 +177,41 @@ int Atari_TRIG(int num)
 
 void Sound_Initialise(int *argc, char *argv[])
 {
-  Pokey_sound_init(FREQ_17_EXACT, 44100, 1, 0);
+	enable_new_pokey = 0;
+  Pokey_sound_init(FREQ_17_EXACT, SOUND_FREQ, 1, 0);
 }
 
 void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
-  static char buffer[896 << 1];
-  Pokey_process(buffer, *length << 1);
-
   PspSample *OutBuf = (PspSample*)buf;
-  int i, j;
 
-  /* TODO: test sound rate when TV mode is switched - currently hardcoded */
-  /* to PAL */
-  for(i = 0, j = 0; i < *length; i++, j+=2) 
-  {
-    OutBuf[i].Left = (short)buffer[j] << 8;
-    OutBuf[i].Right = (short)buffer[j + 1] << 8;
-  }
+	*length = (tv_mode == TV_NTSC) 
+		? PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 60) 
+		: PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 50);
+
+  if (!SoundReady)
+  	memset(OutBuf, 0, sizeof(PspSample) * *length);
+	else
+	{
+	  int i;
+	  for(i = 0; i < *length; i++) 
+	  {
+	    int sample = ((int)(SoundBuffer[i]) - 0x80) * 0x100;
+	    OutBuf[i].Left = OutBuf[i].Right = 
+	      (sample > 32767) ? 32767 
+	        : ((sample < -32768) ? 32768 : sample);
+	  }
+	  SoundReady = 0;
+	}
 }
+
 void Sound_Update(void)
 {
+	unsigned int nsamples = (tv_mode == TV_NTSC) 
+		? PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 60) 
+		: PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 50);
+  Pokey_process(SoundBuffer, nsamples);
+  SoundReady = 1;
 }
 
 void Sound_Pause(void)
@@ -203,6 +221,7 @@ void Sound_Pause(void)
 
 void Sound_Continue(void)
 {
+  SoundReady = 0;
   pspAudioSetChannelCallback(0, AudioCallback, 0);
 }
 
@@ -236,11 +255,11 @@ void RunEmulation()
     break;
   case DISPLAY_MODE_FIT_HEIGHT:
     ratio = (float)SCR_HEIGHT / (float)Screen->Viewport.Height;
-    ScreenW = (float)Screen->Viewport.Width * ratio;
+    ScreenW = (float)Screen->Viewport.Width * ratio - 2;
     ScreenH = SCR_HEIGHT;
     break;
   case DISPLAY_MODE_FILL_SCREEN:
-    ScreenW = SCR_WIDTH;
+    ScreenW = SCR_WIDTH - 3;
     ScreenH = SCR_HEIGHT;
     break;
   }
@@ -251,7 +270,11 @@ void RunEmulation()
 
   /* Reset emulation preferences */
   refresh_rate = Config.Frameskip + 1;
-pspAudioSetChannelCallback(0, AudioCallback, 0);
+
+#ifdef SOUND
+  /* Resume sound */
+	Sound_Continue();
+#endif
 
   /* Start emulation - main loop*/
   while (!ExitPSP)
@@ -264,6 +287,11 @@ pspAudioSetChannelCallback(0, AudioCallback, 0);
     if (display_screen)
       Atari_DisplayScreen();
   }
+
+#ifdef SOUND
+  /* Stop sound */
+  Sound_Pause();
+#endif
 }
 
 int ParseInput()

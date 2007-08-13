@@ -20,7 +20,7 @@
 #define CONSOLE_SOUND 1
 
 /* Define to activate crash menu after CIM instruction. */
-#define CRASH_MENU 1
+/* #define CRASH_MENU 1 */
 
 /* Define to disable bitmap graphics emulation in CURSES target. */
 /* #define CURSES_BASIC 1 */
