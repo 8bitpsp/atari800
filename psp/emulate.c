@@ -332,11 +332,14 @@ inline void HandleKeyInput(unsigned int code, int on)
 int ParseInput()
 {
   /* Clear keyboard and joystick state */
-  key_code = AKEY_NONE;
-  key_consol = CONSOL_NONE;
-  JoyState[0] = 0xff;
-  TrigState[0] = 1;
-  key_shift = 0;
+  if (!ShowKybd)
+  {
+	  key_code = AKEY_NONE;
+	  key_consol = CONSOL_NONE;
+	  JoyState[0] = 0xff;
+	  TrigState[0] = 1;
+	  key_shift = 0;
+	}
 
   /* Get PSP input */
   static SceCtrlData pad;
