@@ -63,10 +63,10 @@ GameConfig DefaultComputerConfig =
     KBD|AKEY_SPACE,      /* Circle       */
     0,                   /* Triangle     */
     0,                   /* L Trigger    */
-    SPC|-AKEY_SHOW_KEYS, /* R Trigger    */
+    MET|META_SHOW_KEYS,  /* R Trigger    */
     CSL|CONSOL_SELECT,   /* Select       */
     CSL|CONSOL_START,    /* Start        */
-    SPC|-AKEY_EXIT,      /* L+R Triggers */
+    MET|META_SHOW_MENU,  /* L+R Triggers */
     0,                   /* Start+Select */
   }
 },
@@ -86,10 +86,10 @@ DefaultConsoleConfig =
     0,                    /* Circle       */
     0,                    /* Triangle     */
     0,                    /* L Trigger    */
-    SPC|-AKEY_SHOW_KEYS,  /* R Trigger    */
+    MET|META_SHOW_KEYS,   /* R Trigger    */
     KBD|AKEY_5200_PAUSE,  /* Select       */
     KBD|AKEY_5200_START,  /* Start        */
-    SPC|-AKEY_EXIT,       /* L+R Triggers */
+    MET|META_SHOW_MENU,    /* L+R Triggers */
     0,                    /* Start+Select */
   }
 };
@@ -210,14 +210,14 @@ static const PspMenuOptionDef
     /* Unmapped */
     { "None", (void*)0 },
     /* Special keys */
-    { "Special: Open Menu",            (void*)(SPC|-AKEY_EXIT)      },
-    { "Special: Show Keyboard/Keypad", (void*)(SPC|-AKEY_SHOW_KEYS) },
+    { "Special: Open Menu",            (void*)(MET|META_SHOW_MENU) },
+    { "Special: Show Keyboard/Keypad", (void*)(MET|META_SHOW_KEYS) },
     /* Console */
     { "Console: Reset",  (void*)(SPC|-AKEY_WARMSTART) },
     { "Console: Option", (void*)(CSL|CONSOL_OPTION)   },
     { "Console: Select", (void*)(CSL|CONSOL_SELECT)   },
     { "Console: Start",  (void*)(CSL|CONSOL_START)    },
-    { "Console: Help",   (void*)(SPC|-AKEY_HELP)      },
+    { "Console: Help",   (void*)(KBD|AKEY_HELP)      },
     /* Joystick */
     { "Joystick: Up",   (void*)(JOY|STICK_FORWARD) },
     { "Joystick: Down", (void*)(JOY|STICK_BACK)    },
@@ -239,6 +239,7 @@ static const PspMenuOptionDef
     { "Backspace",   (void*)(KBD|AKEY_BACKSPACE) },
     { "Escape",      (void*)(KBD|AKEY_ESCAPE) },
     { "Toggle CAPS", (void*)(KBD|AKEY_CAPSTOGGLE) },
+    { "Break",       (void*)(SPC|-AKEY_BREAK) },
     { "Atari Key",   (void*)(KBD|AKEY_ATARI) },
     { "Shift",       (void*)(STA|AKEY_SHFT) },
     { "Control",     (void*)(STA|AKEY_CTRL) },

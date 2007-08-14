@@ -38,8 +38,10 @@ void TrashEmulation();
 #define CSL 0x0800 /* Console */
 #define STA 0x1000 /* State-based (shift/ctrl) */
 #define SPC 0x2000 /* Emulator-reserved */
+#define MET 0x4000 /* Atari800 PSP reserved */
 
-#define AKEY_SHOW_KEYS  -32
+#define META_SHOW_MENU 1
+#define META_SHOW_KEYS 2
 
 typedef struct
 {

@@ -41,6 +41,7 @@ static int ScreenW;
 static int ScreenH;
 static int SoundReady;
 static int ShowKybd;
+static int key_ctrl;
 static PspFpsCounter FpsCounter;
 static PspKeyboardLayout *KeyboardLayout, *KeypadLayout;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
@@ -53,7 +54,7 @@ PspImage *Screen;
 static int ParseInput();
 static void Copy_Screen_Buffer();
 static void AudioCallback(void* buf, unsigned int *length, void *userdata);
-inline void HandleKeyInput(unsigned int code, int on);
+static inline void HandleKeyInput(unsigned int code, int on);
 
 /* Initialize emulation */
 int InitEmulation()
@@ -313,19 +314,27 @@ void RunEmulation()
 inline void HandleKeyInput(unsigned int code, int on)
 {
   if (code & KBD) /* Keyboard */
-  { if (on) key_code = CODE_MASK(code); }
+  { 
+    if (on) key_code = CODE_MASK(code); 
+    else key_code = AKEY_NONE;
+  }
   else if (code & CSL) /* Console */
-  { if (on) key_consol ^= CODE_MASK(code); }
+  { 
+    if (on) key_consol ^= CODE_MASK(code); 
+    else key_consol = CONSOL_NONE;
+  }
   else if (code & STA) /* State-based (shift/ctrl) */
   {
-    if (on)
+    switch (CODE_MASK(code))
     {
-      switch (CODE_MASK(code))
-      {
-      case AKEY_SHFT: key_shift = 1; break;
-//      case AKEY_CTRL: key_ctrl  = 1; break;
-      }
+    case AKEY_SHFT: key_shift = on; break;
+    case AKEY_CTRL: key_ctrl  = on; break;
     }
+  }
+  else if (code & SPC) /* Emulator-specific */
+  {
+    if (on) key_code = -(int)CODE_MASK(code);
+    else key_code = AKEY_NONE;
   }
 }
 
@@ -339,6 +348,7 @@ int ParseInput()
 	  JoyState[0] = 0xff;
 	  TrigState[0] = 1;
 	  key_shift = 0;
+	  key_ctrl = 0;
 	}
 
   /* Get PSP input */
@@ -352,7 +362,7 @@ int ParseInput()
       pspUtilSaveVramSeq(ScreenshotPath, "game");
   //*/
 
-  int i, on, code, key_ctrl;
+  int i, on, code;
   PspKeyboardLayout *layout = (machine_type == MACHINE_5200) 
     ? KeypadLayout : KeyboardLayout;
 
@@ -360,7 +370,6 @@ int ParseInput()
   if (ShowKybd) pspKybdNavigate(layout, &pad);
 
   /* Parse input */
-  key_ctrl = 0;
   for (i = 0; ButtonMapId[i] >= 0; i++)
   {
     code = ActiveGameConfig.ButtonConfig[ButtonMapId[i]];
@@ -382,35 +391,33 @@ int ParseInput()
 	    { if (on) key_consol ^= CODE_MASK(code); }
 	    else if (code & STA) /* State-based (shift/ctrl) */
 	    {
-	      if (on)
-	      {
-	        switch (CODE_MASK(code))
-	        {
-	        case AKEY_SHFT: key_shift = 1; break;
-	        case AKEY_CTRL: key_ctrl  = 1; break;
-	        }
-	      }
+        switch (CODE_MASK(code))
+        {
+        case AKEY_SHFT: key_shift = on; break;
+        case AKEY_CTRL: key_ctrl  = on; break;
+        }
+	    }
+	    else if (code & SPC) /* Emulator-specific */
+	    {
+	      if (on && key_code == AKEY_NONE) 
+	        key_code = -(int)CODE_MASK(code);
 	    }
 	  }
 
-    if (code & SPC) /* Emulator-specific */
+    if (code & MET)
     {
-      int inverted = -(int)CODE_MASK(code);
-      switch (inverted)
+      switch (CODE_MASK(code))
       {
-      case AKEY_EXIT:
+      case META_SHOW_MENU:
         if (on) return 1;
         break;
-      case AKEY_SHOW_KEYS:
+      case META_SHOW_KEYS:
         if (ShowKybd != on)
         {
           if (on) pspKybdReinit(layout);
           else { pspKybdReleaseAll(layout); ClearScreen = 1; }
         }
         ShowKybd = on;
-        break;
-      default:
-        if (on && key_code == AKEY_NONE) key_code = inverted;
         break;
       }
     }
