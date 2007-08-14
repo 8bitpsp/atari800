@@ -53,6 +53,7 @@ PspImage *Screen;
 static int ParseInput();
 static void Copy_Screen_Buffer();
 static void AudioCallback(void* buf, unsigned int *length, void *userdata);
+inline void HandleKeyInput(unsigned int code, int on);
 
 /* Initialize emulation */
 int InitEmulation()
@@ -77,8 +78,8 @@ int InitEmulation()
   }
 
   /* Initialize computer keyboard layout */
-  KeyboardLayout = pspKybdLoadLayout("atari800.lyt", NULL, NULL);
-  KeypadLayout = pspKybdLoadLayout("atari5200.lyt", NULL, NULL);
+  KeyboardLayout = pspKybdLoadLayout("atari800.lyt", NULL, HandleKeyInput);
+  KeypadLayout = pspKybdLoadLayout("atari5200.lyt", NULL, HandleKeyInput);
 
   /* Initialize performance counter */
   pspPerfInitFps(&FpsCounter);
@@ -149,12 +150,12 @@ void Atari_DisplayScreen(void)
     pspVideoClearScreen();
   }
 
+  /* Blit screen */
+  pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
+
   /* Draw keyboard */
   if (ShowKybd) pspKybdRender((machine_type == MACHINE_5200) 
     ? KeypadLayout : KeyboardLayout);
-
-  /* Blit screen */
-  pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
   if (Config.ShowFps)
   {
@@ -198,11 +199,15 @@ void Sound_Initialise(int *argc, char *argv[])
 
 void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
-  if (!SoundReady) { *length = 0; return; }
-
-  int i;
   PspSample *OutBuf = (PspSample*)buf;
 
+  if (!SoundReady)
+  {
+    memset(OutBuf, 0, sizeof(PspSample) * *length);
+    return;
+  }
+
+  int i;
   for(i = 0; i < SoundReady; i++) 
   {
     int sample = ((int)SoundBuffer[i] - 0x80) << 8;
@@ -305,6 +310,25 @@ void RunEmulation()
 #endif
 }
 
+inline void HandleKeyInput(unsigned int code, int on)
+{
+  if (code & KBD) /* Keyboard */
+  { if (on) key_code = CODE_MASK(code); }
+  else if (code & CSL) /* Console */
+  { if (on) key_consol ^= CODE_MASK(code); }
+  else if (code & STA) /* State-based (shift/ctrl) */
+  {
+    if (on)
+    {
+      switch (CODE_MASK(code))
+      {
+      case AKEY_SHFT: key_shift = 1; break;
+//      case AKEY_CTRL: key_ctrl  = 1; break;
+      }
+    }
+  }
+}
+
 int ParseInput()
 {
   /* Clear keyboard and joystick state */
@@ -326,6 +350,11 @@ int ParseInput()
   //*/
 
   int i, on, code, key_ctrl;
+  PspKeyboardLayout *layout = (machine_type == MACHINE_5200) 
+    ? KeypadLayout : KeyboardLayout;
+
+  /* Navigate the virtual keyboard, if shown */
+  if (ShowKybd) pspKybdNavigate(layout, &pad);
 
   /* Parse input */
   key_ctrl = 0;
@@ -338,37 +367,30 @@ int ParseInput()
     /* doesn't trigger any other combination presses. */
     if (on) pad.Buttons &= ~ButtonMask[i];
 
-    /* When v. keyboard is on, ignore all but special keypad combinations */
-    if (ShowKybd && !(code & SPC)) continue;
+    if (!ShowKybd)
+    {
+	    if (code & JOY)      /* Joystick */
+	    { if (on) JoyState[0] &= 0xf0 | CODE_MASK(code); }
+	    else if (code & TRG) /* Trigger */
+	    { if (on) TrigState[0] = CODE_MASK(code); }
+	    else if (code & KBD) /* Keyboard */
+	    { if (on) key_code = CODE_MASK(code); }
+	    else if (code & CSL) /* Console */
+	    { if (on) key_consol ^= CODE_MASK(code); }
+	    else if (code & STA) /* State-based (shift/ctrl) */
+	    {
+	      if (on)
+	      {
+	        switch (CODE_MASK(code))
+	        {
+	        case AKEY_SHFT: key_shift = 1; break;
+	        case AKEY_CTRL: key_ctrl  = 1; break;
+	        }
+	      }
+	    }
+	  }
 
-    if (code & JOY)      /* Joystick */
-    {
-      if (on) JoyState[0] &= 0xf0 | CODE_MASK(code);
-    }
-    else if (code & TRG) /* Trigger */
-    {
-      if (on) TrigState[0] = CODE_MASK(code);
-    }
-    else if (code & KBD) /* Keyboard */
-    {
-      if (on) key_code = CODE_MASK(code);
-    }
-    else if (code & CSL) /* Console */
-    {
-      if (on) key_consol ^= CODE_MASK(code);
-    }
-    else if (code & STA) /* State-based (shift/ctrl) */
-    {
-      if (on)
-      {
-        switch (CODE_MASK(code))
-        {
-        case AKEY_SHFT: key_shift = 1; break;
-        case AKEY_CTRL: key_ctrl  = 1; break;
-        }
-      }
-    }
-    else if (code & SPC) /* Emulator-specific */
+    if (code & SPC) /* Emulator-specific */
     {
       int inverted = -(int)CODE_MASK(code);
       switch (inverted)
@@ -377,11 +399,16 @@ int ParseInput()
         if (on) return 1;
         break;
       case AKEY_SHOW_KEYS:
+        if (ShowKybd != on)
+        {
+          if (on) pspKybdReinit(layout);
+          else { pspKybdReleaseAll(layout); ClearScreen = 1; }
+        }
         ShowKybd = on;
         break;
       default:
-        if (on && key_code == AKEY_NONE) 
-          key_code = inverted;
+        if (on && key_code == AKEY_NONE) key_code = inverted;
+        break;
       }
     }
 
