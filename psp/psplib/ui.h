@@ -113,6 +113,7 @@ void pspUiSplashScreen(PspUiSplash *splash);
 int  pspUiConfirm(const char *message);
 void pspUiAlert(const char *message);
 void pspUiFlashMessage(const char *message);
+const PspMenuItem* pspUiSelect(const PspMenu *menu);
 
 void pspUiGetStatusString(char *status, int length);
 

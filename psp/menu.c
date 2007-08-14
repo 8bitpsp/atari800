@@ -306,117 +306,112 @@ static const PspMenuOptionDef
 /* Menu definitions */
 static const PspMenuItemDef
   OptionMenuDef[] = {
-    { "\tVideo", NULL, NULL, -1, NULL },
-    { "Screen size",         (void*)OPTION_DISPLAY_MODE, 
-      ScreenSizeOptions,   -1, "\026\250\020 Change screen size" },
-    { "\tPerformance", NULL, NULL, -1, NULL },
-    { "Frame skipping",      (void*)OPTION_FRAMESKIP,
-      FrameSkipOptions,    -1, "\026\250\020 Change number of frames skipped per update" },
-    { "VSync",               (void*)OPTION_VSYNC,
-      ToggleOptions,       -1, "\026\250\020 Enable to reduce tearing; disable to increase speed" },
-    { "PSP clock frequency", (void*)OPTION_CLOCK_FREQ,
-      PspClockFreqOptions, -1, 
+    { "\tVideo", 0, NULL, -1, NULL },
+    { "Screen size", OPTION_DISPLAY_MODE, ScreenSizeOptions, -1, 
+      "\026\250\020 Change screen size" },
+    { "\tPerformance", 0, NULL, -1, NULL },
+    { "Frame skipping", OPTION_FRAMESKIP, FrameSkipOptions, -1, 
+      "\026\250\020 Change number of frames skipped per update" },
+    { "VSync", OPTION_VSYNC, ToggleOptions, -1, 
+      "\026\250\020 Enable to reduce tearing; disable to increase speed" },
+    { "PSP clock frequency", OPTION_CLOCK_FREQ, PspClockFreqOptions, -1, 
       "\026\250\020 Larger values: faster emulation, faster battery depletion (default: 222MHz)" },
-    { "Show FPS counter",    (void*)OPTION_SHOW_FPS,
-      ToggleOptions,       -1, "\026\250\020 Show/hide the frames-per-second counter" },
-    { "\tMenu", NULL, NULL, -1, NULL },
-    { "Button mode",        (void*)OPTION_CONTROL_MODE,
-      ControlModeOptions,  -1, "\026\250\020 Change OK and Cancel button mapping" },
-    { NULL, NULL }
+    { "Show FPS counter", OPTION_SHOW_FPS, ToggleOptions, -1,
+      "\026\250\020 Show/hide the frames-per-second counter" },
+    { "\tMenu", 0, NULL, -1, NULL },
+    { "Button mode", OPTION_CONTROL_MODE, ControlModeOptions,  -1,
+      "\026\250\020 Change OK and Cancel button mapping" },
+    { NULL, 0 }
   },
   ComputerControlMenuDef[] = {
-    { "\026"PSP_CHAR_ANALUP,     (void*)MAP_ANALOG_UP,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALDOWN,   (void*)MAP_ANALOG_DOWN,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALLEFT,   (void*)MAP_ANALOG_LEFT,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALRIGHT,  (void*)MAP_ANALOG_RIGHT,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_UP,         (void*)MAP_BUTTON_UP,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_DOWN,       (void*)MAP_BUTTON_DOWN,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LEFT,       (void*)MAP_BUTTON_LEFT,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_RIGHT,      (void*)MAP_BUTTON_RIGHT,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_SQUARE,     (void*)MAP_BUTTON_SQUARE,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_CROSS,      (void*)MAP_BUTTON_CROSS,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_CIRCLE,     (void*)MAP_BUTTON_CIRCLE,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_TRIANGLE,   (void*)MAP_BUTTON_TRIANGLE,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER,   (void*)MAP_BUTTON_LTRIGGER,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_RTRIGGER,   (void*)MAP_BUTTON_RTRIGGER,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_SELECT,     (void*)MAP_BUTTON_SELECT,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_START,      (void*)MAP_BUTTON_START,
-      ComputerButtonMapOptions, -1, ControlHelpText },
+    { "\026"PSP_CHAR_ANALUP,   MAP_ANALOG_UP,     ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN,   ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,   ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_ANALRIGHT,MAP_ANALOG_RIGHT,  ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_UP,       MAP_BUTTON_UP,     ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_DOWN,     MAP_BUTTON_DOWN,   ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_LEFT,     MAP_BUTTON_LEFT,   ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_RIGHT,    MAP_BUTTON_RIGHT,  ComputerButtonMapOptions, -1, 
+      ControlHelpText },
+    { "\026"PSP_CHAR_SQUARE,   MAP_BUTTON_SQUARE, ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_CROSS,    MAP_BUTTON_CROSS,  ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_CIRCLE,   MAP_BUTTON_CIRCLE, ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_SELECT,   MAP_BUTTON_SELECT,  ComputerButtonMapOptions, -1,
+      ControlHelpText },
+    { "\026"PSP_CHAR_START,    MAP_BUTTON_START,   ComputerButtonMapOptions, -1,
+      ControlHelpText },
     { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER,
-                           (void*)MAP_BUTTON_LRTRIGGERS,
-      ComputerButtonMapOptions, -1, ControlHelpText },
+      MAP_BUTTON_LRTRIGGERS, ComputerButtonMapOptions, -1, ControlHelpText },
     { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT,
-                           (void*)MAP_BUTTON_STARTSELECT,
-      ComputerButtonMapOptions, -1, ControlHelpText },
-    { NULL, NULL }
+      MAP_BUTTON_STARTSELECT,ComputerButtonMapOptions, -1, ControlHelpText },
+    { NULL, 0 }
   },
   ConsoleControlMenuDef[] = {
-    { "\026"PSP_CHAR_ANALUP,     (void*)MAP_ANALOG_UP,
+    { "\026"PSP_CHAR_ANALUP,     MAP_ANALOG_UP,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALDOWN,   (void*)MAP_ANALOG_DOWN,
+    { "\026"PSP_CHAR_ANALDOWN,   MAP_ANALOG_DOWN,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALLEFT,   (void*)MAP_ANALOG_LEFT,
+    { "\026"PSP_CHAR_ANALLEFT,   MAP_ANALOG_LEFT,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALRIGHT,  (void*)MAP_ANALOG_RIGHT,
+    { "\026"PSP_CHAR_ANALRIGHT,  MAP_ANALOG_RIGHT,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_UP,         (void*)MAP_BUTTON_UP,
+    { "\026"PSP_CHAR_UP,         MAP_BUTTON_UP,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_DOWN,       (void*)MAP_BUTTON_DOWN,
+    { "\026"PSP_CHAR_DOWN,       MAP_BUTTON_DOWN,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LEFT,       (void*)MAP_BUTTON_LEFT,
+    { "\026"PSP_CHAR_LEFT,       MAP_BUTTON_LEFT,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_RIGHT,      (void*)MAP_BUTTON_RIGHT,
+    { "\026"PSP_CHAR_RIGHT,      MAP_BUTTON_RIGHT,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_SQUARE,     (void*)MAP_BUTTON_SQUARE,
+    { "\026"PSP_CHAR_SQUARE,     MAP_BUTTON_SQUARE,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_CROSS,      (void*)MAP_BUTTON_CROSS,
+    { "\026"PSP_CHAR_CROSS,      MAP_BUTTON_CROSS,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_CIRCLE,     (void*)MAP_BUTTON_CIRCLE,
+    { "\026"PSP_CHAR_CIRCLE,     MAP_BUTTON_CIRCLE,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_TRIANGLE,   (void*)MAP_BUTTON_TRIANGLE,
+    { "\026"PSP_CHAR_TRIANGLE,   MAP_BUTTON_TRIANGLE,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER,   (void*)MAP_BUTTON_LTRIGGER,
+    { "\026"PSP_CHAR_LTRIGGER,   MAP_BUTTON_LTRIGGER,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_RTRIGGER,   (void*)MAP_BUTTON_RTRIGGER,
+    { "\026"PSP_CHAR_RTRIGGER,   MAP_BUTTON_RTRIGGER,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_SELECT,     (void*)MAP_BUTTON_SELECT,
+    { "\026"PSP_CHAR_SELECT,     MAP_BUTTON_SELECT,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_START,      (void*)MAP_BUTTON_START,
+    { "\026"PSP_CHAR_START,      MAP_BUTTON_START,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER,
-                           (void*)MAP_BUTTON_LRTRIGGERS,
+    { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, MAP_BUTTON_LRTRIGGERS,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT,
-                           (void*)MAP_BUTTON_STARTSELECT,
+    { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
       ConsoleButtonMapOptions, -1, ControlHelpText },
-    { NULL, NULL }
+    { NULL, 0 }
   },
   SystemMenuDef[] = {
-    { "\tHardware", NULL, NULL, -1, NULL },
-    { "TV frequency",     (void*)SYSTEM_TV_MODE, TVModeOptions, -1, 
+    { "\tHardware", 0, NULL, -1, NULL },
+    { "TV frequency",     SYSTEM_TV_MODE, TVModeOptions, -1, 
       "\026\250\020 Change emulated machine" },
-    { "Machine type",     (void*)SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
+    { "Machine type",     SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
       "\026\250\020 Change emulated machine" },
-    { "\tSystem", NULL, NULL, -1, NULL },
-    { "Reset", (void*)SYSTEM_RESET, NULL, -1, "\026\001\020 Reset" },
-    { "Save screenshot",  (void*)SYSTEM_SCRNSHOT, NULL, -1,
+    { "\tSystem", 0, NULL, -1, NULL },
+    { "Reset", SYSTEM_RESET, NULL, -1, "\026\001\020 Reset" },
+    { "Save screenshot",  SYSTEM_SCRNSHOT, NULL, -1,
       "\026\001\020 Save screenshot" },
-    { NULL, NULL }
+    { NULL, 0 }
   };
 
 /* Function declarations */
@@ -563,10 +558,8 @@ void InitMenu()
   /* Initialize options */
   LoadOptions();
 
-  /* Initialize emulation - pokey init takes time, so warn user */
-  pspUiFlashMessage("Initializing emulation\nPlease wait...");
-  int init = InitEmulation();
-  if (!init) return;
+  /* Initialize emulation */
+  if (!InitEmulation()) return;
 
   /* Load the background image */
   Background = pspImageLoadPng("background.png");
@@ -586,7 +579,7 @@ void InitMenu()
   PspMenuItem *item;
   for (i = 0; i < 10; i++)
   {
-    item = pspMenuAppendItem(SaveStateGallery.Menu, NULL, (void*)i);
+    item = pspMenuAppendItem(SaveStateGallery.Menu, NULL, i);
     pspMenuSetHelpText(item, EmptySlotText);
   }
 
@@ -649,33 +642,25 @@ void DisplayMenu()
       break;
     case TAB_OPTION:
       /* Init menu options */
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
-        (void*)OPTION_DISPLAY_MODE);
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_DISPLAY_MODE);
       pspMenuSelectOptionByValue(item, (void*)Config.DisplayMode);
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
-        (void*)OPTION_FRAMESKIP);
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_FRAMESKIP);
       pspMenuSelectOptionByValue(item, (void*)(int)Config.Frameskip);
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu,
-        (void*)OPTION_VSYNC);
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_VSYNC);
       pspMenuSelectOptionByValue(item, (void*)Config.VSync);
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
-        (void*)OPTION_CLOCK_FREQ);
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_CLOCK_FREQ);
       pspMenuSelectOptionByValue(item, (void*)Config.ClockFreq);
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
-        (void*)OPTION_SHOW_FPS);
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_SHOW_FPS);
       pspMenuSelectOptionByValue(item, (void*)Config.ShowFps);
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
-        (void*)OPTION_CONTROL_MODE);
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_CONTROL_MODE);
       pspMenuSelectOptionByValue(item, (void*)Config.ControlMode);
 
       pspUiOpenMenu(&OptionUiMenu, NULL);
       break;
     case TAB_SYSTEM:
-      item = pspMenuFindItemByUserdata(SystemUiMenu.Menu, 
-        (void*)SYSTEM_MACHINE_TYPE);
+      item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_MACHINE_TYPE);
       pspMenuSelectOptionByValue(item, (void*)(M_TYPE(machine_type, ram_size)));
-      item = pspMenuFindItemByUserdata(SystemUiMenu.Menu, 
-        (void*)SYSTEM_TV_MODE);
+      item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_TV_MODE);
       pspMenuSelectOptionByValue(item, (void*)tv_mode);
       pspUiOpenMenu(&SystemUiMenu, NULL);
       break;
@@ -713,8 +698,7 @@ static void DisplayStateTab()
   /* Initialize icons */
   for (item = SaveStateGallery.Menu->First; item; item = item->Next)
   {
-    sprintf(path, "%s%s.s%02i", SaveStatePath, config_name,
-      (int)item->Userdata);
+    sprintf(path, "%s%s.s%02i", SaveStatePath, config_name, item->ID);
 
     if (pspFileIoCheckIfExists(path))
     {
@@ -969,14 +953,13 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
 {
   if (uimenu == &ControlUiMenu)
   {
-    ActiveGameConfig.ButtonConfig[(int)item->Userdata] 
-      = (unsigned int)option->Value;
+    ActiveGameConfig.ButtonConfig[item->ID] = (unsigned int)option->Value;
   }
   else if (uimenu == &SystemUiMenu)
   {
     unsigned int curr_system;
 
-    switch((int)item->Userdata)
+    switch(item->ID)
     {
     case SYSTEM_TV_MODE:
       tv_mode = (int)option->Value;
@@ -1009,7 +992,7 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
   }
   else if (uimenu == &OptionUiMenu)
   {
-    switch((int)item->Userdata)
+    switch(item->ID)
     {
     case OPTION_DISPLAY_MODE:
       Config.DisplayMode = (int)option->Value;
@@ -1051,7 +1034,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   }
   else if (uimenu == &SystemUiMenu)
   {
-    switch ((int)((const PspMenuItem*)sel_item)->Userdata)
+    switch (((const PspMenuItem*)sel_item)->ID)
     {
     case SYSTEM_RESET:
 
@@ -1178,15 +1161,15 @@ int OnSaveStateOk(const void *gallery, const void *item)
   config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
   path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
   sprintf(path, "%s%s.s%02i", SaveStatePath, config_name,
-    (int)((const PspMenuItem*)item)->Userdata);
+    ((const PspMenuItem*)item)->ID);
 
   if (pspFileIoCheckIfExists(path) && pspUiConfirm("Load state?"))
   {
     if (LoadState(path))
     {
       ResumeEmulation = 1;
-      pspMenuFindItemByUserdata(((const PspUiGallery*)gallery)->Menu,
-        ((const PspMenuItem*)item)->Userdata);
+      pspMenuFindItemById(((const PspUiGallery*)gallery)->Menu,
+        ((const PspMenuItem*)item)->ID);
       free(path);
 
       return 1;
@@ -1208,19 +1191,17 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery,
     char caption[32];
 	  const char *config_name;
 	  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
-    PspMenuItem *item = pspMenuFindItemByUserdata(gallery->Menu, sel->Userdata);
+    PspMenuItem *item = pspMenuFindItemById(gallery->Menu, sel->ID);
 
     path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
-    sprintf(path, "%s%s.s%02i", 
-      SaveStatePath, config_name, (int)item->Userdata);
+    sprintf(path, "%s%s.s%02i", SaveStatePath, config_name, item->ID);
 
     do /* not a real loop; flow control construct */
     {
       if (button_mask & PSP_CTRL_SQUARE)
       {
         if (pspFileIoCheckIfExists(path) 
-          && !pspUiConfirm("Overwrite existing state?"))
-            break;
+          && !pspUiConfirm("Overwrite existing state?")) break;
 
         pspUiFlashMessage("Saving, please wait ...");
 
@@ -1283,8 +1264,53 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery,
   return OnGenericButtonPress(NULL, NULL, button_mask);
 }
 
+PspMenuItemDef dummy_menu[] = {
+  { "Item one", 1, NULL, -1, "Item one select" },
+  { "Item two", 2, NULL, -1, "Item two select" },
+  { "Item three", 3, NULL, -1, "Item 3 select" },
+  { "Item 4our", 4, NULL, -1, "Item 4our select" },
+  { "Item 2one", 21, NULL, -1, "Item one select" },
+  { "Item 2two", 22, NULL, -1, "Item two select" },
+  { "Item 2three", 23, NULL, -1, "Item 3 select" },
+  { "Item 24our", 24, NULL, -1, "Item 4our select" },
+  { "Item 3one", 31, NULL, -1, "Item one select" },
+  { "Item 3two", 32, NULL, -1, "Item two select" },
+  { "Item 3three", 33, NULL, -1, "Item 3 select" },
+  { "Item 34our", 34, NULL, -1, "Item 4our select" },
+  { "Item 4one", 41, NULL, -1, "Item one select" },
+  { "Item 4two", 42, NULL, -1, "Item two select" },
+  { "Item 4three", 43, NULL, -1, "Item 3 select" },
+  { "Item 44our", 44, NULL, -1, "Item 4our select" },
+  { "Item 5one", 51, NULL, -1, "Item one select" },
+  { "Item 5two", 52, NULL, -1, "Item two select" },
+  { "Item 5three", 53, NULL, -1, "Item 3 select" },
+  { "Item 54our", 54, NULL, -1, "Item 4our select" },
+  { "Item 6one", 61, NULL, -1, "Item one select" },
+  { "Item 6two", 62, NULL, -1, "Item two select" },
+  { "Item 6three", 63, NULL, -1, "Item 3 select" },
+  { "Item 64our", 64, NULL, -1, "Item 4our select" },
+  { "Item 7one", 71, NULL, -1, "Item one select" },
+  { "Item 7two", 72, NULL, -1, "Item two select" },
+  { "Item 7three", 73, NULL, -1, "Item 3 select" },
+  { "Item 74our", 74, NULL, -1, "Item 4our select" },
+  { "Item 8one", 81, NULL, -1, "Item one select" },
+  { "Item 8two", 82, NULL, -1, "Item two select" },
+  { "Item 8three", 83, NULL, -1, "Item 3 select" },
+  { "Item 84our", 84, NULL, -1, "Item 4our select" },
+  { NULL, 0 }
+};
+
 int OnQuickloadOk(const void *browser, const void *path)
 {
+/* Dummy menu */
+PspMenu *menu = pspMenuCreate();
+pspMenuLoad(menu, dummy_menu);
+const PspMenuItem *item = pspUiSelect(menu);
+char foo[326];
+if (item) sprintf(foo,"you selected '%s' (%i)", item->Caption, item->ID);
+else sprintf(foo, "you dina select nuttin'!");
+pspMenuDestroy(menu);
+pspUiAlert(foo);
   /* Load the game */
   if (!Atari800_OpenFile(path, 1, 1, 0))
   { 
@@ -1311,10 +1337,10 @@ int OnQuickloadOk(const void *browser, const void *path)
 /* Initialize game configuration */
 static void InitGameConfig()
 {
-  GameConfig *DefaultConfig = (machine_type == MACHINE_5200) 
+  GameConfig *config = (machine_type == MACHINE_5200) 
     ? &DefaultConsoleConfig : &DefaultComputerConfig;
 
-  memcpy(&ActiveGameConfig, DefaultConfig, sizeof(GameConfig));
+  memcpy(&ActiveGameConfig, config, sizeof(GameConfig));
 }
 
 /* Load game configuration */

@@ -27,9 +27,10 @@ typedef struct PspMenuOption
 
 typedef struct PspMenuItem
 {
+  unsigned int ID;
   char* Caption;
   const void *Icon;
-  const void *Userdata;
+  const void *Param;
   PspMenuOption *Options;
   const PspMenuOption *Selected;
   struct PspMenuItem *Next;
@@ -41,8 +42,8 @@ typedef struct PspMenu
 {
   PspMenuItem* First;
   PspMenuItem* Last;
-  int Count;
   PspMenuItem* Selected;
+  int Count;
 } PspMenu;
 
 typedef struct PspMenuOptionDef
@@ -54,7 +55,7 @@ typedef struct PspMenuOptionDef
 typedef struct PspMenuItemDef
 {
   const char *Caption;
-  void *Userdata;
+  unsigned int ID;
   const PspMenuOptionDef *OptionList;
   int   SelectedIndex;
   const char *HelpText;
@@ -65,14 +66,17 @@ PspMenu*       pspMenuCreate();
 void           pspMenuLoad(PspMenu *menu, const PspMenuItemDef *def);
 void           pspMenuClear(PspMenu* menu);
 void           pspMenuDestroy(PspMenu* menu);
-PspMenuItem*   pspMenuAppendItem(PspMenu* menu, const char* caption, const void *userdata);
-PspMenuOption* pspMenuAppendOption(PspMenuItem *item, const char *text, const void *value, int select);
+PspMenuItem*   pspMenuAppendItem(PspMenu* menu, const char* caption, 
+  unsigned int id);
+PspMenuOption* pspMenuAppendOption(PspMenuItem *item, const char *text, 
+  const void *value, int select);
 void           pspMenuSelectOptionByIndex(PspMenuItem *item, int index);
 void           pspMenuSelectOptionByValue(PspMenuItem *item, const void *value);
-void           pspMenuModifyOption(PspMenuOption *option, const char *text, const void *value);
+void           pspMenuModifyOption(PspMenuOption *option, const char *text, 
+  const void *value);
 void           pspMenuClearOptions(PspMenuItem* item);
 PspMenuItem*   pspMenuGetNthItem(PspMenu *menu, int index);
-PspMenuItem*   pspMenuFindItemByUserdata(PspMenu *menu, const void *userdata);
+PspMenuItem*   pspMenuFindItemById(PspMenu *menu, unsigned int id);
 void           pspMenuSetCaption(PspMenuItem *item, const char *caption);
 void           pspMenuSetHelpText(PspMenuItem *item, const char *helptext);
 
