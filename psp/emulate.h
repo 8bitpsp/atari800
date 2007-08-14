@@ -39,6 +39,8 @@ void TrashEmulation();
 #define STA 0x1000 /* State-based (shift/ctrl) */
 #define SPC 0x2000 /* Emulator-reserved */
 
+#define AKEY_SHOW_KEYS  -32
+
 typedef struct
 {
   int ShowFps;
@@ -46,7 +48,6 @@ typedef struct
   int ClockFreq;
   int DisplayMode;
   int VSync;
-  int UpdateFreq;
   int Frameskip;
 } EmulatorConfig;
 

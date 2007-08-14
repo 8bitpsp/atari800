@@ -28,16 +28,16 @@
 #define TAB_MAX       TAB_SYSTEM
 
 #define OPTION_DISPLAY_MODE 1
-#define OPTION_SYNC_FREQ    2
-#define OPTION_FRAMESKIP    3
-#define OPTION_VSYNC        4
-#define OPTION_CLOCK_FREQ   5
-#define OPTION_SHOW_FPS     6
-#define OPTION_CONTROL_MODE 7
+#define OPTION_FRAMESKIP    2
+#define OPTION_VSYNC        3
+#define OPTION_CLOCK_FREQ   4
+#define OPTION_SHOW_FPS     5
+#define OPTION_CONTROL_MODE 6
 
 #define SYSTEM_SCRNSHOT     1
 #define SYSTEM_RESET        2
 #define SYSTEM_MACHINE_TYPE 3
+#define SYSTEM_TV_MODE      4
 
 #define M_TYPE(machine, ram) ((ram) << 8 | ((machine) & 0xff))
 #define MACHINE(mtype)       ((mtype) & 0xff)
@@ -50,24 +50,24 @@ GameConfig ActiveGameConfig;
 GameConfig DefaultComputerConfig =
 {
   {
-    JOY|STICK_FORWARD, /* Analog Up    */
-    JOY|STICK_BACK,    /* Analog Down  */
-    JOY|STICK_LEFT,    /* Analog Left  */
-    JOY|STICK_RIGHT,   /* Analog Right */
-    KBD|AKEY_UP,       /* D-pad Up     */
-    KBD|AKEY_DOWN,     /* D-pad Down   */
-    KBD|AKEY_LEFT,     /* D-pad Left   */
-    KBD|AKEY_RIGHT,    /* D-pad Right  */
-    0,                 /* Square       */
-    TRG|0,             /* Cross        */
-    KBD|AKEY_SPACE,    /* Circle       */
-    0,                 /* Triangle     */
-    0,                 /* L Trigger    */
-    0,                 /* R Trigger    */
-    CSL|CONSOL_SELECT, /* Select       */
-    CSL|CONSOL_START,  /* Start        */
-    SPC|-AKEY_EXIT,    /* L+R Triggers */
-    0,                 /* Start+Select */
+    JOY|STICK_FORWARD,   /* Analog Up    */
+    JOY|STICK_BACK,      /* Analog Down  */
+    JOY|STICK_LEFT,      /* Analog Left  */
+    JOY|STICK_RIGHT,     /* Analog Right */
+    KBD|AKEY_UP,         /* D-pad Up     */
+    KBD|AKEY_DOWN,       /* D-pad Down   */
+    KBD|AKEY_LEFT,       /* D-pad Left   */
+    KBD|AKEY_RIGHT,      /* D-pad Right  */
+    0,                   /* Square       */
+    TRG|0,               /* Cross        */
+    KBD|AKEY_SPACE,      /* Circle       */
+    0,                   /* Triangle     */
+    0,                   /* L Trigger    */
+    SPC|-AKEY_SHOW_KEYS, /* R Trigger    */
+    CSL|CONSOL_SELECT,   /* Select       */
+    CSL|CONSOL_START,    /* Start        */
+    SPC|-AKEY_EXIT,      /* L+R Triggers */
+    0,                   /* Start+Select */
   }
 },
 DefaultConsoleConfig = 
@@ -86,7 +86,7 @@ DefaultConsoleConfig =
     0,                    /* Circle       */
     0,                    /* Triangle     */
     0,                    /* L Trigger    */
-    0,                    /* R Trigger    */
+    SPC|-AKEY_SHOW_KEYS,  /* R Trigger    */
     KBD|AKEY_5200_PAUSE,  /* Select       */
     KBD|AKEY_5200_START,  /* Start        */
     SPC|-AKEY_EXIT,       /* L+R Triggers */
@@ -176,9 +176,6 @@ static const PspMenuOptionDef
     { "4:3 scaled (fit height)", (void*)DISPLAY_MODE_FIT_HEIGHT },
     { "16:9 scaled (fit screen)", (void*)DISPLAY_MODE_FILL_SCREEN },
     { NULL, NULL } },
-  FrameLimitOptions[] = {
-    { "Disabled", (void*)0 },
-    { NULL, NULL } },
   FrameSkipOptions[] = {
     { "No skipping", (void*)0 },
     { "Skip 1 frame", (void*)1 },
@@ -205,11 +202,16 @@ static const PspMenuOptionDef
     { "320 XE (Rambo)",      (void*)M_TYPE(MACHINE_XLXE, RAM_320_RAMBO) },
     { "5200",                (void*)M_TYPE(MACHINE_5200, 16) },
     { NULL, NULL } },
+  TVModeOptions[] = {
+    { "NTSC", (void*)TV_NTSC },
+    { "PAL",  (void*)TV_PAL },
+    { NULL, NULL } },
   ComputerButtonMapOptions[] = {
     /* Unmapped */
     { "None", (void*)0 },
     /* Special keys */
-    { "Special: Open Menu", (void*)(SPC|-AKEY_EXIT)      },
+    { "Special: Open Menu",            (void*)(SPC|-AKEY_EXIT)      },
+    { "Special: Show Keyboard/Keypad", (void*)(SPC|-AKEY_SHOW_KEYS) },
     /* Console */
     { "Console: Reset",  (void*)(SPC|-AKEY_WARMSTART) },
     { "Console: Option", (void*)(CSL|CONSOL_OPTION)   },
@@ -307,8 +309,6 @@ static const PspMenuItemDef
     { "Screen size",         (void*)OPTION_DISPLAY_MODE, 
       ScreenSizeOptions,   -1, "\026\250\020 Change screen size" },
     { "\tPerformance", NULL, NULL, -1, NULL },
-    { "Frame limiter",       (void*)OPTION_SYNC_FREQ, 
-      FrameLimitOptions,   -1, "\026\250\020 Change screen update frequency" },
     { "Frame skipping",      (void*)OPTION_FRAMESKIP,
       FrameSkipOptions,    -1, "\026\250\020 Change number of frames skipped per update" },
     { "VSync",               (void*)OPTION_VSYNC,
@@ -407,8 +407,10 @@ static const PspMenuItemDef
   },
   SystemMenuDef[] = {
     { "\tHardware", NULL, NULL, -1, NULL },
-    { "Machine type",     (void*)SYSTEM_MACHINE_TYPE,
-      MachineTypeOptions, -1, "\026\250\020 Change emulated machine" },
+    { "TV frequency",     (void*)SYSTEM_TV_MODE, TVModeOptions, -1, 
+      "\026\250\020 Change emulated machine" },
+    { "Machine type",     (void*)SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
+      "\026\250\020 Change emulated machine" },
     { "\tSystem", NULL, NULL, -1, NULL },
     { "Reset", (void*)SYSTEM_RESET, NULL, -1, "\026\001\020 Reset" },
     { "Save screenshot",  (void*)SYSTEM_SCRNSHOT, NULL, -1,
@@ -649,9 +651,6 @@ void DisplayMenu()
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_DISPLAY_MODE);
       pspMenuSelectOptionByValue(item, (void*)Config.DisplayMode);
-      item = pspMenuFindItemByUserdata(OptionUiMenu.Menu,
-        (void*)OPTION_SYNC_FREQ);
-      pspMenuSelectOptionByValue(item, (void*)Config.UpdateFreq);
       item = pspMenuFindItemByUserdata(OptionUiMenu.Menu, 
         (void*)OPTION_FRAMESKIP);
       pspMenuSelectOptionByValue(item, (void*)(int)Config.Frameskip);
@@ -671,9 +670,12 @@ void DisplayMenu()
       pspUiOpenMenu(&OptionUiMenu, NULL);
       break;
     case TAB_SYSTEM:
-      item = pspMenuFindItemByUserdata(SystemUiMenu.Menu,
+      item = pspMenuFindItemByUserdata(SystemUiMenu.Menu, 
         (void*)SYSTEM_MACHINE_TYPE);
       pspMenuSelectOptionByValue(item, (void*)(M_TYPE(machine_type, ram_size)));
+      item = pspMenuFindItemByUserdata(SystemUiMenu.Menu, 
+        (void*)SYSTEM_TV_MODE);
+      pspMenuSelectOptionByValue(item, (void*)tv_mode);
       pspUiOpenMenu(&SystemUiMenu, NULL);
       break;
     case TAB_ABOUT:
@@ -719,11 +721,9 @@ static void DisplayStateTab()
         sprintf(caption, "ERROR");
       else
         sprintf(caption, "%02i/%02i/%02i %02i:%02i",
-          stat.st_mtime.month,
-          stat.st_mtime.day,
+          stat.st_mtime.month, stat.st_mtime.day,
           stat.st_mtime.year - (stat.st_mtime.year / 100) * 100,
-          stat.st_mtime.hour,
-          stat.st_mtime.minute);
+          stat.st_mtime.hour, stat.st_mtime.minute);
 
       pspMenuSetCaption(item, caption);
       item->Icon = LoadStateIcon(path);
@@ -768,13 +768,15 @@ void LoadOptions()
     /* Load values */
     Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", 
       DISPLAY_MODE_UNSCALED);
-    Config.UpdateFreq = pspInitGetInt(init, "Video", "Update Frequency", 0);
     Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 1);
     Config.VSync = pspInitGetInt(init, "Video", "VSync", 0);
     Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
     Config.ShowFps = pspInitGetInt(init, "Video", "Show FPS", 0);
     Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
+
     machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
+    ram_size = pspInitGetInt(init, "System", "Machine Type", 64);
+    tv_mode = pspInitGetInt(init, "System", "TV mode", TV_NTSC);
 
     if (GamePath) free(GamePath);
     GamePath = pspInitGetString(init, "File", "Game Path", NULL);
@@ -797,13 +799,15 @@ static int SaveOptions()
 
   /* Set values */
   pspInitSetInt(init, "Video", "Display Mode", Config.DisplayMode);
-  pspInitSetInt(init, "Video", "Update Frequency", Config.UpdateFreq);
   pspInitSetInt(init, "Video", "Frameskip", Config.Frameskip);
   pspInitSetInt(init, "Video", "VSync", Config.VSync);
   pspInitSetInt(init, "Video", "PSP Clock Frequency",Config.ClockFreq);
   pspInitSetInt(init, "Video", "Show FPS", Config.ShowFps);
-  pspInitSetInt(init, "Menu", "Control Mode", Config.ControlMode);
+  pspInitSetInt(init, "Menu",  "Control Mode", Config.ControlMode);
+
   pspInitSetInt(init, "System", "Machine Type", machine_type);
+  pspInitSetInt(init, "System", "RAM Size", ram_size);
+  pspInitSetInt(init, "System", "TV mode", tv_mode);
 
   if (GamePath) pspInitSetString(init, "File", "Game Path", GamePath);
 
@@ -822,12 +826,15 @@ void InitOptionDefaults()
 {
   Config.ControlMode = 0;
   Config.DisplayMode = DISPLAY_MODE_UNSCALED;
-  Config.UpdateFreq = 0;
   Config.Frameskip = 1;
   Config.VSync = 0;
   Config.ClockFreq = 222;
   Config.ShowFps = 0;
+
   machine_type = MACHINE_XLXE;
+  ram_size = 64;
+  tv_mode = TV_NTSC;
+
   GamePath = NULL;
 }
 
@@ -956,8 +963,8 @@ void OnSystemRender(const void *uiobject, const void *item_obj)
   OnGenericRender(uiobject, item_obj);
 }
 
-int  OnMenuItemChanged(const struct PspUiMenu *uimenu, 
-  PspMenuItem* item, const PspMenuOption* option)
+int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item, 
+  const PspMenuOption* option)
 {
   if (uimenu == &ControlUiMenu)
   {
@@ -970,6 +977,9 @@ int  OnMenuItemChanged(const struct PspUiMenu *uimenu,
 
     switch((int)item->Userdata)
     {
+    case SYSTEM_TV_MODE:
+      tv_mode = (int)option->Value;
+      break;
     case SYSTEM_MACHINE_TYPE:
       if ((MACHINE((int)option->Value) == machine_type 
         && RAM((int)option->Value) == ram_size)
@@ -1003,9 +1013,6 @@ int  OnMenuItemChanged(const struct PspUiMenu *uimenu,
     case OPTION_DISPLAY_MODE:
       Config.DisplayMode = (int)option->Value;
       break;
-    case OPTION_SYNC_FREQ:
-      Config.UpdateFreq = (int)option->Value;
-      break;
     case OPTION_FRAMESKIP:
       Config.Frameskip = (int)option->Value;
       break;
@@ -1038,10 +1045,8 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   if (uimenu == &ControlUiMenu)
   {
     /* Save to MS */
-    if (SaveGameConfig())
-      pspUiAlert("Changes saved");
-    else
-      pspUiAlert("ERROR: Changes not saved");
+    if (SaveGameConfig()) pspUiAlert("Changes saved");
+    else pspUiAlert("ERROR: Changes not saved");
   }
   else if (uimenu == &SystemUiMenu)
   {
@@ -1063,9 +1068,8 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
       /* Save screenshot */
       game_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
       if (!pspUtilSavePngSeq(ScreenshotPath, game_name, Screen))
-          pspUiAlert("ERROR: Screenshot not saved");
-      else
-        pspUiAlert("Screenshot saved successfully");
+        pspUiAlert("ERROR: Screenshot not saved");
+      else pspUiAlert("Screenshot saved successfully");
       break;
     }
   }

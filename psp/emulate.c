@@ -8,6 +8,7 @@
 #include "ctrl.h"
 #include "perf.h"
 #include "image.h"
+#include "kybd.h"
 
 #include "config.h"
 #include "atari.h"
@@ -39,7 +40,9 @@ static int ScreenY;
 static int ScreenW;
 static int ScreenH;
 static int SoundReady;
+static int ShowKybd;
 static PspFpsCounter FpsCounter;
+static PspKeyboardLayout *KeyboardLayout, *KeypadLayout;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
 static int TrigState[4] = { 1, 1, 1, 1 };
 static char SoundBuffer[SOUND_FREQ / 50];
@@ -73,6 +76,10 @@ int InitEmulation()
           (c & 0x000000ff));
   }
 
+  /* Initialize computer keyboard layout */
+  KeyboardLayout = pspKybdLoadLayout("atari800.lyt", NULL, NULL);
+  KeypadLayout = pspKybdLoadLayout("atari5200.lyt", NULL, NULL);
+
   /* Initialize performance counter */
   pspPerfInitFps(&FpsCounter);
 
@@ -90,6 +97,10 @@ int InitEmulation()
 /* Release emulation resources */
 void TrashEmulation()
 {
+  /* Destroy keyboard layout */
+  if (KeyboardLayout) pspKybdDestroyLayout(KeyboardLayout);
+  if (KeypadLayout) pspKybdDestroyLayout(KeypadLayout);
+
   pspImageDestroy(Screen);
   Atari800_Exit(FALSE);
 }
@@ -120,8 +131,7 @@ void Copy_Screen_Buffer()
 
   for (i = 0; i < ATARI_HEIGHT; i++)
   {
-    for (j = 0; j < ATARI_WIDTH; j++)
-      *image++ = *screen++;
+    for (j = 0; j < ATARI_WIDTH; j++) *image++ = *screen++;
     image += ScreenBufferSkip;
   }
 }
@@ -139,13 +149,18 @@ void Atari_DisplayScreen(void)
     pspVideoClearScreen();
   }
 
+  /* Draw keyboard */
+  if (ShowKybd) pspKybdRender((machine_type == MACHINE_5200) 
+    ? KeypadLayout : KeyboardLayout);
+
   /* Blit screen */
   pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
   if (Config.ShowFps)
   {
-    static char fps_display[32];
-    sprintf(fps_display, " %3.02f", pspPerfGetFps(&FpsCounter));
+    static char fps_display[64];
+    sprintf(fps_display, " %3.02f (%3i%%) ", 
+      pspPerfGetFps(&FpsCounter), percent_atari_speed);
 
     int width = pspFontGetTextWidth(&PspStockFont, fps_display);
     int height = pspFontGetLineHeight(&PspStockFont);
@@ -183,24 +198,20 @@ void Sound_Initialise(int *argc, char *argv[])
 
 void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
+  if (!SoundReady) { *length = 0; return; }
+
+  int i;
   PspSample *OutBuf = (PspSample*)buf;
 
-  if (!SoundReady) /* Sound not ready - fill buffer with 0's */
-  	memset(OutBuf, 0, sizeof(PspSample) * *length);
-	else /* Copy sound buffer */
-	{
-	  int i;
-	  for(i = 0; i < SoundReady; i++) 
-	  {
-	    int sample = ((int)(SoundBuffer[i]) - 0x80) << 8;
-	    OutBuf[i].Left = OutBuf[i].Right = 
-	      (sample > 32767) ? 32767 
-	        : ((sample < -32768) ? 32768 : sample);
-	  }
+  for(i = 0; i < SoundReady; i++) 
+  {
+    int sample = ((int)SoundBuffer[i] - 0x80) << 8;
+    OutBuf[i].Left = OutBuf[i].Right = (sample > 32767) ? 32767 
+      : ((sample < -32768) ? 32768 : sample);
+  }
 
-	  *length = SoundReady;
-	  SoundReady = 0;
-	}
+  *length = SoundReady;
+  SoundReady = 0;
 }
 
 void Sound_Update(void)
@@ -208,6 +219,7 @@ void Sound_Update(void)
 	unsigned int nsamples = (tv_mode == TV_NTSC) 
 		? PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 60) 
 		: PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 50);
+
   Pokey_process(SoundBuffer, nsamples);
   SoundReady = nsamples;
 }
@@ -265,6 +277,7 @@ void RunEmulation()
   ScreenX = (SCR_WIDTH / 2) - (ScreenW / 2);
   ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
   ClearScreen = 1;
+  ShowKybd = 0;
 
   /* Reset emulation preferences */
   refresh_rate = Config.Frameskip + 1;
@@ -325,6 +338,9 @@ int ParseInput()
     /* doesn't trigger any other combination presses. */
     if (on) pad.Buttons &= ~ButtonMask[i];
 
+    /* When v. keyboard is on, ignore all but special keypad combinations */
+    if (ShowKybd && !(code & SPC)) continue;
+
     if (code & JOY)      /* Joystick */
     {
       if (on) JoyState[0] &= 0xf0 | CODE_MASK(code);
@@ -359,6 +375,9 @@ int ParseInput()
       {
       case AKEY_EXIT:
         if (on) return 1;
+        break;
+      case AKEY_SHOW_KEYS:
+        ShowKybd = on;
         break;
       default:
         if (on && key_code == AKEY_NONE) 
