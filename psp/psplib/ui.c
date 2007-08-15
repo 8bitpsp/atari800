@@ -1275,9 +1275,9 @@ const PspMenuItem* pspUiSelect(const PspMenu *menu)
   SceCtrlData pad;
 
   sx = SCR_WIDTH - 200;
-  sy = 0;
+  sy = UiMetric.Top;
   dx = SCR_WIDTH;
-  dy = SCR_HEIGHT;
+  dy = UiMetric.Bottom;
   w = dx - sx;
   h = dy - sy;
 
@@ -1353,7 +1353,7 @@ const PspMenuItem* pspUiSelect(const PspMenu *menu)
 
     /* Clear screen */
     pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
-    pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogFogColor);
+    pspVideoFillRect(sx, 0, dx, SCR_HEIGHT, UiMetric.DialogFogColor);
 
     /* Draw scrollbar
     if (sbh > 0)

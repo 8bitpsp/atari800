@@ -6,6 +6,7 @@
 #include "menu.h"
 #include "emulate.h"
 
+#include "cartridge.h"
 #include "statesav.h"
 #include "atari.h"
 #include "input.h"
@@ -211,7 +212,7 @@ static const PspMenuOptionDef
     { "None", (void*)0 },
     /* Special keys */
     { "Special: Open Menu",            (void*)(MET|META_SHOW_MENU) },
-    { "Special: Show Keyboard/Keypad", (void*)(MET|META_SHOW_KEYS) },
+    { "Special: Show Keyboard", (void*)(MET|META_SHOW_KEYS) },
     /* Console */
     { "Console: Reset",  (void*)(SPC|-AKEY_WARMSTART) },
     { "Console: Option", (void*)(CSL|CONSOL_OPTION)   },
@@ -281,7 +282,8 @@ static const PspMenuOptionDef
     /* Unmapped */
     { "None", (void*)0 },
     /* Special keys */
-    { "Special: Open Menu", (void*)(SPC|-AKEY_EXIT)  },
+    { "Special: Open Menu",     (void*)(MET|META_SHOW_MENU) },
+    { "Special: Show Keyboard", (void*)(MET|META_SHOW_KEYS) },
     /* Console */
     { "Console: Start", (void*)(KBD|AKEY_5200_START) },
     { "Console: Pause", (void*)(KBD|AKEY_5200_PAUSE) },
@@ -412,6 +414,54 @@ static const PspMenuItemDef
     { "Save screenshot",  SYSTEM_SCRNSHOT, NULL, -1,
       "\026\001\020 Save screenshot" },
     { NULL, 0 }
+  };
+
+  /* Cartridge types (copied from /ui.c) */
+  const char* CartType[] = 
+  {
+	  "Standard 8 KB cartridge",
+	  "Standard 16 KB cartridge",
+	  "OSS '034M' 16 KB cartridge",
+	  "Standard 32 KB 5200 cartridge",
+	  "DB 32 KB cartridge",
+	  "Two chip 16 KB 5200 cartridge",
+	  "Bounty Bob 40 KB 5200 cartridge",
+	  "64 KB Williams cartridge",
+	  "Express 64 KB cartridge",
+	  "Diamond 64 KB cartridge",
+	  "SpartaDOS X 64 KB cartridge",
+	  "XEGS 32 KB cartridge",
+	  "XEGS 64 KB cartridge",
+	  "XEGS 128 KB cartridge",
+	  "OSS 'M091' 16 KB cartridge",
+	  "One chip 16 KB 5200 cartridge",
+	  "Atrax 128 KB cartridge",
+	  "Bounty Bob 40 KB cartridge",
+	  "Standard 8 KB 5200 cartridge",
+	  "Standard 4 KB 5200 cartridge",
+	  "Right slot 8 KB cartridge",
+	  "32 KB Williams cartridge",
+	  "XEGS 256 KB cartridge",
+	  "XEGS 512 KB cartridge",
+	  "XEGS 1 MB cartridge",
+	  "MegaCart 16 KB cartridge",
+	  "MegaCart 32 KB cartridge",
+	  "MegaCart 64 KB cartridge",
+	  "MegaCart 128 KB cartridge",
+	  "MegaCart 256 KB cartridge",
+	  "MegaCart 512 KB cartridge",
+	  "MegaCart 1 MB cartridge",
+	  "Switchable XEGS 32 KB cartridge",
+	  "Switchable XEGS 64 KB cartridge",
+	  "Switchable XEGS 128 KB cartridge",
+	  "Switchable XEGS 256 KB cartridge",
+	  "Switchable XEGS 512 KB cartridge",
+	  "Switchable XEGS 1 MB cartridge",
+	  "Phoenix 8 KB cartridge",
+	  "Blizzard 16 KB cartridge",
+	  "Atarimax 128 KB Flash cartridge",
+	  "Atarimax 1 MB Flash cartridge",
+	  "SpartaDOS X 128 KB cartridge",
   };
 
 /* Function declarations */
@@ -1264,59 +1314,93 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery,
   return OnGenericButtonPress(NULL, NULL, button_mask);
 }
 
-PspMenuItemDef dummy_menu[] = {
-  { "Item one", 1, NULL, -1, "Item one select" },
-  { "Item two", 2, NULL, -1, "Item two select" },
-  { "Item three", 3, NULL, -1, "Item 3 select" },
-  { "Item 4our", 4, NULL, -1, "Item 4our select" },
-  { "Item 2one", 21, NULL, -1, "Item one select" },
-  { "Item 2two", 22, NULL, -1, "Item two select" },
-  { "Item 2three", 23, NULL, -1, "Item 3 select" },
-  { "Item 24our", 24, NULL, -1, "Item 4our select" },
-  { "Item 3one", 31, NULL, -1, "Item one select" },
-  { "Item 3two", 32, NULL, -1, "Item two select" },
-  { "Item 3three", 33, NULL, -1, "Item 3 select" },
-  { "Item 34our", 34, NULL, -1, "Item 4our select" },
-  { "Item 4one", 41, NULL, -1, "Item one select" },
-  { "Item 4two", 42, NULL, -1, "Item two select" },
-  { "Item 4three", 43, NULL, -1, "Item 3 select" },
-  { "Item 44our", 44, NULL, -1, "Item 4our select" },
-  { "Item 5one", 51, NULL, -1, "Item one select" },
-  { "Item 5two", 52, NULL, -1, "Item two select" },
-  { "Item 5three", 53, NULL, -1, "Item 3 select" },
-  { "Item 54our", 54, NULL, -1, "Item 4our select" },
-  { "Item 6one", 61, NULL, -1, "Item one select" },
-  { "Item 6two", 62, NULL, -1, "Item two select" },
-  { "Item 6three", 63, NULL, -1, "Item 3 select" },
-  { "Item 64our", 64, NULL, -1, "Item 4our select" },
-  { "Item 7one", 71, NULL, -1, "Item one select" },
-  { "Item 7two", 72, NULL, -1, "Item two select" },
-  { "Item 7three", 73, NULL, -1, "Item 3 select" },
-  { "Item 74our", 74, NULL, -1, "Item 4our select" },
-  { "Item 8one", 81, NULL, -1, "Item one select" },
-  { "Item 8two", 82, NULL, -1, "Item two select" },
-  { "Item 8three", 83, NULL, -1, "Item 3 select" },
-  { "Item 84our", 84, NULL, -1, "Item 4our select" },
-  { NULL, 0 }
-};
+int LoadCartridge(const char *path)
+{
+  int type = CART_Insert(path);
+
+  switch(type)
+  {
+	case CART_CANT_OPEN:
+		pspUiAlert("Cannot open file");
+		return 0;
+	case CART_BAD_CHECKSUM:
+		pspUiAlert("Invalid cartridge checksum");
+		return 0;
+  case CART_BAD_FORMAT:
+    pspUiAlert("Unknown cartridge format");
+    return 0;
+  case 0:
+    break;
+  default:
+	  {
+	    int i;
+	    PspMenu *menu = pspMenuCreate();
+
+	    for (i = 0; CartType[i]; i++)
+  	    if (cart_kb[i + 1] == type) 
+  	    	pspMenuAppendItem(menu, CartType[i], i + 1);
+
+	    const PspMenuItem *item = pspUiSelect(menu);
+	    if (item) cart_type = item->ID;
+
+	    pspMenuDestroy(menu);
+      if (!item) return 0;
+	  }
+	  break;
+  }
+
+	if (cart_type != CART_NONE) 
+	{
+		int for5200 = CART_IsFor5200(cart_type);
+		if (for5200 && machine_type != MACHINE_5200) {
+			machine_type = MACHINE_5200;
+			ram_size = 16;
+			Atari800_InitialiseMachine();
+		}
+		else if (!for5200 && machine_type == MACHINE_5200) {
+			machine_type = MACHINE_XLXE;
+			ram_size = 64;
+			Atari800_InitialiseMachine();
+		}
+	}
+
+  return 1;
+}
 
 int OnQuickloadOk(const void *browser, const void *path)
 {
-/* Dummy menu */
-PspMenu *menu = pspMenuCreate();
-pspMenuLoad(menu, dummy_menu);
-const PspMenuItem *item = pspUiSelect(menu);
-char foo[326];
-if (item) sprintf(foo,"you selected '%s' (%i)", item->Caption, item->ID);
-else sprintf(foo, "you dina select nuttin'!");
-pspMenuDestroy(menu);
-pspUiAlert(foo);
-  /* Load the game */
-  if (!Atari800_OpenFile(path, 1, 1, 0))
-  { 
-    pspUiAlert("Error loading file"); 
-    return 0; 
-  }
+  CART_Remove();
+	int type = Atari800_DetectFileType(path);
+
+  switch(type)
+  {
+	case AFILE_CART:
+	case AFILE_ROM:
+	  if (!LoadCartridge(path)) return 0;
+	  break;
+	default:
+	  {
+	    int old_mach = machine_type;
+	    int old_ram = ram_size;
+
+      if (machine_type == MACHINE_5200)
+      {
+				machine_type = MACHINE_XLXE;
+				ram_size = 64;
+				Atari800_InitialiseMachine();
+			}
+
+		  if (!Atari800_OpenFile(path, 1, 1, 0))
+		  {
+				machine_type = old_mach;
+				ram_size = old_ram;
+				Atari800_InitialiseMachine();
+		    pspUiAlert("Error loading file"); 
+		    return 0; 
+		  }
+		}
+	  break;
+	}
 
   /* TODO: load proper control set */
   InitGameConfig();
@@ -1329,9 +1413,10 @@ pspUiAlert(foo);
   if (GamePath) free(GamePath);
   GamePath = pspFileIoGetParentDirectory(LoadedGame);
 
-  /* Return to the emulator */
   ResumeEmulation = 1;
-  return 1;
+	Coldstart();
+
+	return 1;
 }
 
 /* Initialize game configuration */
