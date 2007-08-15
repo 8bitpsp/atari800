@@ -17,6 +17,13 @@
 extern "C" {
 #endif
 
+#define MENU_HEADER(text)        { "\t"text, 0, NULL, -1, NULL }
+#define MENU_ITEM(text, id, option_list, sel_index, help_text) \
+  { (text), (id), (option_list), (sel_index), (help_text) }
+#define MENU_OPTION(text, value) { (text), (void*)(value) }
+#define MENU_END_ITEMS           { NULL, 0 }
+#define MENU_END_OPTIONS         { NULL, NULL }
+
 typedef struct PspMenuOption
 {
   const void* Value;

@@ -34,16 +34,19 @@
 #define OPTION_CLOCK_FREQ   4
 #define OPTION_SHOW_FPS     5
 #define OPTION_CONTROL_MODE 6
+#define OPTION_FRAME_SYNC   7
 
 #define SYSTEM_SCRNSHOT     1
 #define SYSTEM_RESET        2
 #define SYSTEM_MACHINE_TYPE 3
 #define SYSTEM_TV_MODE      4
+#define SYSTEM_CROP_SCREEN  5
 
-#define M_TYPE(machine, ram) ((ram) << 8 | ((machine) & 0xff))
+#define MACHINE_TYPE(machine, ram) ((ram) << 8 | ((machine) & 0xff))
 #define MACHINE(mtype)       ((mtype) & 0xff)
 #define RAM(mtype)           ((mtype) >> 8)
 
+int CropScreen;
 EmulatorConfig Config;
 GameConfig ActiveGameConfig;
 
@@ -169,255 +172,266 @@ static const char *TabLabel[] =
 /* Option definitions */
 static const PspMenuOptionDef
   ToggleOptions[] = {
-    { "Disabled", (void*)0 },
-    { "Enabled", (void*)1 },
-    { NULL, NULL } },
+    MENU_OPTION("Disabled", 0),
+    MENU_OPTION("Enabled",  1),
+    MENU_END_OPTIONS
+  },
   ScreenSizeOptions[] = {
-    { "Actual size", (void*)DISPLAY_MODE_UNSCALED },
-    { "4:3 scaled (fit height)", (void*)DISPLAY_MODE_FIT_HEIGHT },
-    { "16:9 scaled (fit screen)", (void*)DISPLAY_MODE_FILL_SCREEN },
-    { NULL, NULL } },
+    MENU_OPTION("Actual size",              DISPLAY_MODE_UNSCALED),
+    MENU_OPTION("4:3 scaled (fit height)",  DISPLAY_MODE_FIT_HEIGHT),
+    MENU_OPTION("16:9 scaled (fit screen)", DISPLAY_MODE_FILL_SCREEN),
+    MENU_END_OPTIONS
+  },
   FrameSkipOptions[] = {
-    { "No skipping", (void*)0 },
-    { "Skip 1 frame", (void*)1 },
-    { "Skip 2 frames", (void*)2 },
-    { "Skip 3 frames", (void*)3 },
-    { "Skip 4 frames", (void*)4 },
-    { "Skip 5 frames", (void*)5 },
-    { NULL, NULL } },
+    MENU_OPTION("No skipping",   0),
+    MENU_OPTION("Skip 1 frame",  1),
+    MENU_OPTION("Skip 2 frames", 2),
+    MENU_OPTION("Skip 3 frames", 3),
+    MENU_OPTION("Skip 4 frames", 4),
+    MENU_OPTION("Skip 5 frames", 5),
+    MENU_END_OPTIONS
+  },
   PspClockFreqOptions[] = {
-    { "222 MHz", (void*)222 },
-    { "266 MHz", (void*)266 },
-    { "300 MHz", (void*)300 },
-    { "333 MHz", (void*)333 },
-    { NULL, NULL } },
+    MENU_OPTION("222 MHz", 222),
+    MENU_OPTION("266 MHz", 266),
+    MENU_OPTION("300 MHz", 300),
+    MENU_OPTION("333 MHz", 333),
+    MENU_END_OPTIONS
+  },
   ControlModeOptions[] = {
-    { "\026\242\020 cancels, \026\241\020 confirms (US)", (void*)0 },
-    { "\026\241\020 cancels, \026\242\020 confirms (Japan)", (void*)1 },
-    { NULL, NULL } },
+    MENU_OPTION("\026\242\020 cancels, \026\241\020 confirms (US)",    0),
+    MENU_OPTION("\026\241\020 cancels, \026\242\020 confirms (Japan)", 1),
+    MENU_END_OPTIONS
+  },
   MachineTypeOptions[] = {
-    { "800",                 (void*)M_TYPE(MACHINE_OSB,  48) },
-    { "800 XL",              (void*)M_TYPE(MACHINE_XLXE, 64) },
-    { "130 XE",              (void*)M_TYPE(MACHINE_XLXE, 128) },
-    { "320 XE (Compy Shop)", (void*)M_TYPE(MACHINE_XLXE, RAM_320_COMPY_SHOP) },
-    { "320 XE (Rambo)",      (void*)M_TYPE(MACHINE_XLXE, RAM_320_RAMBO) },
-    { "5200",                (void*)M_TYPE(MACHINE_5200, 16) },
-    { NULL, NULL } },
+    MENU_OPTION("800",                 MACHINE_TYPE(MACHINE_OSB,  48)),
+    MENU_OPTION("800 XL",              MACHINE_TYPE(MACHINE_XLXE, 64)),
+    MENU_OPTION("130 XE",              MACHINE_TYPE(MACHINE_XLXE, 128)),
+    MENU_OPTION("320 XE (Compy Shop)", MACHINE_TYPE(MACHINE_XLXE, RAM_320_COMPY_SHOP)),
+    MENU_OPTION("320 XE (Rambo)",      MACHINE_TYPE(MACHINE_XLXE, RAM_320_RAMBO)),
+    MENU_OPTION("5200",                MACHINE_TYPE(MACHINE_5200, 16)),
+    MENU_END_OPTIONS
+  },
   TVModeOptions[] = {
-    { "NTSC", (void*)TV_NTSC },
-    { "PAL",  (void*)TV_PAL },
-    { NULL, NULL } },
+    MENU_OPTION("NTSC", TV_NTSC),
+    MENU_OPTION("PAL",  TV_PAL),
+    MENU_END_OPTIONS
+  },
   ComputerButtonMapOptions[] = {
     /* Unmapped */
-    { "None", (void*)0 },
+    MENU_OPTION("None", 0),
     /* Special keys */
-    { "Special: Open Menu",            (void*)(MET|META_SHOW_MENU) },
-    { "Special: Show Keyboard", (void*)(MET|META_SHOW_KEYS) },
+    MENU_OPTION("Special: Open Menu",     MET|META_SHOW_MENU),
+    MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS),
     /* Console */
-    { "Console: Reset",  (void*)(SPC|-AKEY_WARMSTART) },
-    { "Console: Option", (void*)(CSL|CONSOL_OPTION)   },
-    { "Console: Select", (void*)(CSL|CONSOL_SELECT)   },
-    { "Console: Start",  (void*)(CSL|CONSOL_START)    },
-    { "Console: Help",   (void*)(KBD|AKEY_HELP)      },
+    MENU_OPTION("Console: Reset",  SPC|-AKEY_WARMSTART),
+    MENU_OPTION("Console: Option", CSL|CONSOL_OPTION),
+    MENU_OPTION("Console: Select", CSL|CONSOL_SELECT),
+    MENU_OPTION("Console: Start",  CSL|CONSOL_START),
+    MENU_OPTION("Console: Help",   KBD|AKEY_HELP),
     /* Joystick */
-    { "Joystick: Up",   (void*)(JOY|STICK_FORWARD) },
-    { "Joystick: Down", (void*)(JOY|STICK_BACK)    },
-    { "Joystick: Left", (void*)(JOY|STICK_LEFT)    },
-    { "Joystick: Up",   (void*)(JOY|STICK_RIGHT)   },
-    { "Joystick: Fire", (void*)(TRG|0) },
+    MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD),
+    MENU_OPTION("Joystick: Down", JOY|STICK_BACK),
+    MENU_OPTION("Joystick: Left", JOY|STICK_LEFT),
+    MENU_OPTION("Joystick: Up",   JOY|STICK_RIGHT),
+    MENU_OPTION("Joystick: Fire", TRG|0),
     /* Keyboard */
-    { "Keyboard: Up",   (void*)(KBD|AKEY_UP)    }, 
-    { "Keyboard: Down", (void*)(KBD|AKEY_DOWN)  },
-    { "Keyboard: Left", (void*)(KBD|AKEY_LEFT)  }, 
-    { "Keyboard: Right",(void*)(KBD|AKEY_RIGHT) },
+    MENU_OPTION("Keyboard: Up",   KBD|AKEY_UP), 
+    MENU_OPTION("Keyboard: Down", KBD|AKEY_DOWN),
+    MENU_OPTION("Keyboard: Left", KBD|AKEY_LEFT), 
+    MENU_OPTION("Keyboard: Right",KBD|AKEY_RIGHT),
     /* Keyboard: Function keys */
-    { "F1",(void*)(KBD|AKEY_F1) }, { "F2",(void*)(KBD|AKEY_F2) },
-    { "F3",(void*)(KBD|AKEY_F3) }, { "F4",(void*)(KBD|AKEY_F4) },
+    MENU_OPTION("F1", KBD|AKEY_F1), MENU_OPTION("F2", KBD|AKEY_F2),
+    MENU_OPTION("F3", KBD|AKEY_F3), MENU_OPTION("F4", KBD|AKEY_F4),
     /* Keyboard: misc */
-    { "Space",       (void*)(KBD|AKEY_SPACE) }, 
-    { "Return",      (void*)(KBD|AKEY_RETURN) },
-    { "Tab",         (void*)(KBD|AKEY_TAB) }, 
-    { "Backspace",   (void*)(KBD|AKEY_BACKSPACE) },
-    { "Escape",      (void*)(KBD|AKEY_ESCAPE) },
-    { "Toggle CAPS", (void*)(KBD|AKEY_CAPSTOGGLE) },
-    { "Break",       (void*)(SPC|-AKEY_BREAK) },
-    { "Atari Key",   (void*)(KBD|AKEY_ATARI) },
-    { "Shift",       (void*)(STA|AKEY_SHFT) },
-    { "Control",     (void*)(STA|AKEY_CTRL) },
+    MENU_OPTION("Space",       KBD|AKEY_SPACE), 
+    MENU_OPTION("Return",      KBD|AKEY_RETURN),
+    MENU_OPTION("Tab",         KBD|AKEY_TAB),
+    MENU_OPTION("Backspace",   KBD|AKEY_BACKSPACE),
+    MENU_OPTION("Escape",      KBD|AKEY_ESCAPE),
+    MENU_OPTION("Toggle CAPS", KBD|AKEY_CAPSTOGGLE),
+    MENU_OPTION("Break",       SPC|-AKEY_BREAK),
+    MENU_OPTION("Atari Key",   KBD|AKEY_ATARI),
+    MENU_OPTION("Shift",       STA|AKEY_SHFT),
+    MENU_OPTION("Control",     STA|AKEY_CTRL),
     /* Keyboard: digits */
-    { "1",(void*)(KBD|AKEY_1) }, { "2",(void*)(KBD|AKEY_2) },
-    { "3",(void*)(KBD|AKEY_3) }, { "4",(void*)(KBD|AKEY_4) },
-    { "5",(void*)(KBD|AKEY_5) }, { "6",(void*)(KBD|AKEY_6) },
-    { "7",(void*)(KBD|AKEY_7) }, { "8",(void*)(KBD|AKEY_8) },
-    { "9",(void*)(KBD|AKEY_9) }, { "0",(void*)(KBD|AKEY_0) },
+    MENU_OPTION("1", KBD|AKEY_1), MENU_OPTION("2", KBD|AKEY_2),
+    MENU_OPTION("3", KBD|AKEY_3), MENU_OPTION("4", KBD|AKEY_4),
+    MENU_OPTION("5", KBD|AKEY_5), MENU_OPTION("6", KBD|AKEY_6),
+    MENU_OPTION("7", KBD|AKEY_7), MENU_OPTION("8", KBD|AKEY_8),
+    MENU_OPTION("9", KBD|AKEY_9), MENU_OPTION("0", KBD|AKEY_0),
     /* Keyboard: letters */
-    { "A",(void*)(KBD|AKEY_a) }, { "B",(void*)(KBD|AKEY_b) },
-    { "C",(void*)(KBD|AKEY_c) }, { "D",(void*)(KBD|AKEY_d) },
-    { "E",(void*)(KBD|AKEY_e) }, { "F",(void*)(KBD|AKEY_f) },
-    { "G",(void*)(KBD|AKEY_g) }, { "H",(void*)(KBD|AKEY_h) },
-    { "I",(void*)(KBD|AKEY_i) }, { "J",(void*)(KBD|AKEY_j) },
-    { "K",(void*)(KBD|AKEY_k) }, { "L",(void*)(KBD|AKEY_l) },
-    { "M",(void*)(KBD|AKEY_m) }, { "N",(void*)(KBD|AKEY_n) },
-    { "O",(void*)(KBD|AKEY_o) }, { "P",(void*)(KBD|AKEY_p) },
-    { "Q",(void*)(KBD|AKEY_q) }, { "R",(void*)(KBD|AKEY_r) },
-    { "S",(void*)(KBD|AKEY_s) }, { "T",(void*)(KBD|AKEY_t) },
-    { "U",(void*)(KBD|AKEY_u) }, { "V",(void*)(KBD|AKEY_v) },
-    { "W",(void*)(KBD|AKEY_w) }, { "X",(void*)(KBD|AKEY_x) },
-    { "Y",(void*)(KBD|AKEY_y) }, { "Z",(void*)(KBD|AKEY_z) },
+    MENU_OPTION("A", KBD|AKEY_a), MENU_OPTION("B", KBD|AKEY_b),
+    MENU_OPTION("C", KBD|AKEY_c), MENU_OPTION("D", KBD|AKEY_d),
+    MENU_OPTION("E", KBD|AKEY_e), MENU_OPTION("F", KBD|AKEY_f),
+    MENU_OPTION("G", KBD|AKEY_g), MENU_OPTION("H", KBD|AKEY_h),
+    MENU_OPTION("I", KBD|AKEY_i), MENU_OPTION("J", KBD|AKEY_j),
+    MENU_OPTION("K", KBD|AKEY_k), MENU_OPTION("L", KBD|AKEY_l),
+    MENU_OPTION("M", KBD|AKEY_m), MENU_OPTION("N", KBD|AKEY_n),
+    MENU_OPTION("O", KBD|AKEY_o), MENU_OPTION("P", KBD|AKEY_p),
+    MENU_OPTION("Q", KBD|AKEY_q), MENU_OPTION("R", KBD|AKEY_r),
+    MENU_OPTION("S", KBD|AKEY_s), MENU_OPTION("T", KBD|AKEY_t),
+    MENU_OPTION("U", KBD|AKEY_u), MENU_OPTION("V", KBD|AKEY_v),
+    MENU_OPTION("W", KBD|AKEY_w), MENU_OPTION("X", KBD|AKEY_x),
+    MENU_OPTION("Y", KBD|AKEY_y), MENU_OPTION("Z", KBD|AKEY_z),
     /* Keyboard: symbols */
-    {"< (less than)",   (void*)(KBD|AKEY_LESS) },
-    {"> (greater than)",(void*)(KBD|AKEY_GREATER) },
-    {"= (equals)",      (void*)(KBD|AKEY_EQUAL) },
-    {"+ (plus)",        (void*)(KBD|AKEY_PLUS) },
-    {"* (asterisk)",    (void*)(KBD|AKEY_ASTERISK) },
-    {"/ (slash)",       (void*)(KBD|AKEY_SLASH) },
-    {": (colon)",       (void*)(KBD|AKEY_COLON) },
-    {"; (semicolon)",   (void*)(KBD|AKEY_SEMICOLON) },
-    {", (comma)",       (void*)(KBD|AKEY_COMMA) }, 
-    {". (period)",      (void*)(KBD|AKEY_FULLSTOP) },
-    {"_ (underscore)",  (void*)(KBD|AKEY_UNDERSCORE) },
-    /* End */
-    { NULL, NULL } },
+    MENU_OPTION("< (less than)",   KBD|AKEY_LESS),
+    MENU_OPTION("> (greater than)",KBD|AKEY_GREATER),
+    MENU_OPTION("= (equals)",      KBD|AKEY_EQUAL),
+    MENU_OPTION("+ (plus)",        KBD|AKEY_PLUS),
+    MENU_OPTION("* (asterisk)",    KBD|AKEY_ASTERISK),
+    MENU_OPTION("/ (slash)",       KBD|AKEY_SLASH),
+    MENU_OPTION(": (colon)",       KBD|AKEY_COLON),
+    MENU_OPTION("; (semicolon)",   KBD|AKEY_SEMICOLON),
+    MENU_OPTION(", (comma)",       KBD|AKEY_COMMA), 
+    MENU_OPTION(". (period)",      KBD|AKEY_FULLSTOP),
+    MENU_OPTION("_ (underscore)",  KBD|AKEY_UNDERSCORE),
+    MENU_END_OPTIONS
+  },
   ConsoleButtonMapOptions[] = {
     /* Unmapped */
-    { "None", (void*)0 },
+    MENU_OPTION("None", 0),
     /* Special keys */
-    { "Special: Open Menu",     (void*)(MET|META_SHOW_MENU) },
-    { "Special: Show Keyboard", (void*)(MET|META_SHOW_KEYS) },
+    MENU_OPTION("Special: Open Menu",     MET|META_SHOW_MENU),
+    MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS),
     /* Console */
-    { "Console: Start", (void*)(KBD|AKEY_5200_START) },
-    { "Console: Pause", (void*)(KBD|AKEY_5200_PAUSE) },
-    { "Console: Reset", (void*)(KBD|AKEY_5200_RESET) },
+    MENU_OPTION("Console: Start", KBD|AKEY_5200_START),
+    MENU_OPTION("Console: Pause", KBD|AKEY_5200_PAUSE),
+    MENU_OPTION("Console: Reset", KBD|AKEY_5200_RESET),
     /* Joystick */
-    { "Joystick: Up",   (void*)(JOY|STICK_FORWARD) },
-    { "Joystick: Down", (void*)(JOY|STICK_BACK)    },
-    { "Joystick: Left", (void*)(JOY|STICK_LEFT)    },
-    { "Joystick: Up",   (void*)(JOY|STICK_RIGHT)   },
-    { "Joystick: Fire", (void*)(TRG|0) },
+    MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD),
+    MENU_OPTION("Joystick: Down", JOY|STICK_BACK),
+    MENU_OPTION("Joystick: Left", JOY|STICK_LEFT),
+    MENU_OPTION("Joystick: Up",   JOY|STICK_RIGHT),
+    MENU_OPTION("Joystick: Fire", TRG|0),
     /* Keypad */
-    { "1",(void*)(KBD|AKEY_5200_1) }, { "2",(void*)(KBD|AKEY_5200_2) },
-    { "3",(void*)(KBD|AKEY_5200_3) }, { "4",(void*)(KBD|AKEY_5200_4) },
-    { "5",(void*)(KBD|AKEY_5200_5) }, { "6",(void*)(KBD|AKEY_5200_6) },
-    { "7",(void*)(KBD|AKEY_5200_7) }, { "8",(void*)(KBD|AKEY_5200_8) },
-    { "9",(void*)(KBD|AKEY_5200_9) }, { "0",(void*)(KBD|AKEY_5200_0) },
-    { "*",(void*)(KBD|AKEY_5200_ASTERISK) },
-    { "#",(void*)(KBD|AKEY_5200_HASH) },
-    /* End */
-    { NULL, NULL } };
+    MENU_OPTION("1", KBD|AKEY_5200_1), MENU_OPTION("2", KBD|AKEY_5200_2),
+    MENU_OPTION("3", KBD|AKEY_5200_3), MENU_OPTION("4", KBD|AKEY_5200_4),
+    MENU_OPTION("5", KBD|AKEY_5200_5), MENU_OPTION("6", KBD|AKEY_5200_6),
+    MENU_OPTION("7", KBD|AKEY_5200_7), MENU_OPTION("8", KBD|AKEY_5200_8),
+    MENU_OPTION("9", KBD|AKEY_5200_9), MENU_OPTION("0", KBD|AKEY_5200_0),
+    MENU_OPTION("*", KBD|AKEY_5200_ASTERISK),
+    MENU_OPTION("#", KBD|AKEY_5200_HASH),
+    MENU_END_OPTIONS
+  };
 
 /* Menu definitions */
 static const PspMenuItemDef
   OptionMenuDef[] = {
-    { "\tVideo", 0, NULL, -1, NULL },
-    { "Screen size", OPTION_DISPLAY_MODE, ScreenSizeOptions, -1, 
-      "\026\250\020 Change screen size" },
-    { "\tPerformance", 0, NULL, -1, NULL },
-    { "Frame skipping", OPTION_FRAMESKIP, FrameSkipOptions, -1, 
-      "\026\250\020 Change number of frames skipped per update" },
-    { "VSync", OPTION_VSYNC, ToggleOptions, -1, 
-      "\026\250\020 Enable to reduce tearing; disable to increase speed" },
-    { "PSP clock frequency", OPTION_CLOCK_FREQ, PspClockFreqOptions, -1, 
-      "\026\250\020 Larger values: faster emulation, faster battery depletion (default: 222MHz)" },
-    { "Show FPS counter", OPTION_SHOW_FPS, ToggleOptions, -1,
-      "\026\250\020 Show/hide the frames-per-second counter" },
-    { "\tMenu", 0, NULL, -1, NULL },
-    { "Button mode", OPTION_CONTROL_MODE, ControlModeOptions,  -1,
-      "\026\250\020 Change OK and Cancel button mapping" },
-    { NULL, 0 }
+    MENU_HEADER("Video"),
+    MENU_ITEM("Screen size", OPTION_DISPLAY_MODE, ScreenSizeOptions, -1, 
+      "\026\250\020 Change screen size"),
+    MENU_HEADER("Performance"),
+    MENU_ITEM("Frame limiter", OPTION_FRAME_SYNC, ToggleOptions, -1, 
+      "\026\250\020 Enable to run the system at proper speed; disable to run as fast as possible"),
+    MENU_ITEM("Frame skipping", OPTION_FRAMESKIP, FrameSkipOptions, -1, 
+      "\026\250\020 Change number of frames skipped per update"),
+    MENU_ITEM("VSync", OPTION_VSYNC, ToggleOptions, -1, 
+      "\026\250\020 Enable to reduce tearing; disable to increase speed"),
+    MENU_ITEM("PSP clock frequency", OPTION_CLOCK_FREQ, PspClockFreqOptions, -1, 
+      "\026\250\020 Larger values: faster emulation, faster battery depletion (default: 222MHz)"),
+    MENU_ITEM("Show FPS counter", OPTION_SHOW_FPS, ToggleOptions, -1,
+      "\026\250\020 Show/hide the frames-per-second counter"),
+    MENU_HEADER("Menu"),
+    MENU_ITEM("Button mode", OPTION_CONTROL_MODE, ControlModeOptions,  -1,
+      "\026\250\020 Change OK and Cancel button mapping"),
+    MENU_END_ITEMS
   },
   ComputerControlMenuDef[] = {
-    { "\026"PSP_CHAR_ANALUP,   MAP_ANALOG_UP,     ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN,   ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,   ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_ANALRIGHT,MAP_ANALOG_RIGHT,  ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_UP,       MAP_BUTTON_UP,     ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_DOWN,     MAP_BUTTON_DOWN,   ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_LEFT,     MAP_BUTTON_LEFT,   ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_RIGHT,    MAP_BUTTON_RIGHT,  ComputerButtonMapOptions, -1, 
-      ControlHelpText },
-    { "\026"PSP_CHAR_SQUARE,   MAP_BUTTON_SQUARE, ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_CROSS,    MAP_BUTTON_CROSS,  ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_CIRCLE,   MAP_BUTTON_CIRCLE, ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_SELECT,   MAP_BUTTON_SELECT,  ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_START,    MAP_BUTTON_START,   ComputerButtonMapOptions, -1,
-      ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER,
-      MAP_BUTTON_LRTRIGGERS, ComputerButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT,
-      MAP_BUTTON_STARTSELECT,ComputerButtonMapOptions, -1, ControlHelpText },
-    { NULL, 0 }
+    MENU_ITEM("\026"PSP_CHAR_ANALUP, MAP_ANALOG_UP, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_ANALRIGHT, MAP_ANALOG_RIGHT,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_UP, MAP_BUTTON_UP, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_DOWN, MAP_BUTTON_DOWN, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_LEFT, MAP_BUTTON_LEFT, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_RIGHT, MAP_BUTTON_RIGHT,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_SQUARE, MAP_BUTTON_SQUARE, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_CROSS, MAP_BUTTON_CROSS,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_CIRCLE, MAP_BUTTON_CIRCLE, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_SELECT, MAP_BUTTON_SELECT, 
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_START, MAP_BUTTON_START,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, 
+      MAP_BUTTON_LRTRIGGERS, ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
+      ComputerButtonMapOptions, -1, ControlHelpText),
+    MENU_END_ITEMS
   },
   ConsoleControlMenuDef[] = {
-    { "\026"PSP_CHAR_ANALUP,     MAP_ANALOG_UP,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALDOWN,   MAP_ANALOG_DOWN,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALLEFT,   MAP_ANALOG_LEFT,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_ANALRIGHT,  MAP_ANALOG_RIGHT,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_UP,         MAP_BUTTON_UP,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_DOWN,       MAP_BUTTON_DOWN,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LEFT,       MAP_BUTTON_LEFT,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_RIGHT,      MAP_BUTTON_RIGHT,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_SQUARE,     MAP_BUTTON_SQUARE,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_CROSS,      MAP_BUTTON_CROSS,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_CIRCLE,     MAP_BUTTON_CIRCLE,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_TRIANGLE,   MAP_BUTTON_TRIANGLE,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER,   MAP_BUTTON_LTRIGGER,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_RTRIGGER,   MAP_BUTTON_RTRIGGER,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_SELECT,     MAP_BUTTON_SELECT,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_START,      MAP_BUTTON_START,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, MAP_BUTTON_LRTRIGGERS,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { "\026"PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
-      ConsoleButtonMapOptions, -1, ControlHelpText },
-    { NULL, 0 }
+    MENU_ITEM("\026"PSP_CHAR_ANALUP, MAP_ANALOG_UP,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_ANALRIGHT, MAP_ANALOG_RIGHT,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_UP, MAP_BUTTON_UP,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_DOWN, MAP_BUTTON_DOWN,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_LEFT, MAP_BUTTON_LEFT,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_RIGHT, MAP_BUTTON_RIGHT,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_SQUARE, MAP_BUTTON_SQUARE,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_CROSS, MAP_BUTTON_CROSS,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_CIRCLE, MAP_BUTTON_CIRCLE,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_SELECT, MAP_BUTTON_SELECT,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_START, MAP_BUTTON_START,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, 
+      MAP_BUTTON_LRTRIGGERS, ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_ITEM("\026"PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
+      ConsoleButtonMapOptions, -1, ControlHelpText),
+    MENU_END_ITEMS
   },
   SystemMenuDef[] = {
-    { "\tHardware", 0, NULL, -1, NULL },
-    { "TV frequency",     SYSTEM_TV_MODE, TVModeOptions, -1, 
-      "\026\250\020 Change emulated machine" },
-    { "Machine type",     SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
-      "\026\250\020 Change emulated machine" },
-    { "\tSystem", 0, NULL, -1, NULL },
-    { "Reset", SYSTEM_RESET, NULL, -1, "\026\001\020 Reset" },
-    { "Save screenshot",  SYSTEM_SCRNSHOT, NULL, -1,
-      "\026\001\020 Save screenshot" },
-    { NULL, 0 }
+    MENU_HEADER("Display"),
+    MENU_ITEM("Horizontal crop", SYSTEM_CROP_SCREEN, ToggleOptions, -1, 
+      "\026\250\020 Remove 8-pixel wide strips on each side of the screen"),
+    MENU_ITEM("TV frequency", SYSTEM_TV_MODE, TVModeOptions, -1, 
+      "\026\250\020 Change video frequency of emulated machine"),
+    MENU_ITEM("Machine type", SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
+      "\026\250\020 Change emulated machine"),
+    MENU_HEADER("System"),
+    MENU_ITEM("Reset", SYSTEM_RESET, NULL, -1, "\026\001\020 Reset"),
+    MENU_ITEM("Save screenshot",  SYSTEM_SCRNSHOT, NULL, -1,
+      "\026\001\020 Save screenshot"),
+    MENU_END_ITEMS
   };
 
   /* Cartridge types (copied from /ui.c) */
-  const char* CartType[] = 
+  static const char* CartType[] = 
   {
 	  "Standard 8 KB cartridge",
 	  "Standard 16 KB cartridge",
@@ -564,40 +578,6 @@ PspUiMenu ControlUiMenu =
 
 void InitMenu()
 {
-  /* Initialize UI components */
-  UiMetric.Font = &PspStockFont;
-  UiMetric.Left = 8;
-  UiMetric.Top = 24;
-  UiMetric.Right = 472;
-  UiMetric.Bottom = 250;
-  UiMetric.OkButton = (!Config.ControlMode) 
-    ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
-  UiMetric.CancelButton = (!Config.ControlMode) 
-    ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
-  UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
-  UiMetric.ScrollbarBgColor = 0x44ffffff;
-  UiMetric.ScrollbarWidth = 10;
-  UiMetric.DialogBorderColor = PSP_COLOR_GRAY;
-  UiMetric.DialogBgColor = PSP_COLOR_DARKGRAY;
-  UiMetric.TextColor = PSP_COLOR_GRAY;
-  UiMetric.SelectedColor = PSP_COLOR_YELLOW;
-  UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x44);
-  UiMetric.StatusBarColor = PSP_COLOR_WHITE;
-  UiMetric.BrowserFileColor = PSP_COLOR_GRAY;
-  UiMetric.BrowserDirectoryColor = PSP_COLOR_YELLOW;
-  UiMetric.GalleryIconsPerRow = 5;
-  UiMetric.GalleryIconMarginWidth = 8;
-  UiMetric.MenuItemMargin = 20;
-  UiMetric.MenuSelOptionBg = PSP_COLOR_BLACK;
-  UiMetric.MenuOptionBoxColor = PSP_COLOR_GRAY;
-  UiMetric.MenuOptionBoxBg = COLOR(0, 0, 33, 0xBB);
-  UiMetric.MenuDecorColor = PSP_COLOR_YELLOW;
-  UiMetric.DialogFogColor = COLOR(0, 0, 0, 88);
-  UiMetric.TitlePadding = 4;
-  UiMetric.TitleColor = PSP_COLOR_WHITE;
-  UiMetric.MenuFps = 30;
-  UiMetric.TabBgColor = COLOR(0x74,0x74,0xbe,0xff);
-
   /* Reset variables */
   TabIndex = TAB_ABOUT;
   Background = NULL;
@@ -651,6 +631,40 @@ void InitMenu()
 
   /* Load default configuration */
   LoadGameConfig();
+
+  /* Initialize UI components */
+  UiMetric.Font = &PspStockFont;
+  UiMetric.Left = 8;
+  UiMetric.Top = 24;
+  UiMetric.Right = 472;
+  UiMetric.Bottom = 250;
+  UiMetric.OkButton = (!Config.ControlMode) 
+    ? PSP_CTRL_CROSS : PSP_CTRL_CIRCLE;
+  UiMetric.CancelButton = (!Config.ControlMode) 
+    ? PSP_CTRL_CIRCLE : PSP_CTRL_CROSS;
+  UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
+  UiMetric.ScrollbarBgColor = 0x44ffffff;
+  UiMetric.ScrollbarWidth = 10;
+  UiMetric.DialogBorderColor = PSP_COLOR_GRAY;
+  UiMetric.DialogBgColor = PSP_COLOR_DARKGRAY;
+  UiMetric.TextColor = PSP_COLOR_GRAY;
+  UiMetric.SelectedColor = PSP_COLOR_YELLOW;
+  UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x44);
+  UiMetric.StatusBarColor = PSP_COLOR_WHITE;
+  UiMetric.BrowserFileColor = PSP_COLOR_GRAY;
+  UiMetric.BrowserDirectoryColor = PSP_COLOR_YELLOW;
+  UiMetric.GalleryIconsPerRow = 5;
+  UiMetric.GalleryIconMarginWidth = 8;
+  UiMetric.MenuItemMargin = 20;
+  UiMetric.MenuSelOptionBg = PSP_COLOR_BLACK;
+  UiMetric.MenuOptionBoxColor = PSP_COLOR_GRAY;
+  UiMetric.MenuOptionBoxBg = COLOR(0, 0, 33, 0xBB);
+  UiMetric.MenuDecorColor = PSP_COLOR_YELLOW;
+  UiMetric.DialogFogColor = COLOR(0, 0, 0, 88);
+  UiMetric.TitlePadding = 4;
+  UiMetric.TitleColor = PSP_COLOR_WHITE;
+  UiMetric.MenuFps = 30;
+  UiMetric.TabBgColor = COLOR(0x74,0x74,0xbe,0xff);
 }
 
 void DisplayMenu()
@@ -674,9 +688,11 @@ void DisplayMenu()
     case TAB_QUICKLOAD:
       pspUiOpenBrowser(&QuickloadBrowser, (LoadedGame) ? LoadedGame : GamePath);
       break;
+
     case TAB_STATE:
       DisplayStateTab();
       break;
+
     case TAB_CONTROL:
 
 		  /* Reinitialize the control menu to reflect console or computer */
@@ -688,8 +704,8 @@ void DisplayMenu()
       for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
         pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
       pspUiOpenMenu(&ControlUiMenu, NULL);
-
       break;
+
     case TAB_OPTION:
       /* Init menu options */
       item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_DISPLAY_MODE);
@@ -704,16 +720,21 @@ void DisplayMenu()
       pspMenuSelectOptionByValue(item, (void*)Config.ShowFps);
       item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_CONTROL_MODE);
       pspMenuSelectOptionByValue(item, (void*)Config.ControlMode);
-
+      item = pspMenuFindItemById(OptionUiMenu.Menu, OPTION_FRAME_SYNC);
+      pspMenuSelectOptionByValue(item, (void*)Config.FrameSync);
       pspUiOpenMenu(&OptionUiMenu, NULL);
       break;
+
     case TAB_SYSTEM:
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_MACHINE_TYPE);
-      pspMenuSelectOptionByValue(item, (void*)(M_TYPE(machine_type, ram_size)));
+      pspMenuSelectOptionByValue(item, (void*)(MACHINE_TYPE(machine_type, ram_size)));
+      item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_CROP_SCREEN);
+      pspMenuSelectOptionByValue(item, (void*)CropScreen);
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_TV_MODE);
       pspMenuSelectOptionByValue(item, (void*)tv_mode);
       pspUiOpenMenu(&SystemUiMenu, NULL);
       break;
+
     case TAB_ABOUT:
       pspUiSplashScreen(&SplashScreen);
       break;
@@ -804,10 +825,13 @@ void LoadOptions()
     Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", 
       DISPLAY_MODE_UNSCALED);
     Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 1);
-    Config.VSync = pspInitGetInt(init, "Video", "VSync", 0);
+    Config.VSync     = pspInitGetInt(init, "Video", "VSync", 0);
+    Config.FrameSync = pspInitGetInt(init, "Video", "Frame Sync", 1);
     Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
-    Config.ShowFps = pspInitGetInt(init, "Video", "Show FPS", 0);
+    Config.ShowFps   = pspInitGetInt(init, "Video", "Show FPS", 0);
     Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
+
+    CropScreen = pspInitGetInt(init, "System", "Crop screen", 1);
 
     machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
     ram_size = pspInitGetInt(init, "System", "Machine Type", 64);
@@ -836,10 +860,12 @@ static int SaveOptions()
   pspInitSetInt(init, "Video", "Display Mode", Config.DisplayMode);
   pspInitSetInt(init, "Video", "Frameskip", Config.Frameskip);
   pspInitSetInt(init, "Video", "VSync", Config.VSync);
+  pspInitSetInt(init, "Video", "Frame Sync", Config.FrameSync);
   pspInitSetInt(init, "Video", "PSP Clock Frequency",Config.ClockFreq);
   pspInitSetInt(init, "Video", "Show FPS", Config.ShowFps);
   pspInitSetInt(init, "Menu",  "Control Mode", Config.ControlMode);
 
+  pspInitSetInt(init, "System", "Crop screen", CropScreen);
   pspInitSetInt(init, "System", "Machine Type", machine_type);
   pspInitSetInt(init, "System", "RAM Size", ram_size);
   pspInitSetInt(init, "System", "TV mode", tv_mode);
@@ -865,6 +891,9 @@ void InitOptionDefaults()
   Config.VSync = 0;
   Config.ClockFreq = 222;
   Config.ShowFps = 0;
+  Config.FrameSync = 1;
+
+  CropScreen = 1;
 
   machine_type = MACHINE_XLXE;
   ram_size = 64;
@@ -909,7 +938,7 @@ void OnSplashRender(const void *splash, const void *null)
   OnGenericRender(splash, null);
 }
 
-int  OnSplashButtonPress(const struct PspUiSplash *splash, 
+int OnSplashButtonPress(const struct PspUiSplash *splash, 
   u32 button_mask)
 {
   return OnGenericButtonPress(NULL, NULL, button_mask);
@@ -1011,15 +1040,30 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
 
     switch(item->ID)
     {
+    case SYSTEM_CROP_SCREEN:
+      CropScreen = (int)option->Value;
+      break;
+
     case SYSTEM_TV_MODE:
+      if (Config.VSync
+        && (((int)option->Value == TV_NTSC && pspVideoGetVSyncFreq() != 60)
+          || ((int)option->Value == TV_PAL && pspVideoGetVSyncFreq() != 50)))
+      {
+        if (!pspUiConfirm("The frequency of your PSP's video clock "
+          "does not match the video frequency you selected\n"
+          "Continuing will most likely result in improperly paced "
+          "video refresh\n\nAre you sure you want to switch frequencies?"))
+            return 0;
+      }
       tv_mode = (int)option->Value;
       break;
+
     case SYSTEM_MACHINE_TYPE:
       if ((MACHINE((int)option->Value) == machine_type 
         && RAM((int)option->Value) == ram_size)
           || !pspUiConfirm("This will reset the system. Proceed?")) return 0;
 
-      curr_system = M_TYPE(machine_type, ram_size);
+      curr_system = MACHINE_TYPE(machine_type, ram_size);
 
       /* Reconfigure machine type & RAM size */
       machine_type = MACHINE((int)option->Value);
@@ -1051,10 +1095,23 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       Config.Frameskip = (int)option->Value;
       break;
     case OPTION_VSYNC:
+      if ((int)option->Value 
+        && ((tv_mode == TV_NTSC && pspVideoGetVSyncFreq() != 60)
+          || (tv_mode == TV_PAL && pspVideoGetVSyncFreq() != 50)))
+      {
+        if (!pspUiConfirm("The frequency of your PSP's video clock "
+          "does not match the video frequency of the emulated hardware\n"
+          "Enabling VSync will most likely result in improperly paced "
+          "video refresh\n\nAre you sure you want to enable VSync?"))
+            return 0;
+      }
       Config.VSync = (int)option->Value;
       break;
     case OPTION_CLOCK_FREQ:
       Config.ClockFreq = (int)option->Value;
+      break;
+    case OPTION_FRAME_SYNC:
+      Config.FrameSync = (int)option->Value;
       break;
     case OPTION_SHOW_FPS:
       Config.ShowFps = (int)option->Value;

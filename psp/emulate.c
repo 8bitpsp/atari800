@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <psptypes.h>
+#include <psprtc.h>
+
 #include "audio.h"
 #include "video.h"
 #include "psp.h"
@@ -31,6 +34,7 @@ extern EmulatorConfig Config;
 extern GameConfig ActiveGameConfig;
 extern const u64 ButtonMask[];
 extern const int ButtonMapId[];
+extern int CropScreen;
 
 extern UBYTE cim_encountered;
 
@@ -39,6 +43,11 @@ static int ScreenX;
 static int ScreenY;
 static int ScreenW;
 static int ScreenH;
+static int Frame;
+static int TicksPerUpdate;
+static u32 TicksPerSecond;
+static u64 LastTick;
+static u64 CurrentTick;
 static int SoundReady;
 static int ShowKybd;
 static int key_ctrl;
@@ -52,7 +61,7 @@ static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - ATARI_WIDTH;
 PspImage *Screen;
 
 static int ParseInput();
-static void Copy_Screen_Buffer();
+static void CopyScreenBuffer();
 static void AudioCallback(void* buf, unsigned int *length, void *userdata);
 static inline void HandleKeyInput(unsigned int code, int on);
 
@@ -122,7 +131,7 @@ int Atari_Exit(int run_monitor)
 }
 
 /* Copies the atari screen buffer to the image buffer */
-void Copy_Screen_Buffer()
+void CopyScreenBuffer()
 {
   int i, j;
   u8 *screen, *image;
@@ -140,7 +149,7 @@ void Copy_Screen_Buffer()
 
 void Atari_DisplayScreen(void)
 {
-  Copy_Screen_Buffer();
+  CopyScreenBuffer();
 
   pspVideoBegin();
   
@@ -161,8 +170,7 @@ void Atari_DisplayScreen(void)
   if (Config.ShowFps)
   {
     static char fps_display[64];
-    sprintf(fps_display, " %3.02f (%3i%%) ", 
-      pspPerfGetFps(&FpsCounter), percent_atari_speed);
+    sprintf(fps_display, " %3.02f ", pspPerfGetFps(&FpsCounter));
 
     int width = pspFontGetTextWidth(&PspStockFont, fps_display);
     int height = pspFontGetLineHeight(&PspStockFont);
@@ -170,8 +178,20 @@ void Atari_DisplayScreen(void)
     pspVideoFillRect(SCR_WIDTH - width, 0, SCR_WIDTH, height, PSP_COLOR_BLACK);
     pspVideoPrint(&PspStockFont, SCR_WIDTH - width, 0, fps_display, PSP_COLOR_WHITE);
   }
-  
+
   pspVideoEnd();
+
+  /* Wait if needed */
+  if (Config.FrameSync)
+  {
+    do { sceRtcGetCurrentTick(&CurrentTick); }
+    while (CurrentTick - LastTick < TicksPerUpdate);
+    LastTick = CurrentTick;
+  }
+
+  /* Wait for VSync signal */
+  if (Config.VSync) pspVideoWaitVSync();
+
   pspVideoSwapBuffers();
 }
 
@@ -259,6 +279,17 @@ void RunEmulation()
 {
   float ratio;
 
+  Screen->Viewport.Width = 336;
+  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
+
+  /* Reconfigure visible dimensions, if necessary */
+  if (CropScreen)
+  {
+    Screen->Viewport.X += 8;
+    Screen->Viewport.Width -= 16;
+  }
+
+  /* Clear screen */
   pspImageClear(Screen, 0);
 
   /* Recompute screen size/position */
@@ -279,14 +310,20 @@ void RunEmulation()
     ScreenH = SCR_HEIGHT;
     break;
   }
-
   ScreenX = (SCR_WIDTH / 2) - (ScreenW / 2);
   ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
   ClearScreen = 1;
   ShowKybd = 0;
 
-  /* Reset emulation preferences */
-  refresh_rate = Config.Frameskip + 1;
+  /* Recompute update frequency */
+  TicksPerSecond = sceRtcGetTickResolution();
+  if (Config.FrameSync)
+  {
+    TicksPerUpdate = TicksPerSecond
+      / ((tv_mode == TV_NTSC) ? 60 : 50 / (Config.Frameskip + 1));
+    sceRtcGetCurrentTick(&LastTick);
+  }
+  Frame = 0;
 
 #ifdef SOUND
   /* Resume sound */
@@ -299,10 +336,15 @@ void RunEmulation()
     /* Check input */
     if (ParseInput()) break;
 
-    /* TODO: implement vsync and frequency manipulation */
+    /* Process current frame */
     Atari800_Frame();
-    if (display_screen)
+
+    /* Run the system emulation for a frame */
+    if (++Frame > Config.Frameskip)
+    {
       Atari_DisplayScreen();
+      Frame = 0;
+    }
   }
 
 #ifdef SOUND
@@ -313,6 +355,9 @@ void RunEmulation()
 
 inline void HandleKeyInput(unsigned int code, int on)
 {
+  key_code = AKEY_NONE;
+  key_consol = CONSOL_NONE;
+
   if (code & KBD) /* Keyboard */
   { 
     if (on) key_code = CODE_MASK(code); 
@@ -341,14 +386,14 @@ inline void HandleKeyInput(unsigned int code, int on)
 int ParseInput()
 {
   /* Clear keyboard and joystick state */
+  JoyState[0] = 0xff;
+  TrigState[0] = 1;
+
   if (!ShowKybd)
   {
 	  key_code = AKEY_NONE;
 	  key_consol = CONSOL_NONE;
-	  JoyState[0] = 0xff;
-	  TrigState[0] = 1;
-	  key_shift = 0;
-	  key_ctrl = 0;
+	  key_shift = key_ctrl = 0;
 	}
 
   /* Get PSP input */
@@ -412,7 +457,7 @@ int ParseInput()
         if (on) return 1;
         break;
       case META_SHOW_KEYS:
-        if (ShowKybd != on)
+        if (ShowKybd != on && layout)
         {
           if (on) pspKybdReinit(layout);
           else { pspKybdReleaseAll(layout); ClearScreen = 1; }
