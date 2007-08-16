@@ -228,12 +228,12 @@ void AudioCallback(void* buf, unsigned int *length, void *userdata)
     return;
   }
 
-  int i;
-  for(i = 0; i < SoundReady; i++) 
+  int i, sample;
+  for (i = 0; i < SoundReady; i++) 
   {
-    int sample = ((int)SoundBuffer[i] - 0x80) << 8;
+    sample = ((int)SoundBuffer[i] - 0x80) << 8;
     OutBuf[i].Left = OutBuf[i].Right = (sample > 32767) ? 32767 
-      : ((sample < -32768) ? 32768 : sample);
+      : ((sample < -32768) ? -32768 : sample);
   }
 
   *length = SoundReady;
@@ -243,9 +243,7 @@ void AudioCallback(void* buf, unsigned int *length, void *userdata)
 void Sound_Update(void)
 {
   /* TODO: sound doesn't work correctly with frame skipping */
-	unsigned int nsamples = (tv_mode == TV_NTSC) 
-		? PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 60) 
-		: PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 50);
+	unsigned int nsamples = SOUND_FREQ / ((tv_mode == TV_NTSC) ? 60 : 50);
 
   Pokey_process(SoundBuffer, nsamples);
   SoundReady = nsamples;
