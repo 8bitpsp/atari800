@@ -228,12 +228,11 @@ int pspAudioOutputBlocking(unsigned int channel, void *buf)
 static int OutputBlocking(unsigned int channel,
   unsigned int vol1, unsigned int vol2, void *buf, int length)
 {
-  if (length <= 0) return 0;
   if (!AudioReady || channel >= AUDIO_CHANNELS) return -1;
   if (vol1 > PSP_AUDIO_MAX_VOLUME) vol1 = PSP_AUDIO_MAX_VOLUME;
   if (vol2 > PSP_AUDIO_MAX_VOLUME) vol2 = PSP_AUDIO_MAX_VOLUME;
 
-  sceAudioSetChannelDataLen(channel, length);
+  sceAudioSetChannelDataLen(AudioStatus[channel].Handle, length);
   return sceAudioOutputPannedBlocking(AudioStatus[channel].Handle,
     vol1, vol2, buf);
 }

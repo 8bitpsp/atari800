@@ -129,16 +129,17 @@ void pspUiAlert(const char *message)
 
 int pspUiConfirm(const char *message)
 {
-  int sx, sy, dx, dy, fh, mw, cw, w, h;
+  int sx, sy, dx, dy, th, fh, mw, cw, w, h;
   char *instr = strdup(ConfirmDialogButtonTemplate);
   _pspUiReplaceIcons(instr);
 
   mw = pspFontGetTextWidth(UiMetric.Font, message);
   cw = pspFontGetTextWidth(UiMetric.Font, instr);
   fh = pspFontGetLineHeight(UiMetric.Font);
+  th = pspFontGetTextHeight(UiMetric.Font, message);
 
   w = ((mw > cw) ? mw : cw) + 50;
-  h = fh * 4;
+  h = th + fh * 3;
   sx = SCR_WIDTH / 2 - w / 2;
   sy = SCR_HEIGHT / 2 - h / 2;
   dx = sx + w;
@@ -150,9 +151,10 @@ int pspUiConfirm(const char *message)
 
   pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogBgColor);
   pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2, UiMetric.DialogBorderColor);
-  pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - mw / 2, sy + fh * 0.5, message, UiMetric.TextColor);
-
-  pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, sy + fh * 2.5, instr, UiMetric.TextColor);
+  pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - mw / 2, sy + fh * 0.5, message, 
+    UiMetric.TextColor);
+  pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
+    UiMetric.TextColor);
   free(instr);
 
   pspVideoEnd();

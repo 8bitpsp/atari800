@@ -6,6 +6,7 @@
 #include "menu.h"
 #include "emulate.h"
 
+#include "sio.h"
 #include "cartridge.h"
 #include "statesav.h"
 #include "atari.h"
@@ -140,13 +141,17 @@ static PspImage *NoSaveIcon;
 static char *LoadedGame;
 static char *GamePath;
 static char *SaveStatePath;
+static char *ConfigPath;
 char *ScreenshotPath;
 
 static const char 
   *NoCartName = "BASIC",
   *OptionsFile = "options.ini",
   *ScreenshotDir = "screens",
+  *ConfigDir = "config",
   *SaveStateDir = "savedata",
+  *DefaultComputerConfigFile = "comp_def",
+  *DefaultConsoleConfigFile = "cons_def",
   *QuickloadFilter[] = 
     { "XEX", "EXE", "COM", "BIN", /* Executables */
       "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", /* Disk images */
@@ -156,7 +161,8 @@ static const char
       '\0' },
   PresentSlotText[] = "\026\244\020 Save\t\026\001\020 Load\t\026\243\020 Delete",
   EmptySlotText[] = "\026\244\020 Save",
-  ControlHelpText[] = "\026\250\020 Change mapping\t\026\001\020 Save to \271\t\026\243\020 Load defaults";
+  ControlHelpText[] = "\026\250\020 Change mapping\t\026\001\020 Save to \271\t"
+    "\026\244\020 Set as default\t\026\243\020 Load defaults";
 
 /* Tab labels */
 static const char *TabLabel[] = 
@@ -479,9 +485,9 @@ static const PspMenuItemDef
   };
 
 /* Function declarations */
-static void InitGameConfig();
-static int LoadGameConfig();
-static int SaveGameConfig();
+static void InitGameConfig(GameConfig *config);
+static int  LoadGameConfig(const char *config_name, GameConfig *config);
+static int  SaveGameConfig(const char *config_name, const GameConfig *config);
 
 static void LoadOptions();
 static int  SaveOptions();
@@ -585,11 +591,12 @@ void InitMenu()
   LoadedGame = NULL;
   GamePath = NULL;
 
-  /* Initialize options */
-  LoadOptions();
-
   /* Initialize emulation */
   if (!InitEmulation()) return;
+
+  /* Initialize options */
+  LoadOptions();
+  Atari800_InitialiseMachine();
 
   /* Load the background image */
   Background = pspImageLoadPng("background.png");
@@ -628,9 +635,15 @@ void InitMenu()
   ScreenshotPath = (char*)malloc(sizeof(char) 
     * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
   sprintf(ScreenshotPath, "%s%s/", pspGetAppDirectory(), ScreenshotDir);
+  ConfigPath = (char*)malloc(sizeof(char) 
+    * (strlen(pspGetAppDirectory()) + strlen(ConfigDir) + 2));
+  sprintf(ConfigPath, "%s%s/", pspGetAppDirectory(), ConfigDir);
 
   /* Load default configuration */
-  LoadGameConfig();
+  LoadGameConfig(DefaultConsoleConfigFile, &DefaultConsoleConfig);
+  LoadGameConfig(DefaultComputerConfigFile, &DefaultComputerConfig);
+
+  LoadGameConfig(NoCartName, &ActiveGameConfig);
 
   /* Initialize UI components */
   UiMetric.Font = &PspStockFont;
@@ -824,7 +837,7 @@ void LoadOptions()
     /* Load values */
     Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", 
       DISPLAY_MODE_UNSCALED);
-    Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 1);
+    Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 0);
     Config.VSync     = pspInitGetInt(init, "Video", "VSync", 0);
     Config.FrameSync = pspInitGetInt(init, "Video", "Frame Sync", 1);
     Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
@@ -834,7 +847,7 @@ void LoadOptions()
     CropScreen = pspInitGetInt(init, "System", "Crop screen", 1);
 
     machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
-    ram_size = pspInitGetInt(init, "System", "Machine Type", 64);
+    ram_size = pspInitGetInt(init, "System", "RAM Size", 64);
     tv_mode = pspInitGetInt(init, "System", "TV mode", TV_NTSC);
 
     if (GamePath) free(GamePath);
@@ -887,7 +900,7 @@ void InitOptionDefaults()
 {
   Config.ControlMode = 0;
   Config.DisplayMode = DISPLAY_MODE_UNSCALED;
-  Config.Frameskip = 1;
+  Config.Frameskip = 0;
   Config.VSync = 0;
   Config.ClockFreq = 222;
   Config.ShowFps = 0;
@@ -1001,8 +1014,7 @@ int OnGenericButtonPress(const PspUiFileBrowser *browser,
   {
     if (pspUtilSaveVramSeq(ScreenshotPath, "ui"))
       pspUiAlert("Saved successfully");
-    else
-      pspUiAlert("ERROR: Not saved");
+    else pspUiAlert("ERROR: Screenshot not saved");
     return 0;
   }
   else return 0;
@@ -1044,15 +1056,16 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       CropScreen = (int)option->Value;
       break;
 
+    /* TODO: add manual disk/cartridge ejection */
     case SYSTEM_TV_MODE:
       if (Config.VSync
         && (((int)option->Value == TV_NTSC && pspVideoGetVSyncFreq() != 60)
           || ((int)option->Value == TV_PAL && pspVideoGetVSyncFreq() != 50)))
       {
-        if (!pspUiConfirm("The frequency of your PSP's video clock "
-          "does not match the video frequency you selected\n"
-          "Continuing will most likely result in improperly paced "
-          "video refresh\n\nAre you sure you want to switch frequencies?"))
+        if (!pspUiConfirm("The frequency of your PSP's video clock\n"
+          "does not match the video frequency you selected.\n"
+          "Continuing will most likely result in incorrect frame rate.\n\n"
+          "Are you sure you want to switch frequencies?"))
             return 0;
       }
       tv_mode = (int)option->Value;
@@ -1080,7 +1093,6 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       }
 
       Coldstart();
-      InitGameConfig();
       break;
     }
   }
@@ -1099,10 +1111,10 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
         && ((tv_mode == TV_NTSC && pspVideoGetVSyncFreq() != 60)
           || (tv_mode == TV_PAL && pspVideoGetVSyncFreq() != 50)))
       {
-        if (!pspUiConfirm("The frequency of your PSP's video clock "
-          "does not match the video frequency of the emulated hardware\n"
-          "Enabling VSync will most likely result in improperly paced "
-          "video refresh\n\nAre you sure you want to enable VSync?"))
+        if (!pspUiConfirm("The frequency of your PSP's video clock\n"
+          "does not match the video frequency of the emulated hardware.\n"
+          "Enabling VSync will most likely result in incorrect\n"
+          "framerate.\n\nAre you sure you want to enable VSync?"))
             return 0;
       }
       Config.VSync = (int)option->Value;
@@ -1136,7 +1148,11 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   if (uimenu == &ControlUiMenu)
   {
     /* Save to MS */
-    if (SaveGameConfig()) pspUiAlert("Changes saved");
+    const char *config_name = (LoadedGame) 
+      ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+
+    if (SaveGameConfig(config_name, &ActiveGameConfig)) 
+      pspUiAlert("Layout saved successfully");
     else pspUiAlert("ERROR: Changes not saved");
   }
   else if (uimenu == &SystemUiMenu)
@@ -1168,19 +1184,38 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   return 0;
 }
 
-int  OnMenuButtonPress(const struct PspUiMenu *uimenu, 
-  PspMenuItem* sel_item, 
+int OnMenuButtonPress(const struct PspUiMenu *uimenu, PspMenuItem* sel_item, 
   u32 button_mask)
 {
   if (uimenu == &ControlUiMenu)
   {
-    if (button_mask & PSP_CTRL_TRIANGLE)
+    if (button_mask & PSP_CTRL_SQUARE)
+    {
+      const char *default_file = (machine_type == MACHINE_5200)
+        ? DefaultConsoleConfigFile : DefaultComputerConfigFile;
+
+      /* Save to MS as default mapping */
+      if (!SaveGameConfig(default_file, &ActiveGameConfig))
+        pspUiAlert("ERROR: Changes not saved");
+      else
+      {
+			  GameConfig *config = (machine_type == MACHINE_5200) 
+			    ? &DefaultConsoleConfig : &DefaultComputerConfig;
+
+        /* Modify in-memory defaults */
+        memcpy(config, &ActiveGameConfig, sizeof(GameConfig));
+        pspUiAlert("Layout saved as default");
+      }
+
+      return 0;
+    }
+    else if (button_mask & PSP_CTRL_TRIANGLE)
     {
       PspMenuItem *item;
       int i;
 
       /* Load default mapping */
-      InitGameConfig();
+      InitGameConfig(&ActiveGameConfig);
 
       /* Modify the menu */
       for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
@@ -1288,9 +1323,8 @@ int OnSaveStateOk(const void *gallery, const void *item)
   return 0;
 }
 
-int OnSaveStateButtonPress(const PspUiGallery *gallery, 
-      PspMenuItem *sel, 
-      u32 button_mask)
+int OnSaveStateButtonPress(const PspUiGallery *gallery, PspMenuItem *sel, 
+  u32 button_mask)
 {
   if (button_mask & PSP_CTRL_SQUARE || button_mask & PSP_CTRL_TRIANGLE)
   {
@@ -1426,10 +1460,11 @@ int LoadCartridge(const char *path)
 
 int OnQuickloadOk(const void *browser, const void *path)
 {
+  /* Eject disk and cartridge */
   CART_Remove();
-	int type = Atari800_DetectFileType(path);
+  SIO_Dismount(1);
 
-  switch(type)
+  switch (Atari800_DetectFileType(path))
   {
 	case AFILE_CART:
 	case AFILE_ROM:
@@ -1459,9 +1494,6 @@ int OnQuickloadOk(const void *browser, const void *path)
 	  break;
 	}
 
-  /* TODO: load proper control set */
-  InitGameConfig();
-
   /* Reset loaded game */
   if (LoadedGame) free(LoadedGame);
   LoadedGame = strdup(path);
@@ -1470,6 +1502,9 @@ int OnQuickloadOk(const void *browser, const void *path)
   if (GamePath) free(GamePath);
   GamePath = pspFileIoGetParentDirectory(LoadedGame);
 
+  /* Load control set */
+  LoadGameConfig(LoadedGame, &ActiveGameConfig);
+
   ResumeEmulation = 1;
 	Coldstart();
 
@@ -1477,22 +1512,23 @@ int OnQuickloadOk(const void *browser, const void *path)
 }
 
 /* Initialize game configuration */
-static void InitGameConfig()
+static void InitGameConfig(GameConfig *config)
 {
-  GameConfig *config = (machine_type == MACHINE_5200) 
-    ? &DefaultConsoleConfig : &DefaultComputerConfig;
-
-  memcpy(&ActiveGameConfig, config, sizeof(GameConfig));
+  if (config != &DefaultConsoleConfig && config != &DefaultComputerConfig) 
+  {
+	  GameConfig *default_config = (machine_type == MACHINE_5200) 
+	    ? &DefaultConsoleConfig : &DefaultComputerConfig;
+    memcpy(config, default_config, sizeof(GameConfig));
+  }
 }
 
 /* Load game configuration */
-static int LoadGameConfig()
+static int LoadGameConfig(const char *config_name, GameConfig *config)
 {
   char *path;
-  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
-    + strlen("controlhack.bin") + 6))))
-      return 0;
-  sprintf(path, "%s%s.cnf", pspGetAppDirectory(), "controlhack.bin");
+  if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
+    + strlen(config_name) + 5)))) return 0;
+  sprintf(path, "%s%s.cnf", ConfigPath, config_name);
 
   /* Open file for reading */
   FILE *file = fopen(path, "r");
@@ -1501,17 +1537,17 @@ static int LoadGameConfig()
   /* If no configuration, load defaults */
   if (!file)
   {
-    InitGameConfig();
+    InitGameConfig(config);
     return 1;
   }
 
   /* Read contents of struct */
-  int nread = fread(&ActiveGameConfig, sizeof(GameConfig), 1, file);
+  int nread = fread(config, sizeof(GameConfig), 1, file);
   fclose(file);
 
   if (nread != 1)
   {
-    InitGameConfig();
+    InitGameConfig(config);
     return 0;
   }
 
@@ -1519,13 +1555,12 @@ static int LoadGameConfig()
 }
 
 /* Save game configuration */
-static int SaveGameConfig()
+static int SaveGameConfig(const char *config_name, const GameConfig *config)
 {
   char *path;
-  if (!(path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
-    + strlen("controlhack.bin") + 6))))
-      return 0;
-  sprintf(path, "%s%s.cnf", pspGetAppDirectory(), "controlhack.bin");
+  if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
+    + strlen(config_name) + 5)))) return 0;
+  sprintf(path, "%s%s.cnf", ConfigPath, config_name);
 
   /* Open file for writing */
   FILE *file = fopen(path, "w");
@@ -1533,7 +1568,7 @@ static int SaveGameConfig()
   if (!file) return 0;
 
   /* Write contents of struct */
-  int nwritten = fwrite(&ActiveGameConfig, sizeof(GameConfig), 1, file);
+  int nwritten = fwrite(config, sizeof(GameConfig), 1, file);
   fclose(file);
 
   return (nwritten == 1);
@@ -1555,6 +1590,7 @@ void TrashMenu()
   if (GamePath) free(GamePath);
   if (SaveStatePath) free(SaveStatePath);
   if (ScreenshotPath) free(ScreenshotPath);
+  if (ConfigPath) free(ConfigPath);
 
   if (SaveStateGallery.Menu) pspMenuDestroy(SaveStateGallery.Menu);
   if (OptionUiMenu.Menu) pspMenuDestroy(OptionUiMenu.Menu);

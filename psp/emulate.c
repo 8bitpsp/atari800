@@ -35,6 +35,7 @@ extern GameConfig ActiveGameConfig;
 extern const u64 ButtonMask[];
 extern const int ButtonMapId[];
 extern int CropScreen;
+extern char *ScreenshotPath;
 
 extern UBYTE cim_encountered;
 
@@ -136,7 +137,6 @@ void CopyScreenBuffer()
   int i, j;
   u8 *screen, *image;
 
-  /* TODO: copy only the middle 336 columns */
   screen = (u8*)atari_screen;
   image = (u8*)Screen->Pixels;
 
@@ -242,6 +242,7 @@ void AudioCallback(void* buf, unsigned int *length, void *userdata)
 
 void Sound_Update(void)
 {
+  /* TODO: sound doesn't work correctly with frame skipping */
 	unsigned int nsamples = (tv_mode == TV_NTSC) 
 		? PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 60) 
 		: PSP_AUDIO_SAMPLE_ALIGN(SOUND_FREQ / 50);
@@ -401,7 +402,7 @@ int ParseInput()
   if (!pspCtrlPollControls(&pad))
     return 0;
 
-  /* DEBUGGING
+  //* DEBUGGING
   if ((pad.Buttons & (PSP_CTRL_SELECT | PSP_CTRL_START))
     == (PSP_CTRL_SELECT | PSP_CTRL_START))
       pspUtilSaveVramSeq(ScreenshotPath, "game");
