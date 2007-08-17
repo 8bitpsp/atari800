@@ -24,24 +24,26 @@ static volatile int StopAudio;
 static int SampleCount;
 
 typedef struct {
+  short *Stream;
+  int Offset;
+  int Length;
+} ChannelBuffer;
+
+typedef struct {
   int ThreadHandle;
   int Handle;
   int LeftVolume;
   int RightVolume;
   pspAudioCallback Callback;
   void *Userdata;
+	ChannelBuffer Buffers[2];
 } ChannelInfo;
 
-/* TODO: move all these under a single struct */
 static ChannelInfo AudioStatus[AUDIO_CHANNELS];
-static short *AudioBuffer[AUDIO_CHANNELS][2];
-static int AudioBufferOffset[AUDIO_CHANNELS][2];
-static int AudioBufferLength[AUDIO_CHANNELS][2];
 
 static int AudioChannelThread(int args, void *argp);
 static void FreeBuffers();
-static int OutputBlocking(unsigned int channel, unsigned int vol1, 
-  unsigned int vol2, void *buf, int length);
+static int OutputBlocking(unsigned int channel, void *buf, int length);
 
 int pspAudioInit(int sample_count)
 {
@@ -61,9 +63,9 @@ int pspAudioInit(int sample_count)
 
     for (j = 0; j < 2; j++)
     {
-      AudioBuffer[i][j] = NULL;
-      AudioBufferOffset[i][j] = 0;
-      AudioBufferLength[i][j] = 0;
+      AudioStatus[i].Buffers[j].Stream = NULL;
+      AudioStatus[i].Buffers[j].Offset = 0;
+      AudioStatus[i].Buffers[j].Length = 0;
     }
   }
 
@@ -77,7 +79,8 @@ int pspAudioInit(int sample_count)
   {
     for (j = 0; j < 2; j++)
     {
-      if (!(AudioBuffer[i][j] = (short*)malloc(SampleCount * 2 * sizeof(short))))
+      if (!(AudioStatus[i].Buffers[j].Stream = 
+        (short*)malloc(SampleCount * 2 * sizeof(short))))
       {
         FreeBuffers();
         return 0;
@@ -191,6 +194,9 @@ void pspAudioShutdown()
 
 void pspAudioSetVolume(int channel, int left, int right)
 {
+  if (left > PSP_AUDIO_MAX_VOLUME) left = PSP_AUDIO_MAX_VOLUME;
+  if (right > PSP_AUDIO_MAX_VOLUME) right = PSP_AUDIO_MAX_VOLUME;
+
   AudioStatus[channel].LeftVolume = left;
   AudioStatus[channel].RightVolume = right;
 }
@@ -203,54 +209,58 @@ static int AudioChannelThread(int args, void *argp)
   int i, buf_len;
   unsigned int length;
   int *buf_ptr, *usr_buf_ptr, *src_ptr, *ptr;
-  pspAudioCallback callback;
-  /* TODO: */
-  //void *channel_buffer = AudioBuffer[channel];
+  ChannelInfo *channel_status = &AudioStatus[channel];
+  ChannelBuffer *cur_buf, *inv_buf;
 
   /* Clear buffer */
   for (i = 0; i < 2; i++)
-    memset(AudioBuffer[channel][buf_idx], 0, sizeof(short) * SampleCount * 2);
+    memset(channel_status->Buffers[i].Stream, 0, 
+      sizeof(short) * SampleCount << 1);
 
+  /* Audio loop */
   while (!StopAudio)
   {
-    callback = AudioStatus[channel].Callback;
-    buf_ptr = usr_buf_ptr = (int*)AudioBuffer[channel][buf_idx];
+    cur_buf = &channel_status->Buffers[buf_idx];
+    inv_buf = &channel_status->Buffers[~buf_idx & 1];
+    buf_ptr = usr_buf_ptr = (int*)cur_buf->Stream;
+
     length = SampleCount;
+    buf_len = 0;
 
-    if (callback)
+    if (inv_buf->Offset != 0)
     {
-      buf_len = 0;
+      src_ptr = (int*)inv_buf->Stream + inv_buf->Offset;
+      buf_len = inv_buf->Length;
 
-      if (AudioBufferOffset[channel][buf_idx] != 0)
-      {
-        src_ptr = buf_ptr + AudioBufferOffset[channel][buf_idx];
-        buf_len = AudioBufferLength[channel][buf_idx];
-
-        /* Some remaining data from last audio render */
-        memcpy(buf_ptr, src_ptr, buf_len << 2); // in bytes
-        usr_buf_ptr += buf_len;
-        length -= buf_len;
-      }
-
-      callback(usr_buf_ptr, &length, AudioStatus[channel].Userdata);
-      length += buf_len;
-
-      if ((buf_len = length & 63))  // length % 64
-      {
-        /* Length not divisible by 64 */
-        AudioBufferLength[channel][buf_idx] = buf_len;
-        length &= ~63; // -= length % 64
-        AudioBufferOffset[channel][buf_idx] = length;
-      }
+      /* Some remaining data from last audio render */
+      memcpy(buf_ptr, src_ptr, buf_len << 2); // in bytes
+      usr_buf_ptr += buf_len;
+      length -= buf_len;
     }
-    /* TODO: this looks like it may corrupt sound when pausing/continuing */
-    else for (i = 0, ptr = buf_ptr; i < SampleCount; i++) 
-      *(ptr++) = 0;
 
-	  OutputBlocking(channel, AudioStatus[channel].LeftVolume, 
-      AudioStatus[channel].RightVolume, buf_ptr, length);
+    cur_buf->Offset = 0;
 
-    buf_idx = (buf_idx ? 0 : 1);
+    if (channel_status->Callback)
+    {
+      channel_status->Callback(usr_buf_ptr, &length, channel_status->Userdata);
+      length += buf_len;
+    }
+    else
+    {
+      for (i = 0, ptr = usr_buf_ptr; i < length; i++) 
+        *(ptr++) = 0;
+    }
+
+    if ((buf_len = length & 63))  // length % 64 != 0
+    {
+      length &= ~63; // length -= (length % 64)
+      cur_buf->Offset = length;
+      cur_buf->Length = buf_len;
+    }
+
+	  OutputBlocking(channel, buf_ptr, length);
+
+    buf_idx = ~buf_idx & 1;
   }
 
   sceKernelExitThread(0);
@@ -259,20 +269,18 @@ static int AudioChannelThread(int args, void *argp)
 
 int pspAudioOutputBlocking(unsigned int channel, void *buf)
 {
-  return OutputBlocking(channel, AudioStatus[channel].LeftVolume,
-    AudioStatus[channel].RightVolume, buf, SampleCount);
+  return OutputBlocking(channel, buf, SampleCount);
 }
 
-static int OutputBlocking(unsigned int channel,
-  unsigned int vol1, unsigned int vol2, void *buf, int length)
+static int OutputBlocking(unsigned int channel, void *buf, int length)
 {
   if (!AudioReady || channel >= AUDIO_CHANNELS) return -1;
-  if (vol1 > PSP_AUDIO_MAX_VOLUME) vol1 = PSP_AUDIO_MAX_VOLUME;
-  if (vol2 > PSP_AUDIO_MAX_VOLUME) vol2 = PSP_AUDIO_MAX_VOLUME;
+  
+  ChannelInfo *channel_status = &AudioStatus[channel];
 
-  sceAudioSetChannelDataLen(AudioStatus[channel].Handle, length);
-  return sceAudioOutputPannedBlocking(AudioStatus[channel].Handle,
-    vol1, vol2, buf);
+  sceAudioSetChannelDataLen(channel_status->Handle, length);
+  return sceAudioOutputPannedBlocking(channel_status->Handle,
+    channel_status->LeftVolume, channel_status->RightVolume, buf);
 }
 
 static void FreeBuffers()
@@ -283,10 +291,10 @@ static void FreeBuffers()
   {
     for (j = 0; j < 2; j++)
     {
-      if (AudioBuffer[i][j])
+      if (AudioStatus[i].Buffers[j].Stream)
       {
-        free(AudioBuffer[i][j]);
-        AudioBuffer[i][j] = NULL;
+        free(AudioStatus[i].Buffers[j].Stream);
+        AudioStatus[i].Buffers[j].Stream = NULL;
       }
     }
   }

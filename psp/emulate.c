@@ -221,22 +221,23 @@ void Sound_Initialise(int *argc, char *argv[])
 void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
   PspSample *OutBuf = (PspSample*)buf;
+  unsigned int nsamples = SOUND_FREQ / ((tv_mode == TV_NTSC) ? 60 : 50);
 
   if (!SoundReady)
   {
-    memset(OutBuf, 0, sizeof(PspSample) * *length);
+    memset(OutBuf, 0, sizeof(PspSample) * nsamples);
     return;
   }
 
   int i, sample;
-  for (i = 0; i < SoundReady; i++) 
+  for (i = 0; i < nsamples; i++) 
   {
     sample = ((int)SoundBuffer[i] - 0x80) << 8;
     OutBuf[i].Left = OutBuf[i].Right = (sample > 32767) ? 32767 
       : ((sample < -32768) ? -32768 : sample);
   }
 
-  *length = SoundReady;
+  *length = nsamples;
   SoundReady = 0;
 }
 
@@ -246,7 +247,7 @@ void Sound_Update(void)
 	unsigned int nsamples = SOUND_FREQ / ((tv_mode == TV_NTSC) ? 60 : 50);
 
   Pokey_process(SoundBuffer, nsamples);
-  SoundReady = nsamples;
+  SoundReady = 1;
 }
 
 void Sound_Pause(void)
@@ -256,7 +257,6 @@ void Sound_Pause(void)
 
 void Sound_Continue(void)
 {
-  SoundReady = 0;
   pspAudioSetChannelCallback(0, AudioCallback, 0);
 }
 
