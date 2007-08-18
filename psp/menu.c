@@ -6,6 +6,7 @@
 #include "menu.h"
 #include "emulate.h"
 
+#include "pokeysnd.h"
 #include "sio.h"
 #include "cartridge.h"
 #include "statesav.h"
@@ -42,6 +43,8 @@
 #define SYSTEM_MACHINE_TYPE 3
 #define SYSTEM_TV_MODE      4
 #define SYSTEM_CROP_SCREEN  5
+#define SYSTEM_STEREO       6
+#define SYSTEM_EJECT        7
 
 #define MACHINE_TYPE(machine, ram) ((ram) << 8 | ((machine) & 0xff))
 #define MACHINE(mtype)       ((mtype) & 0xff)
@@ -422,7 +425,13 @@ static const PspMenuItemDef
     MENU_END_ITEMS
   },
   SystemMenuDef[] = {
-    MENU_HEADER("Display"),
+    MENU_HEADER("Storage"),
+    MENU_ITEM("Eject all", SYSTEM_EJECT, NULL, -1, 
+      "\026\001\020 Eject all disks/cartridges"),
+    MENU_HEADER("Audio"),
+    MENU_ITEM("Stereo sound", SYSTEM_STEREO, ToggleOptions, -1, 
+      "\026\250\020 Toggle stereo sound (dual POKEY emulation)"),
+    MENU_HEADER("Video"),
     MENU_ITEM("Horizontal crop", SYSTEM_CROP_SCREEN, ToggleOptions, -1, 
       "\026\250\020 Remove 8-pixel wide strips on each side of the screen"),
     MENU_ITEM("TV frequency", SYSTEM_TV_MODE, TVModeOptions, -1, 
@@ -642,8 +651,7 @@ void InitMenu()
   /* Load default configuration */
   LoadGameConfig(DefaultConsoleConfigFile, &DefaultConsoleConfig);
   LoadGameConfig(DefaultComputerConfigFile, &DefaultComputerConfig);
-
-  LoadGameConfig(NoCartName, &ActiveGameConfig);
+  LoadGameConfig(LoadedGame, &ActiveGameConfig);
 
   /* Initialize UI components */
   UiMetric.Font = &PspStockFont;
@@ -739,6 +747,8 @@ void DisplayMenu()
       break;
 
     case TAB_SYSTEM:
+      item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_STEREO);
+      pspMenuSelectOptionByValue(item, (void*)stereo_enabled);
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_MACHINE_TYPE);
       pspMenuSelectOptionByValue(item, (void*)(MACHINE_TYPE(machine_type, ram_size)));
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_CROP_SCREEN);
@@ -823,6 +833,8 @@ void LoadOptions()
     + strlen(OptionsFile) + 1));
   sprintf(path, "%s%s", pspGetAppDirectory(), OptionsFile);
 
+  /* TODO: experiment not using InitOptionDefaults */
+
   /* Initialize INI structure */
   PspInit *init = pspInitCreate();
 
@@ -845,10 +857,10 @@ void LoadOptions()
     Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
 
     CropScreen = pspInitGetInt(init, "System", "Crop screen", 1);
-
     machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
     ram_size = pspInitGetInt(init, "System", "RAM Size", 64);
     tv_mode = pspInitGetInt(init, "System", "TV mode", TV_NTSC);
+    stereo_enabled = pspInitGetInt(init, "System", "Stereo", 0);
 
     if (GamePath) free(GamePath);
     GamePath = pspInitGetString(init, "File", "Game Path", NULL);
@@ -882,6 +894,7 @@ static int SaveOptions()
   pspInitSetInt(init, "System", "Machine Type", machine_type);
   pspInitSetInt(init, "System", "RAM Size", ram_size);
   pspInitSetInt(init, "System", "TV mode", tv_mode);
+  pspInitSetInt(init, "System", "Stereo", stereo_enabled);
 
   if (GamePath) pspInitSetString(init, "File", "Game Path", GamePath);
 
@@ -907,10 +920,10 @@ void InitOptionDefaults()
   Config.FrameSync = 1;
 
   CropScreen = 1;
-
   machine_type = MACHINE_XLXE;
   ram_size = 64;
   tv_mode = TV_NTSC;
+  stereo_enabled = 0;
 
   GamePath = NULL;
 }
@@ -1056,6 +1069,10 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       CropScreen = (int)option->Value;
       break;
 
+    case SYSTEM_STEREO:
+      stereo_enabled = (int)option->Value;
+      break;
+
     /* TODO: add manual disk/cartridge ejection */
     case SYSTEM_TV_MODE:
       if (Config.VSync
@@ -1076,21 +1093,23 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
         && RAM((int)option->Value) == ram_size)
           || !pspUiConfirm("This will reset the system. Proceed?")) return 0;
 
-      curr_system = MACHINE_TYPE(machine_type, ram_size);
+      if (machine_type == MACHINE_5200 
+        || MACHINE((int)option->Value) == MACHINE_5200)
+      {
+			  /* Eject disk and cartridge */
+			  CART_Remove();
+			  if (machine_type != MACHINE_5200) SIO_Dismount(1);
+
+			  /* Reset loaded game */
+			  if (LoadedGame) free(LoadedGame);
+			  LoadedGame = NULL;
+				LoadGameConfig(LoadedGame, &ActiveGameConfig);
+			}
 
       /* Reconfigure machine type & RAM size */
+      curr_system = MACHINE_TYPE(machine_type, ram_size);
       machine_type = MACHINE((int)option->Value);
       ram_size = RAM((int)option->Value);
-
-      /* Attempt reinitializing the system */
-      if (!Atari800_InitialiseMachine())
-      {
-        pspUiAlert("Cannot switch to selected system - reverting back");
-        machine_type = MACHINE(curr_system);
-        ram_size = RAM(curr_system);
-	      Coldstart();
-        return 0;
-      }
 
       Coldstart();
       break;
@@ -1159,6 +1178,18 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   {
     switch (((const PspMenuItem*)sel_item)->ID)
     {
+    case SYSTEM_EJECT:
+
+      /* Eject cart & disk (if applicable) */
+		  CART_Remove();
+		  if (machine_type != MACHINE_5200) SIO_Dismount(1);
+
+		  /* Reset loaded game */
+		  if (LoadedGame) free(LoadedGame);
+		  LoadedGame = NULL;
+			LoadGameConfig(LoadedGame, &ActiveGameConfig);
+		  break;
+
     case SYSTEM_RESET:
 
       /* Reset system */
@@ -1462,7 +1493,7 @@ int OnQuickloadOk(const void *browser, const void *path)
 {
   /* Eject disk and cartridge */
   CART_Remove();
-  SIO_Dismount(1);
+  if (machine_type != MACHINE_5200) SIO_Dismount(1);
 
   switch (Atari800_DetectFileType(path))
   {
@@ -1526,6 +1557,7 @@ static void InitGameConfig(GameConfig *config)
 static int LoadGameConfig(const char *config_name, GameConfig *config)
 {
   char *path;
+  config_name = (config_name) ? config_name : NoCartName;
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);
@@ -1558,6 +1590,7 @@ static int LoadGameConfig(const char *config_name, GameConfig *config)
 static int SaveGameConfig(const char *config_name, const GameConfig *config)
 {
   char *path;
+  config_name = (config_name) ? config_name : NoCartName;
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);

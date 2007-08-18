@@ -220,6 +220,7 @@ static int AudioChannelThread(int args, void *argp)
   /* Audio loop */
   while (!StopAudio)
   {
+    /* Current audio buffer */
     cur_buf = &channel_status->Buffers[buf_idx];
     inv_buf = &channel_status->Buffers[~buf_idx & 1];
     buf_ptr = usr_buf_ptr = (int*)cur_buf->Stream;

@@ -11,7 +11,7 @@
       body
       {
         margin: 0;
-        font-family: sans-serif;
+        font-family: Bitstream Vera Sans, sans-serif;
         font-size: 10pt;
         background-color: #fbfaf4;
       }
@@ -127,9 +127,9 @@
               <div class="indent">GAMES/ (<i>cartridge and disk images</i>)</div>
               <div class="indent">SCREENS/ (<i>screenshots</i>)</div>
               <div class="indent">SAVEDATA/ (<i>save states</i>)</div>
-              <div class="indent">OPTIONS.INI (<i>Configuration file</i>)</div>
+              <div class="indent">CONFIG/ (<i>key configuration files</i>)</div>
+              <div class="indent">OPTIONS.INI (<i>configuration file</i>)</div>
               <div class="indent">[any other files]</div>
-<B>UNFINISHED</b>
             </div>
             <div class="indent">ATARI800PSP%/
               <div class="indent">EBOOT.PBP</div>
@@ -142,25 +142,37 @@
       <div class="section">
         <p>The emulator currently "ships" with the following default key mappings:</p>
 
-        During emulation:
-
+        <p>For Atari computers (800, 800XL, 130XE):<br/>
         <ul>
-          <li>Analog stick - Directional pad up/down/left/right</li>
-          <li>Directional pad - Directional pad up/down/left/right</li>
-          <li><span class="button">&#9633;</span> (square) - Button 2</li>
-          <li><span class="button">&#10005;</span> (cross) - Button 1</li>
+          <li>Analog stick - Joystick up/down/left/right</li>
+          <li>Directional pad - Keyboard up/down/left/right</li>
+          <li><span class="button">&#10005;</span> (cross) - Joystick trigger</li>
           <li><span class="button">&#9675;</span> (circle) - Spacebar</li>
+          <li><span class="button">START</span> - Start console button</li>
+          <li><span class="button">SELECT</span> - Select console button</li>
+          <li><span class="button">R</span> - Show virtual keyboard</li>
           <li><span class="button">L</span> +
             <span class="button">R</span> - Return to the emulator menu</li>
-          <li><span class="button">START</span> - Pause/Start</li>
         </ul>
+        </p>
+
+        <p>For Atari 5200:<br/>
+        <ul>
+          <li>Analog stick - Joystick up/down/left/right</li>
+          <li>Directional pad - Joystick up/down/left/right</li>
+          <li><span class="button">&#10005;</span> (cross) - Joystick trigger</li>
+          <li><span class="button">START</span> - Start console button</li>
+          <li><span class="button">SELECT</span> - Pause console button</li>
+          <li><span class="button">R</span> - Show virtual keypad</li>
+          <li><span class="button">L</span> +
+            <span class="button">R</span> - Return to the emulator menu</li>
+        </ul>
+        </p>
 
         <p>By default, button
           configuration changes are not retained after button mapping is modified. 
           To save changes, press <span class="button">&#927;</span> (circle) 
-          after desired mapping is configured. To load
-          the default mapping press <span class="button">&#9651;</span>
-          (triangle).</p>
+          to save mapping to memory stick</p>
       </div>
 
       <h1 id="compile">Compiling</h1>
@@ -180,16 +192,6 @@
 
       <h1 id="hist">Version History</h1>
       <div class="section">
-      </div>
-
-      <h1 id="cred">Credits</h1>
-      <div class="section">
-        <ul class="no-bullets">
-          <li>Atari800 team - Atari800 emulator</li>
-          <li>Simon Tatham - fixed.fd font on which the emulator's font is
-            based</li>
-          <li>Ruka - PNG saving/loading code</li>
-        </ul>
       </div>
 
      <hr>
