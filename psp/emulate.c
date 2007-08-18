@@ -284,7 +284,8 @@ void RunEmulation()
     break;
   case DISPLAY_MODE_FIT_HEIGHT:
     ratio = (float)SCR_HEIGHT / (float)Screen->Viewport.Height;
-    ScreenW = (float)Screen->Viewport.Width * ratio - 2;
+    ScreenW = 336.0f * ratio - 2;
+//    ScreenW = (float)Screen->Viewport.Width * ratio - 2;
     ScreenH = SCR_HEIGHT;
     break;
   case DISPLAY_MODE_FILL_SCREEN:
@@ -383,7 +384,7 @@ int ParseInput()
   if (!pspCtrlPollControls(&pad))
     return 0;
 
-  //* DEBUGGING
+  /* DEBUGGING
   if ((pad.Buttons & (PSP_CTRL_SELECT | PSP_CTRL_START))
     == (PSP_CTRL_SELECT | PSP_CTRL_START))
       pspUtilSaveVramSeq(ScreenshotPath, "game");

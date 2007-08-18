@@ -867,7 +867,7 @@ void LoadOptions()
   CropScreen = pspInitGetInt(init, "System", "Crop screen", 0);
   machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
   ram_size = pspInitGetInt(init, "System", "RAM Size", 64);
-  tv_mode = pspInitGetInt(init, "System", "TV mode", TV_NTSC);
+  tv_mode = pspInitGetInt(init, "System", "TV mode", TV_PAL);
   stereo_enabled = pspInitGetInt(init, "System", "Stereo", 0);
 
   if (GamePath) free(GamePath);
@@ -1084,7 +1084,7 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       {
 			  /* Eject disk and cartridge */
 			  CART_Remove();
-			  if (machine_type != MACHINE_5200) SIO_Dismount(1);
+			  SIO_Dismount(1);
       }
 
       /* Reconfigure machine type & RAM size */
@@ -1173,13 +1173,13 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
 
       /* Eject cart & disk (if applicable) */
 		  CART_Remove();
-		  if (machine_type != MACHINE_5200) SIO_Dismount(1);
+		  SIO_Dismount(1);
 
 		  /* Reset loaded game */
 		  if (LoadedGame) free(LoadedGame);
 		  LoadedGame = NULL;
 			LoadGameConfig(LoadedGame, &ActiveGameConfig);
-			Coldstart();
+			Atari800_InitialiseMachine();
 		  break;
 
     case SYSTEM_RESET:
@@ -1485,7 +1485,7 @@ int OnQuickloadOk(const void *browser, const void *path)
 {
   /* Eject disk and cartridge */
   CART_Remove();
-  if (machine_type != MACHINE_5200) SIO_Dismount(1);
+  SIO_Dismount(1);
 
   switch (Atari800_DetectFileType(path))
   {
