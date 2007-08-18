@@ -49,14 +49,12 @@ static int TicksPerUpdate;
 static u32 TicksPerSecond;
 static u64 LastTick;
 static u64 CurrentTick;
-static int SoundReady;
 static int ShowKybd;
 static int key_ctrl;
 static PspFpsCounter FpsCounter;
 static PspKeyboardLayout *KeyboardLayout, *KeypadLayout;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
 static int TrigState[4] = { 1, 1, 1, 1 };
-static char SoundBuffer[SOUND_FREQ / 50];
 static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - ATARI_WIDTH;
 
 PspImage *Screen;
@@ -120,7 +118,6 @@ void TrashEmulation()
 void Atari_Initialise(int *argc, char *argv[])
 {
 #ifdef SOUND
-  SoundReady = 0;
 	Sound_Initialise(argc, argv);
 #endif
 }
@@ -215,39 +212,25 @@ int Atari_TRIG(int num)
 void Sound_Initialise(int *argc, char *argv[])
 {
 	enable_new_pokey = 0;
-  Pokey_sound_init(FREQ_17_EXACT, SOUND_FREQ, 1, 0);
+  Pokey_sound_init(FREQ_17_EXACT, SOUND_FREQ, 1, SND_BIT16);
 }
 
 void AudioCallback(void* buf, unsigned int *length, void *userdata)
 {
   PspSample *OutBuf = (PspSample*)buf;
-  unsigned int nsamples = SOUND_FREQ / ((tv_mode == TV_NTSC) ? 60 : 50);
+  unsigned int nsamples = 1024;
+  static short SoundBuffer[1024];
 
-  if (!SoundReady)
-  {
-    memset(OutBuf, 0, sizeof(PspSample) * nsamples);
-    return;
-  }
+  Pokey_process(SoundBuffer, nsamples);
 
-  int i, sample;
+  int i;
   for (i = 0; i < nsamples; i++) 
-  {
-    sample = ((int)SoundBuffer[i] - 0x80) << 8;
-    OutBuf[i].Left = OutBuf[i].Right = (sample > 32767) ? 32767 
-      : ((sample < -32768) ? -32768 : sample);
-  }
-
-  *length = nsamples;
-  SoundReady = 0;
+    OutBuf[i].Left = OutBuf[i].Right = SoundBuffer[i];
 }
 
 void Sound_Update(void)
 {
-  /* TODO: sound doesn't work correctly with frame skipping */
-	unsigned int nsamples = SOUND_FREQ / ((tv_mode == TV_NTSC) ? 60 : 50);
-
-  Pokey_process(SoundBuffer, nsamples);
-  SoundReady = 1;
+  /* Actual work is done in AudioCallback */
 }
 
 void Sound_Pause(void)

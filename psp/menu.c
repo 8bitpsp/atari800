@@ -159,7 +159,7 @@ static const char
     { "XEX", "EXE", "COM", "BIN", /* Executables */
       "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", /* Disk images */
       "BAS", "LST", /* Listings */
-      "CAR", "CART", "ROM", /* Cartridges */
+      "CAR", "CART", "ROM", "A52", /* Cartridges */
       "CAS", /* Cassette tapes */
       '\0' },
   PresentSlotText[] = "\026\244\020 Save\t\026\001\020 Load\t\026\243\020 Delete",
@@ -436,6 +436,7 @@ static const PspMenuItemDef
       "\026\250\020 Remove 8-pixel wide strips on each side of the screen"),
     MENU_ITEM("TV frequency", SYSTEM_TV_MODE, TVModeOptions, -1, 
       "\026\250\020 Change video frequency of emulated machine"),
+    MENU_HEADER("Hardware"),
     MENU_ITEM("Machine type", SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
       "\026\250\020 Change emulated machine"),
     MENU_HEADER("System"),
@@ -491,6 +492,7 @@ static const PspMenuItemDef
 	  "Atarimax 128 KB Flash cartridge",
 	  "Atarimax 1 MB Flash cartridge",
 	  "SpartaDOS X 128 KB cartridge",
+	  NULL
   };
 
 /* Function declarations */
@@ -500,8 +502,8 @@ static int  SaveGameConfig(const char *config_name, const GameConfig *config);
 
 static void LoadOptions();
 static int  SaveOptions();
-static void InitOptionDefaults();
 
+static void DisplayControlTab();
 static void DisplayStateTab();
 
 static PspImage* LoadStateIcon(const char *path);
@@ -603,6 +605,17 @@ void InitMenu()
   /* Initialize emulation */
   if (!InitEmulation()) return;
 
+  /* Initialize paths */
+  SaveStatePath = (char*)malloc(sizeof(char) 
+    * (strlen(pspGetAppDirectory()) + strlen(SaveStateDir) + 2));
+  sprintf(SaveStatePath, "%s%s/", pspGetAppDirectory(), SaveStateDir);
+  ScreenshotPath = (char*)malloc(sizeof(char) 
+    * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
+  sprintf(ScreenshotPath, "%s%s/", pspGetAppDirectory(), ScreenshotDir);
+  ConfigPath = (char*)malloc(sizeof(char) 
+    * (strlen(pspGetAppDirectory()) + strlen(ConfigDir) + 2));
+  sprintf(ConfigPath, "%s%s/", pspGetAppDirectory(), ConfigDir);
+
   /* Initialize options */
   LoadOptions();
   Atari800_InitialiseMachine();
@@ -613,7 +626,7 @@ void InitMenu()
 
   /* Init NoSaveState icon image */
   NoSaveIcon=pspImageCreate(168, 120, PSP_IMAGE_16BPP);
-  pspImageClear(NoSaveIcon, RGB(0x0c,0,0x3f));
+  pspImageClear(NoSaveIcon, RGB(0x29,0x29,0x29));
 
   /* Initialize options menu */
   OptionUiMenu.Menu = pspMenuCreate();
@@ -636,17 +649,6 @@ void InitMenu()
   /* Initialize control menu */
   ControlUiMenu.Menu = pspMenuCreate();
   pspMenuLoad(ControlUiMenu.Menu, ComputerControlMenuDef);
-
-  /* Initialize paths */
-  SaveStatePath = (char*)malloc(sizeof(char) 
-    * (strlen(pspGetAppDirectory()) + strlen(SaveStateDir) + 2));
-  sprintf(SaveStatePath, "%s%s/", pspGetAppDirectory(), SaveStateDir);
-  ScreenshotPath = (char*)malloc(sizeof(char) 
-    * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
-  sprintf(ScreenshotPath, "%s%s/", pspGetAppDirectory(), ScreenshotDir);
-  ConfigPath = (char*)malloc(sizeof(char) 
-    * (strlen(pspGetAppDirectory()) + strlen(ConfigDir) + 2));
-  sprintf(ConfigPath, "%s%s/", pspGetAppDirectory(), ConfigDir);
 
   /* Load default configuration */
   LoadGameConfig(DefaultConsoleConfigFile, &DefaultConsoleConfig);
@@ -685,12 +687,11 @@ void InitMenu()
   UiMetric.TitlePadding = 4;
   UiMetric.TitleColor = PSP_COLOR_WHITE;
   UiMetric.MenuFps = 30;
-  UiMetric.TabBgColor = COLOR(0x74,0x74,0xbe,0xff);
+  UiMetric.TabBgColor = COLOR(0xcc,0xdb,0xe3, 0xff);
 }
 
 void DisplayMenu()
 {
-  int i;
   PspMenuItem *item;
 
   /* Menu loop */
@@ -715,16 +716,7 @@ void DisplayMenu()
       break;
 
     case TAB_CONTROL:
-
-		  /* Reinitialize the control menu to reflect console or computer */
-		  pspMenuLoad(ControlUiMenu.Menu, 
-		    (machine_type == MACHINE_5200) 
-		      ? ConsoleControlMenuDef : ComputerControlMenuDef);
-
-      /* Load current button mappings */
-      for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
-        pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
-      pspUiOpenMenu(&ControlUiMenu, NULL);
+      DisplayControlTab();
       break;
 
     case TAB_OPTION:
@@ -774,6 +766,29 @@ void DisplayMenu()
       if (ResumeEmulation) RunEmulation();
     }
   } while (!ExitPSP);
+}
+
+static void DisplayControlTab()
+{
+  int i;
+  PspMenuItem *item;
+  const char *config_name;
+  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+  char *game_name = strdup(config_name);
+  char *dot = strrchr(game_name, '.');
+  if (dot) *dot='\0';
+
+  /* Reinitialize the control menu to reflect console or computer */
+  pspMenuLoad(ControlUiMenu.Menu, 
+    (machine_type == MACHINE_5200) 
+      ? ConsoleControlMenuDef : ComputerControlMenuDef);
+
+  /* Load current button mappings */
+  for (item = ControlUiMenu.Menu->First, i = 0; item; item = item->Next, i++)
+    pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
+
+  pspUiOpenMenu(&ControlUiMenu, game_name);
+  free(game_name);
 }
 
 static void DisplayStateTab()
@@ -829,42 +844,34 @@ static void DisplayStateTab()
 /* Load options */
 void LoadOptions()
 {
-  char *path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
+  char *path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(OptionsFile) + 1));
-  sprintf(path, "%s%s", pspGetAppDirectory(), OptionsFile);
-
-  /* TODO: experiment not using InitOptionDefaults */
+  sprintf(path, "%s%s", ConfigPath, OptionsFile);
 
   /* Initialize INI structure */
   PspInit *init = pspInitCreate();
 
   /* Read the file */
-  if (!pspInitLoad(init, path))
-  {
-    /* File does not exist; load defaults */
-    InitOptionDefaults();
-  }
-  else
-  {
-    /* Load values */
-    Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", 
-      DISPLAY_MODE_UNSCALED);
-    Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 0);
-    Config.VSync     = pspInitGetInt(init, "Video", "VSync", 0);
-    Config.FrameSync = pspInitGetInt(init, "Video", "Frame Sync", 1);
-    Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
-    Config.ShowFps   = pspInitGetInt(init, "Video", "Show FPS", 0);
-    Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
+  pspInitLoad(init, path);
 
-    CropScreen = pspInitGetInt(init, "System", "Crop screen", 1);
-    machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
-    ram_size = pspInitGetInt(init, "System", "RAM Size", 64);
-    tv_mode = pspInitGetInt(init, "System", "TV mode", TV_NTSC);
-    stereo_enabled = pspInitGetInt(init, "System", "Stereo", 0);
+  /* Load values */
+  Config.DisplayMode = pspInitGetInt(init, "Video", "Display Mode", 
+    DISPLAY_MODE_UNSCALED);
+  Config.Frameskip = pspInitGetInt(init, "Video", "Frameskip", 0);
+  Config.VSync     = pspInitGetInt(init, "Video", "VSync", 0);
+  Config.FrameSync = pspInitGetInt(init, "Video", "Frame Sync", 1);
+  Config.ClockFreq = pspInitGetInt(init, "Video", "PSP Clock Frequency", 222);
+  Config.ShowFps   = pspInitGetInt(init, "Video", "Show FPS", 0);
+  Config.ControlMode = pspInitGetInt(init, "Menu", "Control Mode", 0);
 
-    if (GamePath) free(GamePath);
-    GamePath = pspInitGetString(init, "File", "Game Path", NULL);
-  }
+  CropScreen = pspInitGetInt(init, "System", "Crop screen", 0);
+  machine_type = pspInitGetInt(init, "System", "Machine Type", MACHINE_XLXE);
+  ram_size = pspInitGetInt(init, "System", "RAM Size", 64);
+  tv_mode = pspInitGetInt(init, "System", "TV mode", TV_NTSC);
+  stereo_enabled = pspInitGetInt(init, "System", "Stereo", 0);
+
+  if (GamePath) free(GamePath);
+  GamePath = pspInitGetString(init, "File", "Game Path", NULL);
 
   /* Clean up */
   free(path);
@@ -874,9 +881,9 @@ void LoadOptions()
 /* Save options */
 static int SaveOptions()
 {
-  char *path = (char*)malloc(sizeof(char) * (strlen(pspGetAppDirectory()) 
+  char *path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(OptionsFile) + 1));
-  sprintf(path, "%s%s", pspGetAppDirectory(), OptionsFile);
+  sprintf(path, "%s%s", ConfigPath, OptionsFile);
 
   /* Initialize INI structure */
   PspInit *init = pspInitCreate();
@@ -906,26 +913,6 @@ static int SaveOptions()
   free(path);
 
   return status;
-}
-
-/* Initialize options to system defaults */
-void InitOptionDefaults()
-{
-  Config.ControlMode = 0;
-  Config.DisplayMode = DISPLAY_MODE_UNSCALED;
-  Config.Frameskip = 0;
-  Config.VSync = 0;
-  Config.ClockFreq = 222;
-  Config.ShowFps = 0;
-  Config.FrameSync = 1;
-
-  CropScreen = 1;
-  machine_type = MACHINE_XLXE;
-  ram_size = 64;
-  tv_mode = TV_NTSC;
-  stereo_enabled = 0;
-
-  GamePath = NULL;
 }
 
 int OnGenericCancel(const void *uiobject, const void* param)
@@ -1061,7 +1048,7 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
   }
   else if (uimenu == &SystemUiMenu)
   {
-    unsigned int curr_system;
+    int reinit_controls;
 
     switch(item->ID)
     {
@@ -1073,7 +1060,6 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       stereo_enabled = (int)option->Value;
       break;
 
-    /* TODO: add manual disk/cartridge ejection */
     case SYSTEM_TV_MODE:
       if (Config.VSync
         && (((int)option->Value == TV_NTSC && pspVideoGetVSyncFreq() != 60)
@@ -1093,25 +1079,27 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
         && RAM((int)option->Value) == ram_size)
           || !pspUiConfirm("This will reset the system. Proceed?")) return 0;
 
-      if (machine_type == MACHINE_5200 
-        || MACHINE((int)option->Value) == MACHINE_5200)
+      if ((reinit_controls = machine_type == MACHINE_5200 
+        || MACHINE((int)option->Value) == MACHINE_5200))
       {
 			  /* Eject disk and cartridge */
 			  CART_Remove();
 			  if (machine_type != MACHINE_5200) SIO_Dismount(1);
+      }
 
+      /* Reconfigure machine type & RAM size */
+      machine_type = MACHINE((int)option->Value);
+      ram_size = RAM((int)option->Value);
+
+      if (reinit_controls)
+      {
 			  /* Reset loaded game */
 			  if (LoadedGame) free(LoadedGame);
 			  LoadedGame = NULL;
 				LoadGameConfig(LoadedGame, &ActiveGameConfig);
 			}
 
-      /* Reconfigure machine type & RAM size */
-      curr_system = MACHINE_TYPE(machine_type, ram_size);
-      machine_type = MACHINE((int)option->Value);
-      ram_size = RAM((int)option->Value);
-
-      Coldstart();
+      Atari800_InitialiseMachine();
       break;
     }
   }
@@ -1180,6 +1168,9 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
     {
     case SYSTEM_EJECT:
 
+      if (!pspUiConfirm("This will reset the system. Proceed?"))
+        break;
+
       /* Eject cart & disk (if applicable) */
 		  CART_Remove();
 		  if (machine_type != MACHINE_5200) SIO_Dismount(1);
@@ -1188,6 +1179,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
 		  if (LoadedGame) free(LoadedGame);
 		  LoadedGame = NULL;
 			LoadGameConfig(LoadedGame, &ActiveGameConfig);
+			Coldstart();
 		  break;
 
     case SYSTEM_RESET:
@@ -1462,7 +1454,7 @@ int LoadCartridge(const char *path)
   	    if (cart_kb[i + 1] == type) 
   	    	pspMenuAppendItem(menu, CartType[i], i + 1);
 
-	    const PspMenuItem *item = pspUiSelect(menu);
+	    const PspMenuItem *item = pspUiSelect("Select cartridge type", menu);
 	    if (item) cart_type = item->ID;
 
 	    pspMenuDestroy(menu);
