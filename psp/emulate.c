@@ -384,11 +384,11 @@ int ParseInput()
   if (!pspCtrlPollControls(&pad))
     return 0;
 
-  /* DEBUGGING
+#ifdef PSP_DEBUG
   if ((pad.Buttons & (PSP_CTRL_SELECT | PSP_CTRL_START))
     == (PSP_CTRL_SELECT | PSP_CTRL_START))
       pspUtilSaveVramSeq(ScreenshotPath, "game");
-  //*/
+#endif
 
   int i, on, code;
   PspKeyboardLayout *layout = (machine_type == MACHINE_5200) 
