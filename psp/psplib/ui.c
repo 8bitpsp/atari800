@@ -21,8 +21,9 @@
 #include "fileio.h"
 #include "ctrl.h"
 #include "ui.h"
+#include "font.h"
 
-#define MAX_DIR_LEN 255
+#define MAX_DIR_LEN 1024
 
 #define  CONTROL_BUTTON_MASK \
   (PSP_CTRL_CIRCLE | PSP_CTRL_TRIANGLE | PSP_CTRL_CROSS | PSP_CTRL_SQUARE | \
@@ -31,6 +32,8 @@
 static const char 
   *AlertDialogButtonTemplate   = "\026\001\020/\026\002\020 Close",
   *ConfirmDialogButtonTemplate = "\026\001\020 Confirm\t\026\002\020 Cancel",
+  *YesNoCancelDialogButtonTemplate = 
+    "\026\001\020 Yes\t\026"PSP_CHAR_SQUARE"\020 No\t\026\002\020 Cancel",
 
   *SelectorTemplate = "\026\001\020 Confirm\t\026\002\020 Cancel",
 
@@ -127,6 +130,59 @@ void pspUiAlert(const char *message)
     if (pad.Buttons & UiMetric.OkButton || pad.Buttons & UiMetric.CancelButton)
       break;
   }
+}
+
+int pspUiYesNoCancel(const char *message)
+{
+  int sx, sy, dx, dy, th, fh, mw, cw, w, h;
+  char *instr = strdup(YesNoCancelDialogButtonTemplate);
+  pspUiReplaceIcons(instr);
+
+  mw = pspFontGetTextWidth(UiMetric.Font, message);
+  cw = pspFontGetTextWidth(UiMetric.Font, instr);
+  fh = pspFontGetLineHeight(UiMetric.Font);
+  th = pspFontGetTextHeight(UiMetric.Font, message);
+
+  w = ((mw > cw) ? mw : cw) + 50;
+  h = th + fh * 3;
+  sx = SCR_WIDTH / 2 - w / 2;
+  sy = SCR_HEIGHT / 2 - h / 2;
+  dx = sx + w;
+  dy = sy + h;
+
+  pspVideoBegin();
+
+  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, UiMetric.DialogFogColor);
+
+  pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogBgColor);
+  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2, UiMetric.DialogBorderColor);
+  pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - mw / 2, sy + fh * 0.5, message, 
+    UiMetric.TextColor);
+  pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
+    UiMetric.TextColor);
+  free(instr);
+
+  pspVideoEnd();
+
+  /* Swap buffers */
+  pspVideoWaitVSync();
+  pspVideoSwapBuffers();
+
+  SceCtrlData pad;
+
+  /* Loop until X or O is pressed */
+  while (!ExitPSP)
+  {
+    if (!pspCtrlPollControls(&pad))
+      continue;
+
+    if (pad.Buttons & UiMetric.OkButton || pad.Buttons & UiMetric.CancelButton 
+      || pad.Buttons & PSP_CTRL_SQUARE) break;
+  }
+
+  if (pad.Buttons & UiMetric.CancelButton) return PSP_UI_CANCEL;
+  else if (pad.Buttons & PSP_CTRL_SQUARE) return PSP_UI_NO;
+  else return PSP_UI_YES;
 }
 
 int pspUiConfirm(const char *message)
