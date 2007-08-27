@@ -242,7 +242,7 @@ static const PspMenuOptionDef
     MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD),
     MENU_OPTION("Joystick: Down", JOY|STICK_BACK),
     MENU_OPTION("Joystick: Left", JOY|STICK_LEFT),
-    MENU_OPTION("Joystick: Up",   JOY|STICK_RIGHT),
+    MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT),
     MENU_OPTION("Joystick: Fire", TRG|0),
     /* Keyboard */
     MENU_OPTION("Keyboard: Up",   KBD|AKEY_UP), 
@@ -311,7 +311,7 @@ static const PspMenuOptionDef
     MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD),
     MENU_OPTION("Joystick: Down", JOY|STICK_BACK),
     MENU_OPTION("Joystick: Left", JOY|STICK_LEFT),
-    MENU_OPTION("Joystick: Up",   JOY|STICK_RIGHT),
+    MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT),
     MENU_OPTION("Joystick: Fire", TRG|0),
     /* Keypad */
     MENU_OPTION("1", KBD|AKEY_5200_1), MENU_OPTION("2", KBD|AKEY_5200_2),
