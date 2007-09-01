@@ -1016,10 +1016,17 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
       {
         if (item->Icon)
         {
+          PspImage *icon = (PspImage*)item->Icon;
+
           if (item == sel)
-            pspVideoPutImage((PspImage*)item->Icon, j - 4, i - 4, icon_w + 8, icon_h + 8);
-          else
-            pspVideoPutImage((PspImage*)item->Icon, j, i, icon_w, icon_h);
+          {
+            int left = (j + icon_w / 2) - icon->Width / 2;
+            left = (left < sx) ? sx : left;
+            int top = (i + icon_h / 2) - icon->Height / 2;
+            top = (top < sy) ? sy : top;
+            pspVideoPutImage(icon, left, top, icon_w + 8, icon_h + 8);
+          }
+          else pspVideoPutImage(icon, j, i, icon->Width, icon->Height);
         }
 
         if (item == sel)
