@@ -45,7 +45,7 @@ extern "C" {
 #define GREEN(pixel) ((((pixel) >> 5)  & 0x1f) * 0xff / 0x1f)
 #define BLUE(pixel) ((((pixel) >> 10) & 0x1f) * 0xff / 0x1f)
 
-#define COLOR(r,g,b,a) (((int)(r)) | ((int)(g) << 8) | ((int)(b) << 16) | ((int)(a) << 24))
+#define COLOR(r,g,b,a) (((int)(r)&0xff)|(((int)(g)&0xff)<<8)|(((int)(b)&0xff)<<16)|(((int)(a)&0xff)<<24))
 
 extern const unsigned int PspFontColor[];
 

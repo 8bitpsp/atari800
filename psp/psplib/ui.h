@@ -102,9 +102,11 @@ typedef struct PspUiSplash
   const char* (*OnGetStatusBarText)(const struct PspUiSplash *splash);
 } PspUiSplash;
 
-#define PSP_UI_YES    2
-#define PSP_UI_NO     1
-#define PSP_UI_CANCEL 0
+#define PSP_UI_YES     2
+#define PSP_UI_NO      1
+#define PSP_UI_CANCEL  0
+
+#define PSP_UI_CONFIRM 1
 
 char pspUiGetButtonIcon(u32 button_mask);
 
