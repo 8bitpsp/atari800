@@ -181,6 +181,11 @@ void* GetBuffer(const PspImage *image)
   return ScratchBuffer;
 }
 
+void pspVideoBeginList(void *list)
+{
+  sceGuStart(GU_CALL, list);
+}
+
 void pspVideoBegin()
 {
   sceGuStart(GU_DIRECT, List);

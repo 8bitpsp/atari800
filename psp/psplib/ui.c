@@ -27,10 +27,8 @@
 
 #define UI_ANIM_FRAMES   8
 #define UI_ANIM_FOG_STEP 0x0f
-#define UI_SHADOW_OFFSET 3
-#define UI_SHADOW_COLOR  COLOR(0,0,0,0x40)
 
-#define  CONTROL_BUTTON_MASK \
+#define CONTROL_BUTTON_MASK \
   (PSP_CTRL_CIRCLE | PSP_CTRL_TRIANGLE | PSP_CTRL_CROSS | PSP_CTRL_SQUARE | \
    PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT | PSP_CTRL_START)
 
@@ -58,6 +56,9 @@ struct UiPos
   int Offset;
   const PspMenuItem *Top;
 };
+
+/* TODO: dynamically allocate */
+static unsigned int __attribute__((aligned(16))) call_list[262144];
 
 void pspUiReplaceIcons(char *string);
 
@@ -120,14 +121,12 @@ void pspUiAlert(const char *message)
 	  /* Apply fog and draw frame */
 	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
 	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
-	  pspVideoFillRect(sx, sy, dx, dy, 
-	    COLOR(UiMetric.DialogBgColor&0xff,
-	      (UiMetric.DialogBgColor>>8)&0xff,
-	      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-	  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-	    COLOR(UiMetric.DialogBorderColor&0xff,
-	      (UiMetric.DialogBorderColor>>8)&0xff,
-	      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+	      GREEN_32(UiMetric.MenuOptionBoxBg),
+	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 	  pspVideoEnd();
 
@@ -138,16 +137,16 @@ void pspUiAlert(const char *message)
 
   pspVideoBegin();
 
-  pspVideoFillRect(sx + UI_SHADOW_OFFSET, sy + UI_SHADOW_OFFSET, 
-    dx + UI_SHADOW_OFFSET, dy + UI_SHADOW_OFFSET, UI_SHADOW_COLOR);
-  pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogBgColor);
-  pspVideoDrawRect(sx + 1, sy + 1, dx - 1, dy - 1, UiMetric.DialogBorderColor);
+  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
+  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+    COLOR(0,0,0,UI_ANIM_FOG_STEP*n));
+  pspVideoFillRect(sx, sy, dx, dy, UiMetric.MenuOptionBoxBg);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - mw / 2, sy + fh * 0.5, message, 
     UiMetric.TextColor);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
     UiMetric.TextColor);
-
-  free(instr);
+  pspVideoGlowRect(sx, sy, dx, dy, 
+    COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
 
@@ -178,16 +177,14 @@ void pspUiAlert(const char *message)
 		  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
 
 		  /* Apply fog and draw frame */
-		  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, COLOR(0,0,0,
-		    UI_ANIM_FOG_STEP * i));
-		  pspVideoFillRect(sx, sy, dx, dy, 
-		    COLOR(UiMetric.DialogBgColor&0xff,
-		      (UiMetric.DialogBgColor>>8)&0xff,
-		      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-		  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-		    COLOR(UiMetric.DialogBorderColor&0xff,
-		      (UiMetric.DialogBorderColor>>8)&0xff,
-		      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+  	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+  	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
+  	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+  	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+  	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+  	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+  	      GREEN_32(UiMetric.MenuOptionBoxBg),
+  	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 		  pspVideoEnd();
 
@@ -197,6 +194,7 @@ void pspUiAlert(const char *message)
 		}
 	}
 
+  free(instr);
   pspImageDestroy(screen);
 }
 
@@ -233,14 +231,12 @@ int pspUiYesNoCancel(const char *message)
 	  /* Apply fog and draw frame */
 	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
 	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
-	  pspVideoFillRect(sx, sy, dx, dy, 
-	    COLOR(UiMetric.DialogBgColor&0xff,
-	      (UiMetric.DialogBgColor>>8)&0xff,
-	      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-	  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-	    COLOR(UiMetric.DialogBorderColor&0xff,
-	      (UiMetric.DialogBorderColor>>8)&0xff,
-	      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+	      GREEN_32(UiMetric.MenuOptionBoxBg),
+	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 	  pspVideoEnd();
 
@@ -251,15 +247,16 @@ int pspUiYesNoCancel(const char *message)
 
   pspVideoBegin();
 
-  pspVideoFillRect(sx + UI_SHADOW_OFFSET, sy + UI_SHADOW_OFFSET, 
-    dx + UI_SHADOW_OFFSET, dy + UI_SHADOW_OFFSET, UI_SHADOW_COLOR);
-  pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogBgColor);
-  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2, UiMetric.DialogBorderColor);
+  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
+  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+    COLOR(0,0,0,UI_ANIM_FOG_STEP*n));
+  pspVideoFillRect(sx, sy, dx, dy, UiMetric.MenuOptionBoxBg);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - mw / 2, sy + fh * 0.5, message, 
     UiMetric.TextColor);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
     UiMetric.TextColor);
-  free(instr);
+  pspVideoGlowRect(sx, sy, dx, dy, 
+    COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
 
@@ -290,16 +287,14 @@ int pspUiYesNoCancel(const char *message)
 		  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
 
 		  /* Apply fog and draw frame */
-		  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, COLOR(0,0,0,
-		    UI_ANIM_FOG_STEP * i));
-		  pspVideoFillRect(sx, sy, dx, dy, 
-		    COLOR(UiMetric.DialogBgColor&0xff,
-		      (UiMetric.DialogBgColor>>8)&0xff,
-		      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-		  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-		    COLOR(UiMetric.DialogBorderColor&0xff,
-		      (UiMetric.DialogBorderColor>>8)&0xff,
-		      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+  	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+  	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
+  	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+  	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+  	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+  	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+  	      GREEN_32(UiMetric.MenuOptionBoxBg),
+  	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 		  pspVideoEnd();
 
@@ -310,6 +305,7 @@ int pspUiYesNoCancel(const char *message)
 	}
 
   pspImageDestroy(screen);
+  free(instr);
 
   if (pad.Buttons & UiMetric.CancelButton) return PSP_UI_CANCEL;
   else if (pad.Buttons & PSP_CTRL_SQUARE) return PSP_UI_NO;
@@ -349,14 +345,12 @@ int pspUiConfirm(const char *message)
 	  /* Apply fog and draw frame */
 	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
 	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
-	  pspVideoFillRect(sx, sy, dx, dy, 
-	    COLOR(UiMetric.DialogBgColor&0xff,
-	      (UiMetric.DialogBgColor>>8)&0xff,
-	      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-	  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-	    COLOR(UiMetric.DialogBorderColor&0xff,
-	      (UiMetric.DialogBorderColor>>8)&0xff,
-	      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+	      GREEN_32(UiMetric.MenuOptionBoxBg),
+	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 	  pspVideoEnd();
 
@@ -367,14 +361,16 @@ int pspUiConfirm(const char *message)
 
   pspVideoBegin();
 
-  pspVideoFillRect(sx + UI_SHADOW_OFFSET, sy + UI_SHADOW_OFFSET, 
-    dx + UI_SHADOW_OFFSET, dy + UI_SHADOW_OFFSET, UI_SHADOW_COLOR);
-  pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogBgColor);
-  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2, UiMetric.DialogBorderColor);
+  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
+  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+    COLOR(0,0,0,UI_ANIM_FOG_STEP*n));
+  pspVideoFillRect(sx, sy, dx, dy, UiMetric.MenuOptionBoxBg);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - mw / 2, sy + fh * 0.5, message, 
     UiMetric.TextColor);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
     UiMetric.TextColor);
+  pspVideoGlowRect(sx, sy, dx, dy, 
+    COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
 
@@ -405,16 +401,14 @@ int pspUiConfirm(const char *message)
 		  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
 
 		  /* Apply fog and draw frame */
-		  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, COLOR(0,0,0,
-		    UI_ANIM_FOG_STEP * i));
-		  pspVideoFillRect(sx, sy, dx, dy, 
-		    COLOR(UiMetric.DialogBgColor&0xff,
-		      (UiMetric.DialogBgColor>>8)&0xff,
-		      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-		  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-		    COLOR(UiMetric.DialogBorderColor&0xff,
-		      (UiMetric.DialogBorderColor>>8)&0xff,
-		      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+  	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+  	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
+  	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+  	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+  	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+  	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+  	      GREEN_32(UiMetric.MenuOptionBoxBg),
+  	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 		  pspVideoEnd();
 
@@ -460,14 +454,12 @@ void pspUiFlashMessage(const char *message)
 	  /* Apply fog and draw frame */
 	  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
 	    COLOR(0,0,0,UI_ANIM_FOG_STEP*i));
-	  pspVideoFillRect(sx, sy, dx, dy, 
-	    COLOR(UiMetric.DialogBgColor&0xff,
-	      (UiMetric.DialogBgColor>>8)&0xff,
-	      (UiMetric.DialogBgColor>>16)&0xff,(0xff/n)*i));
-	  pspVideoDrawRect(sx + 1, sy + 1, dx - 2, dy - 2,
-	    COLOR(UiMetric.DialogBorderColor&0xff,
-	      (UiMetric.DialogBorderColor>>8)&0xff,
-	      (UiMetric.DialogBorderColor>>16)&0xff,(0xff/n)*i));
+	  pspVideoFillRect(SCR_WIDTH/2-(((dx-sx)/n)*i)/2, 
+	    SCR_HEIGHT/2-(((dy-sy)/n)*i)/2, 
+	    SCR_WIDTH/2+(((dx-sx)/n)*i)/2, SCR_HEIGHT/2+(((dy-sy)/n)*i)/2,
+	    COLOR(RED_32(UiMetric.MenuOptionBoxBg),
+	      GREEN_32(UiMetric.MenuOptionBoxBg),
+	      BLUE_32(UiMetric.MenuOptionBoxBg),(0xff/n)*i));
 
 	  pspVideoEnd();
 
@@ -476,22 +468,24 @@ void pspUiFlashMessage(const char *message)
     pspVideoSwapBuffers();
 	}
 
-  pspImageDestroy(screen);
-
   pspVideoBegin();
 
-  pspVideoFillRect(sx + UI_SHADOW_OFFSET, sy + UI_SHADOW_OFFSET, 
-    dx + UI_SHADOW_OFFSET, dy + UI_SHADOW_OFFSET, UI_SHADOW_COLOR);
-  pspVideoFillRect(sx, sy, dx, dy, UiMetric.DialogBgColor);
-  pspVideoDrawRect(sx + 1, sy + 1, dx - 1, dy - 1, UiMetric.DialogBorderColor);
+  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
+  pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+    COLOR(0,0,0,UI_ANIM_FOG_STEP*n));
+  pspVideoFillRect(sx, sy, dx, dy, UiMetric.MenuOptionBoxBg);
   pspVideoPrintCenter(UiMetric.Font,
     sx, sy + fh, dx, message, UiMetric.TextColor);
+  pspVideoGlowRect(sx, sy, dx, dy, 
+    COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
 
   /* Swap buffers */
   pspVideoWaitVSync();
   pspVideoSwapBuffers();
+
+  pspImageDestroy(screen);
 }
 
 void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
@@ -1096,6 +1090,8 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
   w = dx - sx - UiMetric.ScrollbarWidth;
   h = dy - sy;
 
+  memset(call_list, 0, sizeof(call_list));
+
   /* Determine width of the longest caption */
   for (item = menu->First; item; item = item->Next)
   {
@@ -1248,28 +1244,119 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
         else if (pad.Buttons & PSP_CTRL_LEFT  || pad.Buttons & UiMetric.CancelButton)
         {
           option_mode = 0;
+
           if (pad.Buttons & UiMetric.CancelButton)
             pad.Buttons &= ~UiMetric.CancelButton;
+        }
+
+        if (!option_mode)
+        {
+          const PspMenuOption *option;
+          k = sx + max_item_w + UiMetric.MenuItemMargin + 10;
+
+          /* Determine bounds */
+          int min_y = sy + pos.Index * fh;
+          int cur_y = min_y + fh / 2;
+          int max_y = sy + (pos.Index  + 1) * fh;
+          int min_x = k - UiMetric.MenuItemMargin;
+          int max_x = k + max_option_w + UiMetric.MenuItemMargin;
+          k += pspFontGetTextWidth(UiMetric.Font, " >");
+          if (sel->Selected && sel->Selected->Text)
+            k += pspFontGetTextWidth(UiMetric.Font, sel->Selected->Text);
+
+          for (option = temp_option; option && min_y >= sy; option = option->Prev, min_y -= fh);
+          for (option = temp_option->Next; option && max_y < dy; option = option->Next, max_y += fh);
+          max_y += fh;
+
+          /* Deflation animation */
+          for (i = UI_ANIM_FRAMES - 1; i >= 0; i--)
+          {
+        	  pspVideoBegin();
+            if (!UiMetric.Background) pspVideoClearScreen();
+              else pspVideoPutImage(UiMetric.Background, 0, 0, 
+                UiMetric.Background->Width, UiMetric.Background->Height);
+              
+        	  pspVideoCallList(call_list);
+
+        	  /* Clear screen */
+        	  pspVideoFillRect(k - ((k - min_x) / UI_ANIM_FRAMES) * i,
+        	    cur_y - ((cur_y - min_y) / UI_ANIM_FRAMES) * i, 
+        	    k + ((max_x - k) / UI_ANIM_FRAMES) * i, 
+        	    cur_y + ((max_y - cur_y) / UI_ANIM_FRAMES) * i,
+              UiMetric.MenuOptionBoxBg);
+
+            /* Selected option for the item */
+            if (sel->Selected && sel->Selected->Text)
+            pspVideoPrint(UiMetric.Font, 
+              sx + max_item_w + UiMetric.MenuItemMargin + 10, 
+              sy + pos.Index * fh, sel->Selected->Text, UiMetric.SelectedColor);
+
+        	  pspVideoEnd();
+
+            /* Swap buffers */
+            pspVideoWaitVSync();
+            pspVideoSwapBuffers();
+        	}
         }
       }
       else
       {
-        if (pad.Buttons & PSP_CTRL_RIGHT)
+        if ((pad.Buttons & PSP_CTRL_RIGHT) 
+          && sel->Options && sel->Options->Next)
         {
-          if (sel->Options && sel->Options->Next)
+          /* Get copy of screen */
+				  PspImage *screen = pspVideoGetVramBufferCopy();
+
+          option_mode = 1;
+          max_option_w = 0;
+          int width;
+          const PspMenuOption *option;
+
+          /* Find the longest option caption */
+          for (option = sel->Options; option; option = option->Next)
+            if (option->Text && (width = pspFontGetTextWidth(UiMetric.Font, option->Text)) > max_option_w) 
+              max_option_w = width;
+
+          temp_option = (sel->Selected) ? sel->Selected : sel->Options;
+
+          k = sx + max_item_w + UiMetric.MenuItemMargin + 10;
+
+          /* Determine bounds */
+          int min_y = sy + pos.Index * fh;
+          int cur_y = min_y + fh / 2;
+          int max_y = sy + (pos.Index  + 1) * fh;
+          int min_x = k - UiMetric.MenuItemMargin;
+          int max_x = k + max_option_w + UiMetric.MenuItemMargin;
+          k += pspFontGetTextWidth(UiMetric.Font, " >");
+          if (sel->Selected && sel->Selected->Text)
+            k += pspFontGetTextWidth(UiMetric.Font, sel->Selected->Text);
+
+          for (option = temp_option; option && min_y >= sy; option = option->Prev, min_y -= fh);
+          for (option = temp_option->Next; option && max_y < dy; option = option->Next, max_y += fh);
+          max_y += fh;
+
+          /* Expansion animation */
+          for (i = 0; i <= UI_ANIM_FRAMES; i++)
           {
-            option_mode = 1;
-            max_option_w = 0;
-            int width;
-            PspMenuOption *option;
+        	  pspVideoBegin();
 
-            /* Find the longest option caption */
-            for (option = sel->Options; option; option = option->Next)
-              if (option->Text && (width = pspFontGetTextWidth(UiMetric.Font, option->Text)) > max_option_w) 
-                max_option_w = width;
+        	  /* Clear screen */
+        	  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
+        	  pspVideoFillRect(k - ((k - min_x) / UI_ANIM_FRAMES) * i,
+        	    cur_y - ((cur_y - min_y) / UI_ANIM_FRAMES) * i, 
+        	    k + ((max_x - k) / UI_ANIM_FRAMES) * i, 
+        	    cur_y + ((max_y - cur_y) / UI_ANIM_FRAMES) * i,
+              UiMetric.MenuOptionBoxBg);
 
-            temp_option = (sel->Selected) ? sel->Selected : sel->Options;
-          }
+        	  pspVideoEnd();
+
+            /* Swap buffers */
+            pspVideoWaitVSync();
+            pspVideoSwapBuffers();
+        	}
+
+          /* Destroy copy of screen */
+          pspImageDestroy(screen);
         }
         else if (pad.Buttons & UiMetric.OkButton)
         {
@@ -1295,14 +1382,8 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
       }
     }
 
-    pspVideoBegin();
-
-    /* Clear screen */
-    if (UiMetric.Background) 
-      pspVideoPutImage(UiMetric.Background, 0, 0, 
-        UiMetric.Background->Width, UiMetric.Background->Height);
-    else 
-      pspVideoClearScreen();
+    /* Render to a call list */
+    pspVideoBeginList(call_list);
 
     /* Draw instructions */
     if (sel)
@@ -1361,73 +1442,26 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
           pspVideoFillRect(sx, j, sx + w, j + fh, UiMetric.SelectedBgColor);
 
         /* Item caption */
-        pspVideoPrint(UiMetric.Font, 
-          sx + 10, j, 
-          item->Caption, 
+        pspVideoPrint(UiMetric.Font, sx + 10, j, item->Caption, 
           (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
 
-        /* Selected option for the item */
-        if (item->Selected)
+        if (!option_mode || item != sel)
         {
-          k = sx + max_item_w + UiMetric.MenuItemMargin + 10;
-          k += pspVideoPrint(UiMetric.Font, 
-            k, j, 
-            item->Selected->Text, 
-            (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
-
-          if (!option_mode && item == sel)
+          /* Selected option for the item */
+          if (item->Selected)
           {
-            if (sel->Options && sel->Options->Next)
-              pspVideoPrint(UiMetric.Font, k + anim_frame, j, " >", UiMetric.MenuDecorColor);
+            k = sx + max_item_w + UiMetric.MenuItemMargin + 10;
+            k += pspVideoPrint(UiMetric.Font, k, j, item->Selected->Text, 
+              (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
+
+            if (!option_mode && item == sel)
+            {
+              if (sel->Options && sel->Options->Next)
+                pspVideoPrint(UiMetric.Font, k + anim_frame, j, " >", UiMetric.MenuDecorColor);
+            }
           }
         }
       }
-    }
-
-    /* Render menu options */
-    if (option_mode)
-    {
-      /* Render selected item + previous items */
-      i = sy + pos.Index * fh;
-      k = sx + max_item_w + UiMetric.MenuItemMargin + 10;
-      int arrow_x = k - UiMetric.MenuItemMargin + (UiMetric.MenuItemMargin / 2 - arrow_w / 2);
-      const PspMenuOption *option;
-
-      for (option = temp_option; option && i >= sy; option = option->Prev, i -= fh)
-      {
-        pspVideoFillRect(k - UiMetric.MenuItemMargin, i, k + max_option_w + UiMetric.MenuItemMargin, i + fh, 
-          (option == temp_option) ? UiMetric.MenuSelOptionBg : UiMetric.MenuOptionBoxBg);
-        pspVideoPrint(UiMetric.Font, k, i, option->Text, 
-          (option == temp_option) ? UiMetric.SelectedColor : UiMetric.MenuOptionBoxColor);
-      }
-      pspVideoFillRect(k - UiMetric.MenuItemMargin, 
-        i + fh - 8, 
-        k + max_option_w + UiMetric.MenuItemMargin, 
-        i + fh, UiMetric.MenuOptionBoxBg);
-
-      /* Up arrow */
-      if (option)
-        pspVideoPrint(UiMetric.Font, arrow_x, 
-          i + fh + anim_frame, PSP_CHAR_UP_ARROW, UiMetric.MenuDecorColor);
-
-      /* Render following items */
-      i = sy + (pos.Index  + 1) * fh;
-      for (option = temp_option->Next; option && i < dy; option = option->Next, i += fh)
-      {
-        pspVideoFillRect(k - UiMetric.MenuItemMargin, i, 
-          k + max_option_w + UiMetric.MenuItemMargin, i + fh,
-          UiMetric.MenuOptionBoxBg);
-        pspVideoPrint(UiMetric.Font, k, i, option->Text, UiMetric.MenuOptionBoxColor);
-      }
-
-      pspVideoFillRect(k - UiMetric.MenuItemMargin, i, 
-        k + max_option_w + UiMetric.MenuItemMargin, i + 8, 
-        UiMetric.MenuOptionBoxBg);
-
-      /* Down arrow */
-      if (option)
-        pspVideoPrint(UiMetric.Font, arrow_x, i - fh - anim_frame, 
-          PSP_CHAR_DOWN_ARROW, UiMetric.MenuDecorColor);
     }
 
     /* Perform any custom drawing */
@@ -1440,6 +1474,64 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
       sby = sy + (int)((float)(h - sbh) * ((float)(pos.Offset + pos.Index) / (float)menu->Count));
       pspVideoFillRect(dx - UiMetric.ScrollbarWidth, sy, dx, dy, UiMetric.ScrollbarBgColor);
       pspVideoFillRect(dx - UiMetric.ScrollbarWidth, sby, dx, sby + sbh, UiMetric.ScrollbarColor);
+    }
+
+    /* End writing to call list */
+    pspVideoEnd();
+
+    /* Begin direct rendering */
+    pspVideoBegin();
+
+    /* Clear screen */
+    if (!UiMetric.Background) pspVideoClearScreen();
+    else pspVideoPutImage(UiMetric.Background, 0, 0, 
+      UiMetric.Background->Width, UiMetric.Background->Height);
+
+    pspVideoCallList(call_list);
+
+    /* Render menu options */
+    if (option_mode)
+    {
+      k = sx + max_item_w + UiMetric.MenuItemMargin + 10;
+
+      /* Determine vertical bounds */
+      int min_y = sy + (pos.Index + 1) * fh - 8;
+      int max_y = sy + pos.Index * fh;
+      int min_x = k - UiMetric.MenuItemMargin;
+      int max_x = k + max_option_w + UiMetric.MenuItemMargin;
+      int arrow_x = min_x + (UiMetric.MenuItemMargin / 2 - arrow_w / 2);
+      const PspMenuOption *option;
+
+      for (option = temp_option; option && min_y > sy; option = option->Prev, min_y -= fh);
+      for (option = temp_option->Next; option && max_y < dy; option = option->Next, max_y += fh);
+      max_y += fh + 8;
+
+      /* Background */
+      pspVideoFillRect(min_x, min_y, max_x, max_y, UiMetric.MenuOptionBoxBg);
+      pspVideoFillRect(min_x, sy + pos.Index * fh, max_x, 
+        sy + (pos.Index + 1) * fh, UiMetric.MenuSelOptionBg);
+      pspVideoGlowRect(min_x, min_y, max_x, max_y, 
+        COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
+
+      /* Render selected item + previous items */
+      i = sy + pos.Index * fh;
+      for (option = temp_option; option && i >= sy; option = option->Prev, i -= fh)
+        pspVideoPrint(UiMetric.Font, k, i, option->Text, (option == temp_option) 
+          ? UiMetric.SelectedColor : UiMetric.MenuOptionBoxColor);
+
+      /* Up arrow */
+      if (option) pspVideoPrint(UiMetric.Font, arrow_x, 
+          i + fh + anim_frame, PSP_CHAR_UP_ARROW, UiMetric.MenuDecorColor);
+
+      /* Render following items */
+      i = sy + (pos.Index  + 1) * fh;
+      for (option = temp_option->Next; option && i < dy; option = option->Next, i += fh)
+        pspVideoPrint(UiMetric.Font, k, i, option->Text, 
+          UiMetric.MenuOptionBoxColor);
+
+      /* Down arrow */
+      if (option) pspVideoPrint(UiMetric.Font, arrow_x, i - fh - anim_frame, 
+          PSP_CHAR_DOWN_ARROW, UiMetric.MenuDecorColor);
     }
 
     pspVideoEnd();
@@ -1690,6 +1782,8 @@ const PspMenuItem* pspUiSelect(const char *title, const PspMenu *menu)
     pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
       COLOR(0, 0, 0, UI_ANIM_FOG_STEP * UI_ANIM_FRAMES));
     pspVideoFillRect(sx, 0, dx, SCR_HEIGHT, UiMetric.MenuOptionBoxBg);
+    pspVideoGlowRect(sx, 0, dx, SCR_HEIGHT, 
+      COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
 
     /* Title */
     if (title)

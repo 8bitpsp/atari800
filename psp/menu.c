@@ -668,8 +668,6 @@ void InitMenu()
   UiMetric.ScrollbarColor = PSP_COLOR_GRAY;
   UiMetric.ScrollbarBgColor = 0x44ffffff;
   UiMetric.ScrollbarWidth = 10;
-  UiMetric.DialogBorderColor = PSP_COLOR_GRAY;
-  UiMetric.DialogBgColor = PSP_COLOR_DARKGRAY;
   UiMetric.TextColor = PSP_COLOR_GRAY;
   UiMetric.SelectedColor = PSP_COLOR_YELLOW;
   UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x44);
@@ -683,11 +681,11 @@ void InitMenu()
   UiMetric.MenuOptionBoxColor = PSP_COLOR_GRAY;
   UiMetric.MenuOptionBoxBg = COLOR(0, 0, 33, 0xBB);
   UiMetric.MenuDecorColor = PSP_COLOR_YELLOW;
-  UiMetric.DialogFogColor = COLOR(0, 0, 0, 88);
   UiMetric.TitlePadding = 4;
   UiMetric.TitleColor = PSP_COLOR_WHITE;
   UiMetric.MenuFps = 30;
   UiMetric.TabBgColor = COLOR(0xcc,0xdb,0xe3, 0xff);
+  UiMetric.Animate = 1;
 }
 
 void DisplayMenu()
