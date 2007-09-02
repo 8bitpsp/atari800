@@ -887,6 +887,8 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
   sceRtcGetCurrentTick(&last_tick);
   ticks_per_upd = ticks_per_sec / UiMetric.MenuFps;
 
+  memset(call_list, 0, sizeof(call_list));
+
   /* Begin navigation loop */
   while (!ExitPSP)
   {
@@ -968,14 +970,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
           break;
     }
 
-    pspVideoBegin();
-
-    /* Clear screen */
-    if (UiMetric.Background) 
-      pspVideoPutImage(UiMetric.Background, 0, 0, 
-        UiMetric.Background->Width, UiMetric.Background->Height);
-    else 
-      pspVideoClearScreen();
+    pspVideoBeginList(call_list);
 
     /* Draw title */
     if (title)
@@ -1009,6 +1004,9 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
         0, SCR_HEIGHT - fh, SCR_WIDTH, help_copy, UiMetric.StatusBarColor);
     }
 
+    int sel_left = 0;
+    int sel_top = 0;
+
     /* Render the menu items */
     for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
     {
@@ -1020,41 +1018,77 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
 
           if (item == sel)
           {
-            int left = (j + icon_w / 2) - icon->Width / 2;
-            left = (left < sx) ? sx : left;
-            int top = (i + icon_h / 2) - icon->Height / 2;
-            top = (top < sy) ? sy : top;
-            pspVideoPutImage(icon, left, top, icon_w + 8, icon_h + 8);
+            sel_left = (j + icon_w / 2) - icon->Width / 2;
+            sel_top = (i + icon_h / 2) - icon->Height / 2;
           }
-          else pspVideoPutImage(icon, j, i, icon->Width, icon->Height);
+          else 
+          {
+            pspVideoPutImage(icon, j, i, icon_w, icon_h);
+            pspVideoFillRect(j, i, j + icon_w, i + icon_h, 
+              COLOR(0,0,0,UI_ANIM_FOG_STEP*2));
+          }
         }
 
-        if (item == sel)
-        {
-          pspVideoDrawRect(j - 4, i - 4, 
-            j + icon_w + 4, i + icon_h + 4, UiMetric.TextColor);
-          glow += glow_dir;
-          if (glow >= 5 || glow <= 2) glow_dir *= -1;
-          pspVideoGlowRect(j - 4, i - 4, 
-            j + icon_w + 4, i + icon_h + 4, UiMetric.SelectedColor, glow);
-        }
-        else 
+        if (item != sel)
         {
           pspVideoShadowRect(j, i, j + icon_w, i + icon_h, PSP_COLOR_BLACK, 3);
           pspVideoDrawRect(j, i, j + icon_w, i + icon_h, UiMetric.TextColor);
-        }
 
-        if (item->Caption)
-        {
-          x = j + icon_w / 2 
-            - pspFontGetTextWidth(UiMetric.Font, item->Caption) / 2;
-          pspVideoPrint(UiMetric.Font, x, 
-            i + icon_h + (fh / 2), item->Caption, 
-            (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
+          if (item->Caption)
+          {
+            x = j + icon_w / 2 
+              - pspFontGetTextWidth(UiMetric.Font, item->Caption) / 2;
+            pspVideoPrint(UiMetric.Font, x, 
+              i + icon_h + (fh / 2), item->Caption, 
+              (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
+          }
         }
       }
     }
 
+    pspVideoEnd();
+
+    pspVideoBegin();
+
+    /* Clear screen */
+    if (!UiMetric.Background) pspVideoClearScreen();
+    else pspVideoPutImage(UiMetric.Background, 0, 0, 
+      UiMetric.Background->Width, UiMetric.Background->Height);
+
+    pspVideoCallList(call_list);
+
+    /* Render the menu items */
+    for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
+      for (j = sx, c = 0; item && c < UiMetric.GalleryIconsPerRow; j += grid_w, c++, item = item->Next)
+        if (item->Icon)
+          pspVideoPutImage((PspImage*)item->Icon, j, i, icon_w, icon_h);
+
+    if (sel->Icon)
+    {
+      PspImage *icon = (PspImage*)sel->Icon;
+
+      sel_left = (sel_left < sx) ? sx : sel_left;
+      sel_left = (sel_left + icon->Width > dx) ? dx - icon->Width : sel_left;
+      sel_top = (sel_top < sy) ? sy : sel_top;
+      sel_top = (sel_top + icon->Height > dy) ? dy - icon->Height : sel_top;
+
+  	  pspVideoFillRect(sel_left - 3, sel_top - 3, 
+  	    sel_left + icon->Width + 3, sel_top + icon->Height + 3,
+        UiMetric.MenuOptionBoxBg);
+      pspVideoPutImage(icon, sel_left, sel_top, icon->Width, icon->Height);
+
+      glow += glow_dir;
+      if (glow >= 4 || glow <= 2) glow_dir *= -1;
+      pspVideoGlowRect(sel_left - 3, sel_top - 3, 
+  	    sel_left + icon->Width + 3, sel_top + icon->Height + 3,
+  	    UiMetric.SelectedColor, glow);
+    }
+/*
+    glow += glow_dir;
+    if (glow >= 5 || glow <= 2) glow_dir *= -1;
+    pspVideoGlowRect(j - 4, i - 4, 
+      j + icon_w + 4, i + icon_h + 4, UiMetric.SelectedColor, glow);
+*/
     /* Perform any custom drawing */
     if (gallery->OnRender)
       gallery->OnRender(gallery, sel);
