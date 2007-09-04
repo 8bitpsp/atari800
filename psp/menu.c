@@ -761,7 +761,12 @@ void DisplayMenu()
       pspCtrlSetPollingMode(PSP_CTRL_NORMAL);
 
       /* Resume emulation */
-      if (ResumeEmulation) RunEmulation();
+      if (ResumeEmulation)
+      {
+        pspUiFadeout();
+        RunEmulation();
+        pspUiFadeout();
+      }
     }
   } while (!ExitPSP);
 }

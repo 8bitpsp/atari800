@@ -120,6 +120,8 @@ void pspUiAlert(const char *message);
 void pspUiFlashMessage(const char *message);
 const PspMenuItem* pspUiSelect(const char *title, const PspMenu *menu);
 
+void pspUiFadeout();
+
 void pspUiGetStatusString(char *status, int length);
 
 PspUiMetric UiMetric;

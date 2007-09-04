@@ -879,10 +879,6 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
   /* Compute height of scrollbar */
   sbh = ((float)vis_v / (float)(rows + (rows % vis_v))) * (float)h;
 
-  int glow = 2, glow_dir = 1;
-
-  pspVideoWaitVSync();
-
   /* Compute update frequency */
   u32 ticks_per_sec, ticks_per_upd;
   u64 current_tick, last_tick;
@@ -893,8 +889,10 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
 
   memset(call_list, 0, sizeof(call_list));
   int refresh = 1;
-  int sel_left = 0;
-  int sel_top = 0;
+  int sel_left = 0, max_left = 0;
+  int sel_top = 0, max_top = 0;
+
+  pspVideoWaitVSync();
 
   /* Begin navigation loop */
   while (!ExitPSP)
@@ -1209,7 +1207,7 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
   int option_mode, max_option_w = 0;
   int arrow_w = pspFontGetTextWidth(UiMetric.Font, "\272");
   int anim_frame = 0, anim_incr = 1;
-  PspMenuItem *sel = menu->Selected;
+  PspMenuItem *sel = menu->Selected, *last_sel = NULL;
 
   sx = UiMetric.Left;
   sy = UiMetric.Top + ((title) ? (fh + UiMetric.TitlePadding) : 0);
@@ -1672,6 +1670,8 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
     /* Swap buffers */
     pspVideoWaitVSync();
     pspVideoSwapBuffers();
+
+    last_sel = sel;
   }
 
   menu->Selected = sel;
@@ -1980,5 +1980,34 @@ const PspMenuItem* pspUiSelect(const char *title, const PspMenu *menu)
   pspImageDestroy(screen);
 
   return sel;
+}
+
+void pspUiFadeout()
+{
+  /* Get copy of screen */
+  PspImage *screen = pspVideoGetVramBufferCopy();
+
+  /* Exit animation */
+  int i, alpha;
+  for (i = 0; i < UI_ANIM_FRAMES; i++)
+  {
+	  pspVideoBegin();
+
+	  /* Clear screen */
+	  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
+
+	  /* Apply fog and draw right frame */
+	  alpha = (0x100/UI_ANIM_FRAMES)*i-1;
+	  if (alpha > 0) 
+	    pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, COLOR(0,0,0,alpha));
+
+	  pspVideoEnd();
+
+    /* Swap buffers */
+    pspVideoWaitVSync();
+    pspVideoSwapBuffers();
+	}
+
+  pspImageDestroy(screen);
 }
 
