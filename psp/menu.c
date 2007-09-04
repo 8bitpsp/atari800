@@ -793,7 +793,7 @@ static void DisplayStateTab()
 {
   PspMenuItem *item;
   SceIoStat stat;
-  char caption[32];
+  char caption[128];
 
   const char *config_name;
   config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;

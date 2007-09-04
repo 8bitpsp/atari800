@@ -265,8 +265,7 @@ void pspVideoPutImage(const PspImage *image, int dx, int dy, int dw, int dh)
         = vertices[1].z = 0;
 
       sceGuDrawArray(GU_SPRITES,
-        GU_TEXTURE_16BIT | TexColor | GU_VERTEX_16BIT | GU_TRANSFORM_2D,
-        2, 0, vertices);
+        GU_TEXTURE_16BIT|TexColor|GU_VERTEX_16BIT|GU_TRANSFORM_2D,2,0,vertices);
     }
 
     sceGuDisable(GU_TEXTURE_2D);
@@ -312,7 +311,7 @@ void pspVideoDrawRect(int sx, int sy, int dx, int dy, u32 color)
   vert[3].x=dx; vert[3].y=sy; vert[3].color = color;
   vert[4].x=sx; vert[4].y=sy; vert[4].color = color;
 
-  sceGuDrawArray(GU_LINE_STRIP, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 5, NULL, vert);
+  sceGuDrawArray(GU_LINE_STRIP, GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D, 5, NULL, vert);
 }
 
 void pspVideoShadowRect(int sx, int sy, int dx, int dy, u32 color, int depth)
@@ -348,7 +347,7 @@ void pspVideoFillRect(int sx, int sy, int dx, int dy, u32 color)
   vert[2].x = dx; vert[2].y = dy; vert[2].color = color;
   vert[3].x = sx; vert[3].y = dy; vert[3].color = color;
 
-  sceGuDrawArray(GU_TRIANGLE_FAN, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 4, NULL, vert);
+  sceGuDrawArray(GU_TRIANGLE_FAN, GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D, 4, NULL, vert);
 }
 
 void pspVideoCallList(const void *list)
@@ -415,7 +414,7 @@ inline int PutChar(const PspFont *font, int sx, int sy, unsigned char sym, int c
     { vert[v].x = sx + j; vert[v].y = sy + h; vert[v].color = 0xff000000; v++; }
 
   /* Render the char as a set of pixels */
-  sceGuDrawArray(GU_POINTS, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, v, NULL, vert);
+  sceGuDrawArray(GU_POINTS, GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D, v, NULL, vert);
 
   /* Return total width */
   return w;

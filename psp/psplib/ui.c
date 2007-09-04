@@ -16,6 +16,7 @@
 #include <pspkernel.h>
 #include <psprtc.h>
 #include <psppower.h>
+#include <pspgu.h>
 
 #include "psp.h"
 #include "fileio.h"
@@ -797,7 +798,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
   SceCtrlData pad;
   PspMenuItem *sel = menu->Selected;
 
-  int sx, sy, dx, dy, x,
+  int sx, sy, dx, dy,
     orig_w = 272, orig_h = 228, // defaults
     fh, c, i, j,
     sbh, sby,
@@ -807,6 +808,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
     icon_idx, icon_off,
     rows, vis_v, vis_s,
     icons;
+  const PspMenuItem *last_sel = NULL;
 
   /* Find first icon and save its width/height */
   for (item = menu->First; item; item = item->Next)
@@ -836,6 +838,8 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
   rows = ceil((float)icons / (float)UiMetric.GalleryIconsPerRow); // number of rows total
   vis_v = h / grid_h; // number of rows visible at any time
   vis_s = UiMetric.GalleryIconsPerRow * vis_v; // max. number of icons visible on screen at any time
+  int max_w = ((float)icon_w * 1.5); /* Maximized width  */
+  int max_h = ((float)icon_h * 1.5); /* Maximized height */
 
   icon_idx = 0;
   icon_off = 0;
@@ -888,6 +892,9 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
   ticks_per_upd = ticks_per_sec / UiMetric.MenuFps;
 
   memset(call_list, 0, sizeof(call_list));
+  int refresh = 1;
+  int sel_left = 0;
+  int sel_top = 0;
 
   /* Begin navigation loop */
   while (!ExitPSP)
@@ -901,6 +908,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
       if (pad.Buttons & PSP_CTRL_RIGHT && sel->Next)
       {
         sel = sel->Next;
+        refresh = 1;
         if (++icon_idx >= vis_s)
         {
           icon_idx = 0;
@@ -911,7 +919,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
       else if (pad.Buttons & PSP_CTRL_LEFT && sel->Prev)
       {
         sel = sel->Prev;
-
+        refresh = 1;
         if (--icon_idx < 0)
         {
           icon_idx = vis_s-1;
@@ -924,7 +932,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
         for (i = 0; sel->Next && i < UiMetric.GalleryIconsPerRow; i++)
         {
           sel = sel->Next;
-
+          refresh = 1;
           if (++icon_idx >= vis_s)
           {
             icon_idx = 0;
@@ -938,7 +946,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
         for (i = 0; sel->Prev && i < UiMetric.GalleryIconsPerRow; i++)
         {
           sel = sel->Prev;
-
+          refresh = 1;
           if (--icon_idx < 0)
           {
             icon_idx = vis_s-1;
@@ -950,6 +958,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
 
       if (pad.Buttons & UiMetric.OkButton)
       {
+        refresh = 1;
         pad.Buttons &= ~UiMetric.OkButton;
         if (!gallery->OnOk || gallery->OnOk(gallery, sel))
           break;
@@ -958,6 +967,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
 
     if (pad.Buttons & UiMetric.CancelButton)
     {
+      refresh = 1;
       pad.Buttons &= ~UiMetric.CancelButton;
       if (gallery->OnCancel)
         gallery->OnCancel(gallery, sel);
@@ -966,87 +976,165 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
 
     if ((pad.Buttons & CONTROL_BUTTON_MASK) && gallery->OnButtonPress)
     {
+      refresh = 1;
       if (gallery->OnButtonPress(gallery, sel, pad.Buttons & CONTROL_BUTTON_MASK))
           break;
     }
 
-    pspVideoBeginList(call_list);
-
-    /* Draw title */
-    if (title)
+    if (last_sel != sel && last_sel && sel && sel->Icon)
     {
-      pspVideoPrint(UiMetric.Font, UiMetric.Left, UiMetric.Top, 
-        title, UiMetric.TitleColor);
-      pspVideoDrawLine(UiMetric.Left, UiMetric.Top + fh - 1, UiMetric.Left + w, 
-        UiMetric.Top + fh - 1, UiMetric.TitleColor);
-    }
-
-    /* Draw scrollbar */
-    if (sbh < h)
-    {
-      sby = sy + (((float)icon_off / (float)UiMetric.GalleryIconsPerRow) 
-        / (float)(rows + (rows % vis_v))) * (float)h;
-      pspVideoFillRect(dx - UiMetric.ScrollbarWidth, 
-        sy, dx, dy, UiMetric.ScrollbarBgColor);
-      pspVideoFillRect(dx - UiMetric.ScrollbarWidth, 
-        sby, dx, sby+sbh, UiMetric.ScrollbarColor);
-    }
-
-    /* Draw instructions */
-    if (sel && sel->HelpText)
-    {
-      static char help_copy[MAX_DIR_LEN];
-      strncpy(help_copy, sel->HelpText, MAX_DIR_LEN);
-      help_copy[MAX_DIR_LEN - 1] = '\0';
-      pspUiReplaceIcons(help_copy);
-
-      pspVideoPrintCenter(UiMetric.Font, 
-        0, SCR_HEIGHT - fh, SCR_WIDTH, help_copy, UiMetric.StatusBarColor);
-    }
-
-    int sel_left = 0;
-    int sel_top = 0;
-
-    /* Render the menu items */
-    for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
-    {
-      for (j = sx, c = 0; item && c < UiMetric.GalleryIconsPerRow; j += grid_w, c++, item = item->Next)
+      /* "Implode" animation */
+      int f, n = 2;
+      for (f = n - 1; f >= 0; f--)
       {
-        if (item->Icon)
-        {
-          PspImage *icon = (PspImage*)item->Icon;
+        pspVideoBegin();
 
-          if (item == sel)
-          {
-            sel_left = (j + icon_w / 2) - icon->Width / 2;
-            sel_top = (i + icon_h / 2) - icon->Height / 2;
-          }
-          else 
-          {
-            pspVideoPutImage(icon, j, i, icon_w, icon_h);
-            pspVideoFillRect(j, i, j + icon_w, i + icon_h, 
-              COLOR(0,0,0,UI_ANIM_FOG_STEP*2));
-          }
-        }
+        /* Clear screen */
+        if (!UiMetric.Background) pspVideoClearScreen();
+        else pspVideoPutImage(UiMetric.Background, 0, 0, 
+          UiMetric.Background->Width, UiMetric.Background->Height);
 
-        if (item != sel)
-        {
-          pspVideoShadowRect(j, i, j + icon_w, i + icon_h, PSP_COLOR_BLACK, 3);
-          pspVideoDrawRect(j, i, j + icon_w, i + icon_h, UiMetric.TextColor);
+        sceGuCallList(call_list); 
 
-          if (item->Caption)
-          {
-            x = j + icon_w / 2 
-              - pspFontGetTextWidth(UiMetric.Font, item->Caption) / 2;
-            pspVideoPrint(UiMetric.Font, x, 
-              i + icon_h + (fh / 2), item->Caption, 
-              (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
-          }
-        }
+        /* Render the menu items */
+        for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
+          for (j = sx, c = 0; item && c < UiMetric.GalleryIconsPerRow; j += grid_w, c++, item = item->Next)
+            if (item->Icon && item != last_sel)
+            {
+              pspVideoPutImage((PspImage*)item->Icon, j, i, icon_w, icon_h);
+              if (item->Caption)
+              {
+                int cap_pos = j + icon_w / 2 
+                  - pspFontGetTextWidth(UiMetric.Font, item->Caption) / 2;
+                pspVideoPrint(UiMetric.Font, cap_pos, 
+                  i + icon_h + (fh / 2), item->Caption, UiMetric.TextColor);
+              }
+            }
+
+        pspVideoFillRect(sel_left-(icon_w+((max_w-icon_w)/n)*f)/2,
+          sel_top-(icon_h+((max_h-icon_h)/n)*f)/2,
+          sel_left+(icon_w+((max_w-icon_w)/n)*f)/2,
+          sel_top+(icon_h+((max_h-icon_h)/n)*f)/2,
+          UiMetric.MenuOptionBoxBg);
+
+        pspVideoEnd();
+
+        /* Swap buffers */
+        pspVideoWaitVSync();
+        pspVideoSwapBuffers();
       }
     }
 
-    pspVideoEnd();
+    if (refresh)
+    {
+      sceGuStart(GU_CALL, call_list);
+
+      /* Draw title */
+      if (title)
+      {
+        pspVideoPrint(UiMetric.Font, UiMetric.Left, UiMetric.Top, 
+          title, UiMetric.TitleColor);
+        pspVideoDrawLine(UiMetric.Left, UiMetric.Top + fh - 1, UiMetric.Left + w, 
+          UiMetric.Top + fh - 1, UiMetric.TitleColor);
+      }
+
+      /* Draw scrollbar */
+      if (sbh < h)
+      {
+        sby = sy + (((float)icon_off / (float)UiMetric.GalleryIconsPerRow) 
+          / (float)(rows + (rows % vis_v))) * (float)h;
+        pspVideoFillRect(dx - UiMetric.ScrollbarWidth, 
+          sy, dx, dy, UiMetric.ScrollbarBgColor);
+        pspVideoFillRect(dx - UiMetric.ScrollbarWidth, 
+          sby, dx, sby+sbh, UiMetric.ScrollbarColor);
+      }
+
+      /* Draw instructions */
+      if (sel && sel->HelpText)
+      {
+        static char help_copy[MAX_DIR_LEN];
+        strncpy(help_copy, sel->HelpText, MAX_DIR_LEN);
+        help_copy[MAX_DIR_LEN - 1] = '\0';
+        pspUiReplaceIcons(help_copy);
+
+        pspVideoPrintCenter(UiMetric.Font, 
+          0, SCR_HEIGHT - fh, SCR_WIDTH, help_copy, UiMetric.StatusBarColor);
+      }
+
+      /* Render non-image components of each item */
+      for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
+      {
+        for (j = sx, c = 0; item && c < UiMetric.GalleryIconsPerRow; j += grid_w, c++, item = item->Next)
+        {
+          if (item != sel)
+          {
+            pspVideoShadowRect(j - 1, i - 1, j + icon_w, i + icon_h, PSP_COLOR_BLACK, 3);
+            pspVideoDrawRect(j - 1, i - 1, j + icon_w, i + icon_h, UiMetric.TextColor);
+          }
+          else
+          {
+            sel_left = j + icon_w / 2;
+            sel_top = i + icon_h / 2;
+
+            sel_left = (sel_left-max_w/2 < sx) ? sx+max_w/2 : sel_left;
+            sel_top = (sel_top-max_h/2 < UiMetric.Top) 
+              ? UiMetric.Top+max_h/2 : sel_top;
+            sel_left = (sel_left+max_w/2 > dx) ? dx-max_w/2 : sel_left;
+            sel_top = (sel_top+max_h/2 > dy) ? dy-max_h/2 : sel_top;
+          }
+        }
+      }
+
+      /* Perform any custom drawing */
+      if (gallery->OnRender)
+        gallery->OnRender(gallery, sel);
+
+      sceGuFinish();
+    }
+
+    if (last_sel != sel && last_sel && sel && sel->Icon)
+    {
+      /* Popup animation */
+      int f, n = 2;
+      for (f = 0; f <= n >> 1; f++)
+      {
+        pspVideoBegin();
+
+        /* Clear screen */
+        if (!UiMetric.Background) pspVideoClearScreen();
+        else pspVideoPutImage(UiMetric.Background, 0, 0, 
+          UiMetric.Background->Width, UiMetric.Background->Height);
+
+        sceGuCallList(call_list); 
+
+        /* Render the menu items */
+        for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
+          for (j = sx, c = 0; item && c < UiMetric.GalleryIconsPerRow; j += grid_w, c++, item = item->Next)
+            if (item->Icon && item != sel)
+            {
+              pspVideoPutImage((PspImage*)item->Icon, j, i, icon_w, icon_h);
+              if (item->Caption && item != sel)
+              {
+                int cap_pos = j + icon_w / 2 
+                  - pspFontGetTextWidth(UiMetric.Font, item->Caption) / 2;
+                pspVideoPrint(UiMetric.Font, cap_pos, 
+                  i + icon_h + (fh / 2), item->Caption, UiMetric.TextColor);
+              }
+            }
+
+        pspVideoFillRect(sel_left-(icon_w+((max_w-icon_w)/n)*f)/2,
+          sel_top-(icon_h+((max_h-icon_h)/n)*f)/2,
+          sel_left+(icon_w+((max_w-icon_w)/n)*f)/2,
+          sel_top+(icon_h+((max_h-icon_h)/n)*f)/2,
+          UiMetric.MenuOptionBoxBg);
+
+        pspVideoEnd();
+
+        /* Swap buffers */
+        pspVideoWaitVSync();
+        pspVideoSwapBuffers();
+      }
+    }
 
     pspVideoBegin();
 
@@ -1055,45 +1143,44 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
     else pspVideoPutImage(UiMetric.Background, 0, 0, 
       UiMetric.Background->Width, UiMetric.Background->Height);
 
-    pspVideoCallList(call_list);
+    sceGuCallList(call_list); 
 
     /* Render the menu items */
     for (i = sy, item = top; item && i + grid_h < dy; i += grid_h)
       for (j = sx, c = 0; item && c < UiMetric.GalleryIconsPerRow; j += grid_w, c++, item = item->Next)
-        if (item->Icon)
+        if (item->Icon && item != sel)
+        {
           pspVideoPutImage((PspImage*)item->Icon, j, i, icon_w, icon_h);
+          if (item->Caption && item != sel)
+          {
+            int cap_pos = j + icon_w / 2 
+              - pspFontGetTextWidth(UiMetric.Font, item->Caption) / 2;
+            pspVideoPrint(UiMetric.Font, cap_pos, 
+              i + icon_h + (fh / 2), item->Caption, UiMetric.TextColor);
+          }
+        }
 
-    if (sel->Icon)
+    if (sel && sel->Icon)
     {
-      PspImage *icon = (PspImage*)sel->Icon;
-
-      sel_left = (sel_left < sx) ? sx : sel_left;
-      sel_left = (sel_left + icon->Width > dx) ? dx - icon->Width : sel_left;
-      sel_top = (sel_top < sy) ? sy : sel_top;
-      sel_top = (sel_top + icon->Height > dy) ? dy - icon->Height : sel_top;
-
-  	  pspVideoFillRect(sel_left - 3, sel_top - 3, 
-  	    sel_left + icon->Width + 3, sel_top + icon->Height + 3,
-        UiMetric.MenuOptionBoxBg);
-      pspVideoPutImage(icon, sel_left, sel_top, icon->Width, icon->Height);
-
-      glow += glow_dir;
-      if (glow >= 4 || glow <= 2) glow_dir *= -1;
-      pspVideoGlowRect(sel_left - 3, sel_top - 3, 
-  	    sel_left + icon->Width + 3, sel_top + icon->Height + 3,
-  	    UiMetric.SelectedColor, glow);
+      pspVideoPutImage((PspImage*)sel->Icon, sel_left-max_w/2, sel_top-max_h/2,
+        max_w, max_h);
+      pspVideoGlowRect(sel_left-max_w/2, sel_top-max_h/2,
+        sel_left+max_w/2, sel_top+max_h/2,
+        COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
     }
-/*
-    glow += glow_dir;
-    if (glow >= 5 || glow <= 2) glow_dir *= -1;
-    pspVideoGlowRect(j - 4, i - 4, 
-      j + icon_w + 4, i + icon_h + 4, UiMetric.SelectedColor, glow);
-*/
-    /* Perform any custom drawing */
-    if (gallery->OnRender)
-      gallery->OnRender(gallery, sel);
+
+    if (sel && sel->Caption)
+    {
+      int cap_left = sel_left
+        - pspFontGetTextWidth(UiMetric.Font, sel->Caption) / 2;
+      pspVideoPrint(UiMetric.Font, cap_left, 
+        sel_top + max_h/2 - (fh + (fh - UiMetric.Font->Ascent)), sel->Caption, 
+        UiMetric.TextColor);
+    }
 
     pspVideoEnd();
+
+    last_sel = sel;
 
     /* Wait if needed */
     do { sceRtcGetCurrentTick(&current_tick); }
