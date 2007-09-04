@@ -494,7 +494,7 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
   PspMenu *menu;
   PspFile *file;
   PspFileList *list;
-  const PspMenuItem *sel;
+  const PspMenuItem *sel, *last_sel;
   PspMenuItem *item;
   SceCtrlData pad;
   char *instr;
@@ -530,10 +530,14 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
   u32 ticks_per_sec, ticks_per_upd;
   u64 current_tick, last_tick;
 
+  memset(call_list, 0, sizeof(call_list));
+
+  int sel_top = 0, last_sel_top = 0, fast_scroll;
+
   /* Begin browsing (outer) loop */
   while (!ExitPSP)
   {
-    sel = NULL;
+    sel = last_sel = NULL;
     pos.Top = NULL;
     pspMenuClear(menu);
 
@@ -616,6 +620,8 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
       if (!pspCtrlPollControls(&pad))
         continue;
 
+      fast_scroll = 0;
+
       /* Check the directional buttons */
       if (sel)
       {
@@ -624,12 +630,14 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
           if (pos.Index+1 >= lnmax) { pos.Offset++; pos.Top=pos.Top->Next; } 
           else pos.Index++;
           sel=sel->Next;
+          fast_scroll = pad.Buttons & PSP_CTRL_ANALDOWN;
         }
         else if ((pad.Buttons & PSP_CTRL_UP || pad.Buttons & PSP_CTRL_ANALUP) && sel->Prev)
         {
           if (pos.Index - 1 < 0) { pos.Offset--; pos.Top=pos.Top->Prev; }
           else pos.Index--;
           sel = sel->Prev;
+          fast_scroll = pad.Buttons & PSP_CTRL_ANALUP;
         }
         else if (pad.Buttons & PSP_CTRL_LEFT)
         {
@@ -712,13 +720,7 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
 
       is_dir = (unsigned int)sel->Param & PSP_FILEIO_DIR;
 
-      pspVideoBegin();
-
-      /* Clear screen */
-      if (UiMetric.Background) 
-        pspVideoPutImage(UiMetric.Background, 0, 0, UiMetric.Background->Width, 
-          UiMetric.Background->Height);
-      else pspVideoClearScreen();
+      sceGuStart(GU_CALL, call_list);
 
       /* Draw current path */
       pspVideoPrint(UiMetric.Font, sx, UiMetric.Top, cur_path, 
@@ -758,17 +760,74 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
         item && i < lnmax; item = item->Next, j += fh, i++)
       {
         if (item == sel)
-          pspVideoFillRect(sx, j, sx + w, j + fh, UiMetric.SelectedBgColor);
+        {
+          sel_top = j;
+          continue;
+        }
+        else if (item == last_sel) last_sel_top = j;
 
         pspVideoPrintClipped(UiMetric.Font, sx + 10, j, item->Caption, w - 10, 
-          "...", (item == sel) ? UiMetric.SelectedColor :
-            ((unsigned int)item->Param & PSP_FILEIO_DIR) 
-              ? UiMetric.BrowserDirectoryColor : UiMetric.BrowserFileColor);
+          "...", ((unsigned int)item->Param & PSP_FILEIO_DIR) 
+            ? UiMetric.BrowserDirectoryColor : UiMetric.BrowserFileColor);
       }
 
       /* Perform any custom drawing */
       if (browser->OnRender)
         browser->OnRender(browser, "not implemented");
+
+      sceGuFinish();
+
+      if (sel != last_sel && sel && last_sel)
+      {
+        /* Move animation */
+        int f, n = (fast_scroll) ? 2 : 4;
+        for (f = 0; f <= n; f++)
+        {
+          pspVideoBegin();
+
+          /* Clear screen */
+          if (!UiMetric.Background) pspVideoClearScreen();
+          else pspVideoPutImage(UiMetric.Background, 0, 0, 
+            UiMetric.Background->Width, UiMetric.Background->Height);
+
+          sceGuCallList(call_list);
+
+          int box_top = last_sel_top-((last_sel_top-sel_top)/n)*f;
+          pspVideoFillRect(sx, box_top, 
+            sx + w, box_top + fh, UiMetric.SelectedBgColor);
+          pspVideoPrintClipped(UiMetric.Font, sx + 10, last_sel_top, 
+            last_sel->Caption, w - 10, "...", 
+            ((unsigned int)last_sel->Param & PSP_FILEIO_DIR) 
+              ? UiMetric.BrowserDirectoryColor : UiMetric.BrowserFileColor);
+          pspVideoPrintClipped(UiMetric.Font, sx + 10, sel_top, 
+            sel->Caption, w - 10, "...", UiMetric.SelectedColor);
+
+          pspVideoEnd();
+
+          /* Swap buffers */
+          pspVideoWaitVSync();
+          pspVideoSwapBuffers();
+        }
+      }
+
+      pspVideoBegin();
+
+      /* Clear screen */
+      if (UiMetric.Background) 
+        pspVideoPutImage(UiMetric.Background, 0, 0, UiMetric.Background->Width, 
+          UiMetric.Background->Height);
+      else pspVideoClearScreen();
+
+      sceGuCallList(call_list);
+
+      /* Render selected item */
+      if (sel)
+      {
+        pspVideoFillRect(sx, sel_top, 
+          sx + w, sel_top + fh, UiMetric.SelectedBgColor);
+        pspVideoPrintClipped(UiMetric.Font, sx + 10, sel_top, 
+          sel->Caption, w - 10, "...", UiMetric.SelectedColor);
+      }
 
       pspVideoEnd();
 
@@ -780,6 +839,8 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
       /* Swap buffers */
       pspVideoWaitVSync();
       pspVideoSwapBuffers();
+
+      last_sel = sel;
     }
   }
 
@@ -1088,6 +1149,8 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
         gallery->OnRender(gallery, sel);
 
       sceGuFinish();
+
+      refresh = 0;
     }
 
     if (last_sel != sel && last_sel && sel && sel->Icon)
@@ -1996,7 +2059,7 @@ void pspUiFadeout()
 	  /* Clear screen */
 	  pspVideoPutImage(screen, 0, 0, screen->Width, screen->Height);
 
-	  /* Apply fog and draw right frame */
+	  /* Apply fog */
 	  alpha = (0x100/UI_ANIM_FRAMES)*i-1;
 	  if (alpha > 0) 
 	    pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, COLOR(0,0,0,alpha));
