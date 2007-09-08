@@ -970,15 +970,8 @@ int OnSplashButtonPress(const struct PspUiSplash *splash,
 /* Handles drawing of generic items */
 void OnGenericRender(const void *uiobject, const void *item_obj)
 {
-  static char status[128];
-  pspUiGetStatusString(status, sizeof(status));
-
   /* Draw tabs */
-  int height = pspFontGetLineHeight(UiMetric.Font);
-  int width = pspFontGetTextWidth(UiMetric.Font, status);
-  pspVideoPrint(UiMetric.Font, SCR_WIDTH - width, 0, status, PSP_COLOR_WHITE);
-
-  int i, x;
+  int i, x, width, height = pspFontGetLineHeight(UiMetric.Font);
   for (i = 0, x = 5; i <= TAB_MAX; i++, x += width + 10)
   {
     width = -10;

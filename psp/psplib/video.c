@@ -204,8 +204,6 @@ void pspVideoPutImage(const PspImage *image, int dx, int dy, int dw, int dh)
   void *pixels;
   int width;
 
-  sceKernelDcacheWritebackAll();
-
   if (image->PowerOfTwo)
   {
     pixels = image->Pixels;
@@ -216,6 +214,8 @@ void pspVideoPutImage(const PspImage *image, int dx, int dy, int dw, int dh)
     pixels = GetBuffer(image);
     width = BUF_WIDTH;
   }
+
+  sceKernelDcacheWritebackAll();
 
   if (image->Depth != PSP_IMAGE_INDEXED &&
     dw == image->Viewport.Width && dh == image->Viewport.Height)
@@ -240,7 +240,7 @@ void pspVideoPutImage(const PspImage *image, int dx, int dy, int dw, int dh)
     sceGuTexImage(0, width, width, width, pixels);
     sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
-
+ 
     struct TexVertex* vertices;
     int start, end, sc_end, slsz_scaled;
     slsz_scaled = ceil((float)dw * (float)SLICE_SIZE) / (float)image->Viewport.Width;
