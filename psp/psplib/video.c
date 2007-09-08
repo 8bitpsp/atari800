@@ -115,12 +115,14 @@ void pspVideoInit()
   sceGuSync(0,0);
 
   /* Compute VBlank frequency */
-  u64 t0, t1;
-  sceDisplayWaitVblankStart();
-  sceRtcGetCurrentTick(&t0);
-  sceDisplayWaitVblankStart();
-  sceRtcGetCurrentTick(&t1);
-  VBlankFreq = round(1.00 / ((double)(t1 - t0) 
+  u64 t[2];
+  int i;
+  for (i = 0; i < 2; i++)
+  {
+    sceDisplayWaitVblankStart();
+    sceRtcGetCurrentTick(&t[i]);
+  }
+  VBlankFreq = round(1.00 / ((double)(t[1] - t[0]) 
     * (1.00 / (double)sceRtcGetTickResolution())));
 
   sceGuDisplay(GU_TRUE);
@@ -176,8 +178,6 @@ void* GetBuffer(const PspImage *image)
   last_w = w;
   last_h = h;
 
-  sceKernelDcacheWritebackAll();
-
   return ScratchBuffer;
 }
 
@@ -203,6 +203,8 @@ void pspVideoPutImage(const PspImage *image, int dx, int dy, int dw, int dh)
 
   void *pixels;
   int width;
+
+  sceKernelDcacheWritebackAll();
 
   if (image->PowerOfTwo)
   {
