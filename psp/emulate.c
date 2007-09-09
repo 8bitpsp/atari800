@@ -261,9 +261,6 @@ void RunEmulation()
 {
   float ratio;
 
-  Screen->Viewport.Width = 336;
-  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
-
   /* Reconfigure visible dimensions, if necessary */
   if (CropScreen)
   {
@@ -285,7 +282,6 @@ void RunEmulation()
   case DISPLAY_MODE_FIT_HEIGHT:
     ratio = (float)SCR_HEIGHT / (float)Screen->Viewport.Height;
     ScreenW = 336.0f * ratio - 2;
-//    ScreenW = (float)Screen->Viewport.Width * ratio - 2;
     ScreenH = SCR_HEIGHT;
     break;
   case DISPLAY_MODE_FILL_SCREEN:
@@ -293,6 +289,7 @@ void RunEmulation()
     ScreenH = SCR_HEIGHT;
     break;
   }
+
   ScreenX = (SCR_WIDTH / 2) - (ScreenW / 2);
   ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
   ClearScreen = 1;

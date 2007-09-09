@@ -149,7 +149,8 @@ static char *ConfigPath;
 char *ScreenshotPath;
 
 static const char 
-  *NoCartName = "BASIC",
+  *BasicName = "BASIC",
+  *EmptyCartName = "5200",
   *OptionsFile = "options.ini",
   *ScreenshotDir = "screens",
   *ConfigDir = "config",
@@ -613,7 +614,7 @@ void InitMenu()
   UiMetric.ScrollbarWidth = 10;
   UiMetric.TextColor = PSP_COLOR_GRAY;
   UiMetric.SelectedColor = PSP_COLOR_YELLOW;
-  UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x44);
+  UiMetric.SelectedBgColor = COLOR(0xff,0xff,0xff,0x88);
   UiMetric.StatusBarColor = PSP_COLOR_WHITE;
   UiMetric.BrowserFileColor = PSP_COLOR_GRAY;
   UiMetric.BrowserDirectoryColor = PSP_COLOR_YELLOW;
@@ -705,6 +706,10 @@ void DisplayMenu()
     /* Set buttons to autorepeat */
     pspCtrlSetPollingMode(PSP_CTRL_AUTOREPEAT);
 
+    /* Reset viewport */
+    Screen->Viewport.Width = 336;
+    Screen->Viewport.X = (ATARI_WIDTH-336)/2;
+
     /* Display appropriate tab */
     switch (TabIndex)
     {
@@ -781,7 +786,8 @@ static void DisplayControlTab()
   int i;
   PspMenuItem *item;
   const char *config_name;
-  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame)
+    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
   char *game_name = strdup(config_name);
   char *dot = strrchr(game_name, '.');
   if (dot) *dot='\0';
@@ -806,7 +812,8 @@ static void DisplayStateTab()
   char caption[128];
 
   const char *config_name;
-  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame)
+    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
   char *path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
   char *game_name = strdup(config_name);
   char *dot = strrchr(game_name, '.');
@@ -1029,10 +1036,11 @@ int OnGenericButtonPress(const PspUiFileBrowser *browser,
 void OnSystemRender(const void *uiobject, const void *item_obj)
 {
   int w, h, x, y;
-  w = Screen->Viewport.Width >> 1;
-  h = Screen->Viewport.Height >> 1;
-  x = SCR_WIDTH - w - 8;
-  y = SCR_HEIGHT - h - 80;
+
+  w = Screen->Viewport.Width>>1;
+  h = Screen->Viewport.Height>>1;
+  x = SCR_WIDTH-w-8;
+  y = (SCR_HEIGHT>>1)-(h>>1);
 
   /* Draw a small representation of the screen */
   pspVideoShadowRect(x, y, x + w - 1, y + h - 1, PSP_COLOR_BLACK, 3);
@@ -1162,7 +1170,8 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   {
     /* Save to MS */
     const char *config_name = (LoadedGame) 
-      ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+      ? pspFileIoGetFilename(LoadedGame)
+      : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
 
     if (SaveGameConfig(config_name, &ActiveGameConfig)) 
       pspUiAlert("Layout saved successfully");
@@ -1202,7 +1211,8 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
     case SYSTEM_SCRNSHOT:
 
       /* Save screenshot */
-      game_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+      game_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame)
+        : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
       if (!pspUtilSavePngSeq(ScreenshotPath, game_name, Screen))
         pspUiAlert("ERROR: Screenshot not saved");
       else pspUiAlert("Screenshot saved successfully");
@@ -1329,7 +1339,8 @@ int OnSaveStateOk(const void *gallery, const void *item)
 {
   char *path;
   const char *config_name;
-  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame)
+    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
   path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
   sprintf(path, "%s%s.s%02i", SaveStatePath, config_name,
     ((const PspMenuItem*)item)->ID);
@@ -1360,7 +1371,8 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery, PspMenuItem *sel,
     char *path;
     char caption[32];
 	  const char *config_name;
-	  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame) : NoCartName;
+	  config_name = (LoadedGame) ? pspFileIoGetFilename(LoadedGame)
+      : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
     PspMenuItem *item = pspMenuFindItemById(gallery->Menu, sel->ID);
 
     path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
@@ -1555,7 +1567,8 @@ static void InitGameConfig(GameConfig *config)
 static int LoadGameConfig(const char *config_name, GameConfig *config)
 {
   char *path;
-  config_name = (config_name) ? config_name : NoCartName;
+  config_name = (config_name) ? config_name
+    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);
@@ -1588,7 +1601,8 @@ static int LoadGameConfig(const char *config_name, GameConfig *config)
 static int SaveGameConfig(const char *config_name, const GameConfig *config)
 {
   char *path;
-  config_name = (config_name) ? config_name : NoCartName;
+  config_name = (config_name) ? config_name
+    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);
