@@ -689,7 +689,7 @@ void InitMenu()
   /* Load default configuration */
   LoadGameConfig(DefaultConsoleConfigFile, &DefaultConsoleConfig);
   LoadGameConfig(DefaultComputerConfigFile, &DefaultComputerConfig);
-  LoadGameConfig(LoadedGame, &ActiveGameConfig);
+  LoadGameConfig(NULL, &ActiveGameConfig);
 }
 
 void DisplayMenu()
@@ -1567,8 +1567,8 @@ static void InitGameConfig(GameConfig *config)
 static int LoadGameConfig(const char *config_name, GameConfig *config)
 {
   char *path;
-  config_name = (config_name) ? config_name
-    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+  config_name = (config_name) ? pspFileIoGetFilename(config_name)
+    : ((machine_type == MACHINE_5200) ? EmptyCartName : BasicName);
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);
