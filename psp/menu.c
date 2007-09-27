@@ -158,11 +158,11 @@ static const char
   *DefaultComputerConfigFile = "comp_def",
   *DefaultConsoleConfigFile = "cons_def",
   *QuickloadFilter[] = 
-    { "XEX", "EXE", "COM", "BIN", /* Executables */
-      "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", /* Disk images */
-      "BAS", "LST", /* Listings */
-      "CAR", "CART", "ROM", "A52", /* Cartridges */
-      "CAS", /* Cassette tapes */
+    { "XEX", "EXE", "COM", "BIN", // Executables
+      "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", // Disk images
+      "BAS", "LST", // Listings
+      "CAR", "CART", "ROM", "A52", // Cartridges
+      "CAS", // Cassette tapes
       '\0' },
   PresentSlotText[] = "\026\244\020 Save\t\026\001\020 Load\t\026\243\020 Delete",
   EmptySlotText[] = "\026\244\020 Save",
