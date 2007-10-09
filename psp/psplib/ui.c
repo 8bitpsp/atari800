@@ -211,7 +211,7 @@ void pspUiAlert(const char *message)
     UiMetric.TextColor);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
     UiMetric.TextColor);
-  pspVideoGlowRect(sx, sy, dx, dy, 
+  pspVideoGlowRect(sx, sy, dx - 1, dy - 1, 
     COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
@@ -326,7 +326,7 @@ int pspUiYesNoCancel(const char *message)
     UiMetric.TextColor);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
     UiMetric.TextColor);
-  pspVideoGlowRect(sx, sy, dx, dy, 
+  pspVideoGlowRect(sx, sy, dx - 1, dy - 1, 
     COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
@@ -445,7 +445,7 @@ int pspUiConfirm(const char *message)
     UiMetric.TextColor);
   pspVideoPrint(UiMetric.Font, SCR_WIDTH / 2 - cw / 2, dy - fh * 1.5, instr, 
     UiMetric.TextColor);
-  pspVideoGlowRect(sx, sy, dx, dy, 
+  pspVideoGlowRect(sx, sy, dx - 1, dy - 1, 
     COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
@@ -557,7 +557,7 @@ void pspUiFlashMessage(const char *message)
   pspVideoFillRect(sx, sy, dx, dy, UiMetric.MenuOptionBoxBg);
   pspVideoPrintCenter(UiMetric.Font,
     sx, sy + fh, dx, message, UiMetric.TextColor);
-  pspVideoGlowRect(sx, sy, dx, dy, 
+  pspVideoGlowRect(sx, sy, dx - 1, dy - 1, 
     COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP*n), 2);
 
   pspVideoEnd();
@@ -1273,7 +1273,7 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
       pspVideoPutImage((PspImage*)sel->Icon, sel_left-max_w/2, sel_top-max_h/2,
         max_w, max_h);
       pspVideoGlowRect(sel_left-max_w/2, sel_top-max_h/2,
-        sel_left+max_w/2, sel_top+max_h/2,
+        sel_left+max_w/2 - 1, sel_top+max_h/2 - 1,
         COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
     }
 
@@ -1797,7 +1797,7 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
       pspVideoFillRect(min_x, min_y, max_x, max_y, UiMetric.MenuOptionBoxBg);
       pspVideoFillRect(min_x, sy + pos.Index * fh, max_x, 
         sy + (pos.Index + 1) * fh, UiMetric.MenuSelOptionBg);
-      pspVideoGlowRect(min_x, min_y, max_x, max_y, 
+      pspVideoGlowRect(min_x, min_y, max_x - 1, max_y - 1, 
         COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
 
       /* Render selected item + previous items */
@@ -2039,7 +2039,7 @@ const PspMenuItem* pspUiSelect(const char *title, const PspMenu *menu)
     /* Apply fog and draw frame */
     pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
       COLOR(0, 0, 0, UI_ANIM_FOG_STEP * UI_ANIM_FRAMES));
-    pspVideoGlowRect(sx, 0, dx, SCR_HEIGHT, 
+    pspVideoGlowRect(sx, 0, dx - 1, SCR_HEIGHT - 1, 
       COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
 
     /* Title */

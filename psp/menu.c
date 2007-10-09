@@ -46,6 +46,7 @@
 #define SYSTEM_CROP_SCREEN  5
 #define SYSTEM_STEREO       6
 #define SYSTEM_EJECT        7
+#define SYSTEM_DRIVE        8
 
 #define MACHINE_TYPE(machine, ram) ((ram) << 8 | ((machine) & 0xff))
 #define MACHINE(mtype)       ((mtype) & 0xff)
@@ -164,6 +165,9 @@ static const char
       "CAR", "CART", "ROM", "A52", // Cartridges
       "CAS", // Cassette tapes
       '\0' },
+  VacantText[] = "Off",
+  *DiskFilter[] = 
+    { "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", '\0' },
   PresentSlotText[] = "\026\244\020 Save\t\026\001\020 Load\t\026\243\020 Delete",
   EmptySlotText[] = "\026\244\020 Save",
   ControlHelpText[] = "\026\250\020 Change mapping\t\026\001\020 Save to \271\t"
@@ -324,6 +328,10 @@ static const PspMenuOptionDef
     MENU_OPTION("*", KBD|AKEY_5200_ASTERISK),
     MENU_OPTION("#", KBD|AKEY_5200_HASH),
     MENU_END_OPTIONS
+  },
+  DiskImageOptions[] = {
+    MENU_OPTION(VacantText, 0),
+    MENU_END_OPTIONS
   };
 
 /* Menu definitions */
@@ -430,7 +438,9 @@ static const PspMenuItemDef
   },
   SystemMenuDef[] = {
     MENU_HEADER("Storage"),
-    MENU_ITEM("Eject all", SYSTEM_EJECT, NULL, -1, 
+    MENU_ITEM("Disk drive 0", SYSTEM_DRIVE, DiskImageOptions, 0,
+      "\026\001\020 Load another disk\t\026"PSP_CHAR_TRIANGLE"\020 Eject disk"),
+    MENU_ITEM("Eject all", SYSTEM_EJECT, NULL, -1,
       "\026\001\020 Eject all disks/cartridges"),
     MENU_HEADER("Audio"),
     MENU_ITEM("Stereo sound", SYSTEM_STEREO, ToggleOptions, -1, 
@@ -514,6 +524,8 @@ static PspImage* LoadStateIcon(const char *path);
 static int LoadState(const char *path);
 static PspImage* SaveState(const char *path, PspImage *icon);
 
+int LoadDiskImage(const char *path);
+
 /* Interface callbacks */
 static int  OnGenericCancel(const void *uiobject, const void *param);
 static void OnGenericRender(const void *uiobject, const void *item_obj);
@@ -537,6 +549,7 @@ static int OnSaveStateButtonPress(const PspUiGallery *gallery,
 static void OnSystemRender(const void *uiobject, const void *item_obj);
 
 static int OnQuickloadOk(const void *browser, const void *path);
+static int OnSwitchDiskImageOk(const void *browser, const void *path);
 
 /* UI object declarations */
 PspUiSplash SplashScreen =
@@ -554,6 +567,16 @@ PspUiFileBrowser QuickloadBrowser =
   OnGenericCancel,
   OnGenericButtonPress,
   QuickloadFilter,
+  0
+};
+
+PspUiFileBrowser DiskBrowser = 
+{
+  OnGenericRender,
+  OnSwitchDiskImageOk,
+  OnGenericCancel,
+  OnGenericButtonPress,
+  DiskFilter,
   0
 };
 
@@ -749,6 +772,9 @@ void DisplayMenu()
     case TAB_SYSTEM:
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_STEREO);
       pspMenuSelectOptionByValue(item, (void*)stereo_enabled);
+      item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_DRIVE);
+      pspMenuModifyOption(item->Options,
+        pspFileIoGetFilename(sio_filename[0]), NULL);
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_MACHINE_TYPE);
       pspMenuSelectOptionByValue(item, (void*)(MACHINE_TYPE(machine_type, ram_size)));
       item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_CROP_SCREEN);
@@ -1113,6 +1139,11 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
       Atari800_InitialiseMachine();
       break;
     }
+    
+    /* Refresh disk image indicator */
+    PspMenuItem *item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_DRIVE);
+    pspMenuModifyOption(item->Options, pspFileIoGetFilename(sio_filename[0]),
+      NULL);
   }
   else if (uimenu == &OptionUiMenu)
   {
@@ -1162,6 +1193,65 @@ int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item,
   return 1;
 }
 
+static int OnSwitchDiskImageOk(const void *browser, const void *path)
+{
+  /* Detect disk type */
+  switch(Atari800_DetectFileType((char*)path))
+  {
+  case AFILE_ATR:
+  case AFILE_XFD:
+  case AFILE_ATR_GZ:
+  case AFILE_XFD_GZ:
+  case AFILE_DCM:
+    break;
+  default:
+    pspUiAlert("Unrecognized or unsupported disk image");
+    return 0;
+  }
+
+  /* Eject disk */
+  SIO_Dismount(1);
+
+  /* Switch system if necessary */
+  int old_mach = machine_type;
+  int old_ram = ram_size;
+  int reset = 0;
+  if (machine_type == MACHINE_5200)
+  {
+    reset = 1;
+    machine_type = MACHINE_XLXE;
+    ram_size = 64;
+    Atari800_InitialiseMachine();
+  }
+
+  /* Load image */
+  if (!Atari800_OpenFile((char*)path, reset, 1, 0))
+  {
+    if (reset)
+    {
+      machine_type = old_mach;
+      ram_size = old_ram;
+      Atari800_InitialiseMachine();
+      pspUiAlert("Error loading file");
+      return 0;
+    }
+  }
+
+  /* Reset loaded game */
+  if (LoadedGame) free(LoadedGame);
+  LoadedGame = strdup((char*)path);
+
+  /* Reset current game path */
+  if (GamePath) free(GamePath);
+  GamePath = pspFileIoGetParentDirectory(LoadedGame);
+
+  /* Load control set */
+  LoadGameConfig(LoadedGame, &ActiveGameConfig);
+
+  ResumeEmulation = 1;
+  return 1;
+}
+
 int OnMenuOk(const void *uimenu, const void* sel_item)
 {
   const char *game_name;
@@ -1181,6 +1271,10 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   {
     switch (((const PspMenuItem*)sel_item)->ID)
     {
+    case SYSTEM_DRIVE:
+      pspUiOpenBrowser(&DiskBrowser, (LoadedGame) ? LoadedGame : GamePath);
+      break;
+
     case SYSTEM_EJECT:
 
       if (!pspUiConfirm("This will reset the system. Proceed?"))
@@ -1218,6 +1312,11 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
       else pspUiAlert("Screenshot saved successfully");
       break;
     }
+
+    /* Refresh disk image indicator */
+    PspMenuItem *item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_DRIVE);
+    pspMenuModifyOption(item->Options, pspFileIoGetFilename(sio_filename[0]),
+      NULL);
   }
 
   return 0;
@@ -1261,6 +1360,21 @@ int OnMenuButtonPress(const struct PspUiMenu *uimenu, PspMenuItem* sel_item,
         pspMenuSelectOptionByValue(item, (void*)ActiveGameConfig.ButtonConfig[i]);
 
       return 0;
+    }
+  }
+  else if (uimenu == &SystemUiMenu)
+  {
+    if (sel_item->ID == SYSTEM_DRIVE && (button_mask & PSP_CTRL_TRIANGLE)
+      && (drive_status[0] != Off && drive_status[0] != NoDisk)
+      && pspUiConfirm("Eject disk?"))
+    {
+      /* Eject disk */
+      SIO_Dismount(1);
+
+      /* Refresh disk image indicator */
+      PspMenuItem *item = pspMenuFindItemById(SystemUiMenu.Menu, SYSTEM_DRIVE);
+      pspMenuModifyOption(item->Options, pspFileIoGetFilename(sio_filename[0]),
+        NULL);
     }
   }
 
