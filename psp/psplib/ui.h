@@ -15,6 +15,7 @@
 
 #include "video.h"
 #include "menu.h"
+#include "adhoc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,6 +114,9 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path);
 void pspUiOpenGallery(const PspUiGallery *gallery, const char *title);
 void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title);
 void pspUiSplashScreen(PspUiSplash *splash);
+
+int pspUiAdhocHost(const char *name, PspMAC mac);
+int pspUiAdhocJoin(PspMAC mac);
 
 int  pspUiConfirm(const char *message);
 int  pspUiYesNoCancel(const char *message);

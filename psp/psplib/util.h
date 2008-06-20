@@ -22,6 +22,11 @@ extern "C" {
 int pspUtilSavePngSeq(const char *path, const char *filename, const PspImage *image);
 int pspUtilSaveVramSeq(const char *path, const char *filename);
 
+unsigned long pspUtilComputeMemCrc(unsigned long inCrc32, const void *buf,
+                                   size_t bufLen);
+int pspUtilComputeOpenFileCrc(FILE *file, unsigned long *outCrc32);
+int pspUtilComputeFileCrc(const char *path, unsigned long *outCrc32);
+
 #ifdef __cplusplus
 }
 #endif

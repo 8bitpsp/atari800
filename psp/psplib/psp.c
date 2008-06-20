@@ -11,12 +11,12 @@
 /**     changes to this file.                               **/
 /*************************************************************/
 #include <pspkernel.h>
-#include <time.h>
-#include <malloc.h>
 #include <psppower.h>
+#include <malloc.h>
+#include <string.h>
 
 #include "psp.h"
-#include "fileio.h"
+#include "file.h"
 
 struct PspCallback
 {
@@ -24,21 +24,18 @@ struct PspCallback
   void *Param;
 };
 
+static char *AppDirectory;
 static struct PspCallback ExitCallback;
 int ExitPSP;
 
 static int _callback_thread(SceSize args, void* argp);
 static int _callback(int arg1, int arg2, void* common);
-
-static struct PspContext
-{
-  char *AppDirectory;
-} pspC;
+static char* get_parent_directory(const char *path);
 
 void pspInit(char *app_path)
 {
   ExitPSP = 0;
-  pspC.AppDirectory = pspFileIoGetParentDirectory(app_path);
+  AppDirectory = get_parent_directory(app_path);
 
   ExitCallback.Handler = NULL;
   ExitCallback.Param = NULL;
@@ -46,12 +43,12 @@ void pspInit(char *app_path)
 
 const char* pspGetAppDirectory()
 {
-  return pspC.AppDirectory;
+  return AppDirectory;
 }
 
 void pspShutdown()
 {
-  free(pspC.AppDirectory);
+  free(AppDirectory);
   sceKernelExitGame();
 }
 
@@ -70,22 +67,6 @@ int pspGetBatteryTime()
 int pspGetBatteryPercent()
 {
   return scePowerGetBatteryLifePercent();
-}
-
-void pspGetTime(PspTime *time)
-{
-  time_t t;
-  struct tm *tm;
-
-  sceKernelLibcTime(&t);
-  tm = localtime(&t);
-
-  time->Second = tm->tm_sec;
-  time->Minute = tm->tm_min;
-  time->Hour = tm->tm_hour;
-  time->Day = tm->tm_mday;
-  time->Month = tm->tm_mon + 1;
-  time->Year = 1900 + tm->tm_year;
 }
 
 static int _callback(int arg1, int arg2, void* common)
@@ -138,3 +119,14 @@ int pspStartCallbackThread()
   return thid;
 }
 
+char* get_parent_directory(const char *path)
+{
+  char *pos = strrchr(path, '/');
+  if (!pos) return NULL;
+
+  char *parent = (char*)malloc(sizeof(char) * (pos - path + 2));
+  strncpy(parent, path, pos - path + 1);
+  parent[pos - path + 1] = '\0';
+
+  return parent;
+}

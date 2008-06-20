@@ -1,6 +1,6 @@
 /** PSP helper library ***************************************/
 /**                                                         **/
-/**                        fileio.c                         **/
+/**                        file.c                         **/
 /**                                                         **/
 /** This file contains file management routines             **/
 /**                                                         **/
@@ -17,16 +17,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "fileio.h"
+#include "file.h"
 
-static int _pspFileIoCompareFilesByName(const void *s1, const void *s2);
-static void _pspFileIoSortFileList(PspFileList *list);
+static int  _pspFileCompareFilesByName(const void *s1, const void *s2);
+static void _pspFileSortFileList(PspFileList *list);
 
 // Returns a list of all files in a directory
 // path: path containing the files
 // filter: array of strings, each containing an extension. last element contains NULL ('\0')
 
-PspFileList* pspFileIoGetFileList(const char *path, const char **filter)
+PspFileList* pspFileGetFileList(const char *path, const char **filter)
 {
   SceUID fd = sceIoDopen(path);
 
@@ -51,7 +51,7 @@ PspFileList* pspFileIoGetFileList(const char *path, const char **filter)
       /* Loop through the list of allowed extensions and compare */
       for (pext = filter, loop = 1; *pext; pext++)
       {
-        if (pspFileIoEndsWith(dir.d_name, *pext))
+        if (pspFileEndsWith(dir.d_name, *pext))
         {
           loop = 0;
           break;
@@ -66,7 +66,7 @@ PspFileList* pspFileIoGetFileList(const char *path, const char **filter)
     file = (PspFile*)malloc(sizeof(PspFile));
     file->Name = strdup(dir.d_name);
     file->Next = 0;
-    file->Attrs = (dir.d_stat.st_attr & FIO_SO_IFDIR) ? PSP_FILEIO_DIR : 0;
+    file->Attrs = (dir.d_stat.st_attr & FIO_SO_IFDIR) ? PSP_FILE_DIR : 0;
 
     list->Count++;
 
@@ -88,22 +88,22 @@ PspFileList* pspFileIoGetFileList(const char *path, const char **filter)
 
   // Sort the files by name
 
-  _pspFileIoSortFileList(list);
+  _pspFileSortFileList(list);
 
   return list;
 }
 
-static int _pspFileIoCompareFilesByName(const void *s1, const void *s2)
+static int _pspFileCompareFilesByName(const void *s1, const void *s2)
 {
   PspFile *f1=*(PspFile**)s1, *f2=*(PspFile**)s2;
-  if ((f1->Attrs&PSP_FILEIO_DIR)==(f2->Attrs&PSP_FILEIO_DIR))
+  if ((f1->Attrs&PSP_FILE_DIR)==(f2->Attrs&PSP_FILE_DIR))
     return strcasecmp(f1->Name, f2->Name);
-  else if (f1->Attrs&PSP_FILEIO_DIR)
+  else if (f1->Attrs&PSP_FILE_DIR)
     return -1;
   else return 1;
 }
 
-static void _pspFileIoSortFileList(PspFileList *list)
+static void _pspFileSortFileList(PspFileList *list)
 {
   PspFile **files, *file;
   int i;
@@ -116,7 +116,7 @@ static void _pspFileIoSortFileList(PspFileList *list)
     files[i] = file;
 
   /* Sort the array */
-  qsort((void*)files, list->Count, sizeof(PspFile*), _pspFileIoCompareFilesByName);
+  qsort((void*)files, list->Count, sizeof(PspFile*), _pspFileCompareFilesByName);
 
   /* Rearrange the file entries in the list */
   list->First = files[0];
@@ -132,7 +132,7 @@ static void _pspFileIoSortFileList(PspFileList *list)
   free(files);
 }
 
-void pspFileIoDestroyFileList(PspFileList* list)
+void pspFileDestroyFileList(PspFileList* list)
 {
   PspFile *file, *next;
 
@@ -146,7 +146,7 @@ void pspFileIoDestroyFileList(PspFileList* list)
   free(list);
 }
 
-void pspFileIoEnterDirectory(char **cur_path, char *dir)
+void pspFileEnterDirectory(char **cur_path, char *dir)
 {
   /* Same directory */
   if (strcmp(dir, ".") == 0)
@@ -176,7 +176,7 @@ void pspFileIoEnterDirectory(char **cur_path, char *dir)
   *cur_path = new_path;
 }
 
-char* pspFileIoGetParentDirectory(const char *path)
+char* pspFileGetParentDirectory(const char *path)
 {
   char *pos = strrchr(path, '/');
 
@@ -189,7 +189,7 @@ char* pspFileIoGetParentDirectory(const char *path)
   return parent;
 }
 
-const char* pspFileIoGetFilename(const char *path)
+const char* pspFileGetFilename(const char *path)
 {
   char *pos;
   if (!(pos = strrchr(path, '/'))) 
@@ -197,13 +197,13 @@ const char* pspFileIoGetFilename(const char *path)
   return pos + 1;
 }
 
-int pspFileIoIsRootDirectory(const char *path)
+int pspFileIsRootDirectory(const char *path)
 {
   char *pos = strchr(path, '/');
   return !(pos && (*(pos + 1)));
 }
 
-const char* pspFileIoGetFileExtension(const char *path)
+const char* pspFileGetFileExtension(const char *path)
 {
   const char *filename = strrchr(path, '/');
 
@@ -214,7 +214,7 @@ const char* pspFileIoGetFileExtension(const char *path)
   return (ext) ? ext + 1 : filename + strlen(filename);
 }
 
-int pspFileIoEndsWith(const char *filename, const char *ext)
+int pspFileEndsWith(const char *filename, const char *ext)
 {
   int fn_len, ext_len;
   const char *file_ext;
@@ -233,7 +233,7 @@ int pspFileIoEndsWith(const char *filename, const char *ext)
   return 0;
 }
 
-int pspFileIoCheckIfExists(const char *path)
+int pspFileCheckIfExists(const char *path)
 {
   SceIoStat stat;
   memset(&stat, 0, sizeof(stat));
@@ -244,7 +244,20 @@ int pspFileIoCheckIfExists(const char *path)
   return 1;
 }
 
-int pspFileIoDelete(const char *path)
+int pspFileDelete(const char *path)
 {
   return sceIoRemove(path) >= 0;
+}
+
+int pspFileGetFileSize(const char *path)
+{
+  FILE *fd = fopen(path, "rb");
+  if(!fd) return 0;
+
+  /* Seek to end of file, and get size */
+  fseek(fd, 0, SEEK_END);
+  int size = ftell(fd);
+  fclose(fd);
+
+  return size;
 }

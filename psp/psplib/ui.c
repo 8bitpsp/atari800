@@ -17,9 +17,10 @@
 #include <psprtc.h>
 #include <psppower.h>
 #include <pspgu.h>
+#include <pspnet_adhocmatching.h>
 
 #include "psp.h"
-#include "fileio.h"
+#include "file.h"
 #include "ctrl.h"
 #include "ui.h"
 #include "font.h"
@@ -28,6 +29,9 @@
 
 #define UI_ANIM_FRAMES   8
 #define UI_ANIM_FOG_STEP 0x0f
+
+#define ADHOC_INITIALIZING  "Initializing Ad-hoc networking. Please wait..."
+#define ADHOC_AWAITING_JOIN "Waiting for someone to join..."
 
 #define CONTROL_BUTTON_MASK \
   (PSP_CTRL_CIRCLE | PSP_CTRL_TRIANGLE | PSP_CTRL_CROSS | PSP_CTRL_SQUARE | \
@@ -69,6 +73,30 @@ struct UiPos
   int Offset;
   const PspMenuItem *Top;
 };
+
+struct AdhocMatchEvent
+{
+  int NewEvent;
+  int EventID;
+  PspMAC EventMAC;
+  PspMAC CurrentMAC;
+  char OptData[512];
+};
+
+static struct AdhocMatchEvent _adhoc_match_event;
+
+static void adhocMatchingCallback(int unk1, 
+                                  int event, 
+                                  unsigned char *mac2, 
+                                  int opt_len, 
+                                  void *opt_data);
+
+#define ADHOC_PENDING     0
+#define ADHOC_WAIT_CLI    1
+#define ADHOC_WAIT_HOST   2
+#define ADHOC_WAIT_EST    3
+#define ADHOC_ESTABLISHED 4
+#define ADHOC_EST_AS_CLI  5
 
 /* TODO: dynamically allocate ?? */
 static unsigned int __attribute__((aligned(16))) call_list[524288];//262144];
@@ -590,8 +618,8 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
   if (!start_path)
     start_path = pspGetAppDirectory();
 
-  char *cur_path = pspFileIoGetParentDirectory(start_path);
-  const char *cur_file = pspFileIoGetFilename(start_path);
+  char *cur_path = pspFileGetParentDirectory(start_path);
+  const char *cur_file = pspFileGetFilename(start_path);
   struct UiPos pos;
   int lnmax, lnhalf;
   int sby, sbh, j, h, w, fh = pspFontGetLineHeight(UiMetric.Font);
@@ -619,13 +647,13 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
     pspMenuClear(menu);
 
     /* Load list of files for the selected path */
-    if ((list = pspFileIoGetFileList(cur_path, browser->Filter)))
+    if ((list = pspFileGetFileList(cur_path, browser->Filter)))
     {
       /* Check for a parent path, prepend .. if necessary */
-      if ((hasparent =! pspFileIoIsRootDirectory(cur_path)))
+      if ((hasparent =! pspFileIsRootDirectory(cur_path)))
       {
         item = pspMenuAppendItem(menu, "..", 0);
-        item->Param = (void*)PSP_FILEIO_DIR;
+        item->Param = (void*)PSP_FILE_DIR;
       }
 
       /* Add a menu item for each file */
@@ -645,15 +673,15 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
       cur_file = NULL;
 
       /* Destroy the file list */
-      pspFileIoDestroyFileList(list);
+      pspFileDestroyFileList(list);
     }
     else
     {
       /* Check for a parent path, prepend .. if necessary */
-      if ((hasparent =! pspFileIoIsRootDirectory(cur_path)))
+      if ((hasparent =! pspFileIsRootDirectory(cur_path)))
       {
         item = pspMenuAppendItem(menu, "..", 0);
-        item->Param = (void*)PSP_FILEIO_DIR;
+        item->Param = (void*)PSP_FILE_DIR;
       }
     }
 
@@ -733,10 +761,10 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
         /* File/dir selection */
         if (pad.Buttons & UiMetric.OkButton)
         {
-          if (((unsigned int)sel->Param & PSP_FILEIO_DIR))
+          if (((unsigned int)sel->Param & PSP_FILE_DIR))
           {
             /* Selected a directory, descend */
-            pspFileIoEnterDirectory(&cur_path, sel->Caption);
+            pspFileEnterDirectory(&cur_path, sel->Caption);
             break;
           }
           else
@@ -760,9 +788,9 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
 
       if (pad.Buttons & PSP_CTRL_TRIANGLE)
       {
-        if (!pspFileIoIsRootDirectory(cur_path))
+        if (!pspFileIsRootDirectory(cur_path))
         {
-          pspFileIoEnterDirectory(&cur_path, "..");
+          pspFileEnterDirectory(&cur_path, "..");
           break;
         }
       }
@@ -790,7 +818,7 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
         if (exit) goto exit_browser;
       }
 
-      is_dir = (unsigned int)sel->Param & PSP_FILEIO_DIR;
+      is_dir = (unsigned int)sel->Param & PSP_FILE_DIR;
 
       sceGuStart(GU_CALL, call_list);
 
@@ -830,7 +858,7 @@ void pspUiOpenBrowser(PspUiFileBrowser *browser, const char *start_path)
 
         pspVideoPrintClipped(UiMetric.Font, sx + 10, j, item->Caption, w - 10, 
           "...", (item == sel) ? UiMetric.SelectedColor
-            : ((unsigned int)item->Param & PSP_FILEIO_DIR)
+            : ((unsigned int)item->Param & PSP_FILE_DIR)
             ? UiMetric.BrowserDirectoryColor : UiMetric.BrowserFileColor);
      }
 
@@ -1003,8 +1031,8 @@ void pspUiOpenGallery(const PspUiGallery *gallery, const char *title)
   ticks_per_upd = ticks_per_sec / UiMetric.MenuFps;
 
   memset(call_list, 0, sizeof(call_list));
-  int sel_left = 0, max_left = 0;
-  int sel_top = 0, max_top = 0;
+  int sel_left = 0 /*, max_left = 0 */;
+  int sel_top = 0 /*, max_top = 0 */;
 
   pspVideoWaitVSync();
 
@@ -1598,7 +1626,7 @@ void pspUiOpenMenu(const PspUiMenu *uimenu, const char *title)
                 else pspVideoPutImage(UiMetric.Background, 0, 0, 
                   UiMetric.Background->Viewport.Width, 
                   UiMetric.Background->Height);
-                
+
           	  pspVideoCallList(call_list);
 
               /* Perform any custom drawing */
@@ -2057,8 +2085,9 @@ const PspMenuItem* pspUiSelect(const char *title, const PspMenu *menu)
     }
 
     /* Up arrow */
-    if (pos.Top->Prev) pspVideoPrint(UiMetric.Font, SCR_WIDTH - arrow_w * 2,
-        sy + anim_frame, PSP_CHAR_UP_ARROW, UiMetric.MenuDecorColor);
+    if (pos.Top && pos.Top->Prev) pspVideoPrint(UiMetric.Font, 
+      SCR_WIDTH - arrow_w * 2, sy + anim_frame, 
+      PSP_CHAR_UP_ARROW, UiMetric.MenuDecorColor);
 
     /* Down arrow */
     if (item) pspVideoPrint(UiMetric.Font, SCR_WIDTH - arrow_w * 2, 
@@ -2153,6 +2182,503 @@ const PspMenuItem* pspUiSelect(const char *title, const PspMenu *menu)
   return sel;
 }
 
+static void adhocMatchingCallback(int unk1, 
+                                  int event, 
+                                  unsigned char *mac2, 
+                                  int opt_len, 
+                                  void *opt_data)
+{
+  _adhoc_match_event.NewEvent = 1;
+  _adhoc_match_event.EventID = event;
+  memcpy(_adhoc_match_event.EventMAC, mac2, 
+    sizeof(unsigned char) * 6);
+  strncpy(_adhoc_match_event.OptData, opt_data, sizeof(char) * opt_len);
+  _adhoc_match_event.OptData[opt_len] = '\0';
+}
+
+int pspUiAdhocHost(const char *name, PspMAC mac)
+{
+  /* Check the wlan switch */
+  if (!pspAdhocIsWLANEnabled())
+  {
+    pspUiAlert("Error: WLAN switch is turned off"); 
+    return 0;
+  }
+
+  pspUiFlashMessage(ADHOC_INITIALIZING);
+  _adhoc_match_event.NewEvent = 0;
+
+  /* Initialize ad-hoc networking */
+  if (!pspAdhocInit("ULUS99999", adhocMatchingCallback))
+  {
+    pspUiAlert("Ad-hoc networking initialization failed"); 
+    return 0;
+  }
+
+  /* Wait for someone to join */
+  pspUiFlashMessage(ADHOC_AWAITING_JOIN);
+
+  int state = ADHOC_WAIT_CLI;
+  PspMAC selected;
+
+  /* Loop until someone joins or host cancels */
+  while (!ExitPSP)
+  {
+    SceCtrlData pad;
+
+    if (!pspCtrlPollControls(&pad))
+      continue;
+
+    if (pad.Buttons & UiMetric.CancelButton) 
+      break;
+
+    if (_adhoc_match_event.NewEvent)
+    {
+      _adhoc_match_event.NewEvent = 0;
+
+      switch(_adhoc_match_event.EventID)
+      {
+      case MATCHING_JOINED:
+        break;
+      case MATCHING_DISCONNECT:
+      case MATCHING_CANCELED:
+        if (pspAdhocIsMACEqual(selected, _adhoc_match_event.EventMAC))
+          state = ADHOC_WAIT_CLI;
+        break;
+      case MATCHING_SELECTED:
+        if (state == ADHOC_WAIT_CLI)
+        {
+          memcpy(selected, _adhoc_match_event.EventMAC, 
+            sizeof(unsigned char) * 6);
+          sceKernelDelayThread(1000000/60);
+          pspAdhocSelectTarget(selected);
+          state = ADHOC_WAIT_EST;
+        }
+        break;
+      case MATCHING_ESTABLISHED:
+        if (state == ADHOC_WAIT_EST)
+        {
+          if (pspAdhocIsMACEqual(selected, _adhoc_match_event.EventMAC))
+          {
+            state = ADHOC_ESTABLISHED;
+            goto established;
+          }
+        }
+        break;
+      }
+    }
+
+    /* Wait if needed */
+    sceKernelDelayThread(1000000/60);
+  }
+
+established:
+
+  if (state == ADHOC_ESTABLISHED)
+  {
+    sceKernelDelayThread(1000000);
+
+    PspMAC my_mac;
+    pspAdhocGetOwnMAC(my_mac);
+    memcpy(mac, selected, sizeof(unsigned char) * 6);
+
+    if (!pspAdhocConnect(my_mac))
+      return 0;
+
+    return 1;
+  }
+
+  /* Shutdown ad-hoc networking */
+  pspAdhocShutdown();
+  return 0;
+}
+
+int pspUiAdhocJoin(PspMAC mac)
+{
+  /* Check the wlan switch */
+  if (!pspAdhocIsWLANEnabled())
+  {
+    pspUiAlert("Error: WLAN switch is turned off"); 
+    return 0;
+  }
+
+  char *title = "Select host";
+
+  /* Get copy of screen */
+  PspImage *screen = pspVideoGetVramBufferCopy();
+
+  pspUiFlashMessage(ADHOC_INITIALIZING);
+  _adhoc_match_event.NewEvent = 0;
+
+  /* Initialize ad-hoc networking */
+  if (!pspAdhocInit("ULUS99999", adhocMatchingCallback))
+  {
+    pspUiAlert("Ad-hoc networking initialization failed"); 
+    pspImageDestroy(screen);
+    return 0;
+  }
+
+  /* Initialize menu */
+  PspMenu *menu = pspMenuCreate();
+
+  int state = ADHOC_PENDING;
+  const PspMenuItem *sel, *item, *last_sel = NULL;
+  struct UiPos pos;
+  int lnmax, lnhalf;
+  int i, j, h, w, fh = pspFontGetLineHeight(UiMetric.Font);
+  int sx, sy, dx, dy;
+  int anim_frame = 0, anim_incr = 1;
+  int arrow_w = pspFontGetTextWidth(UiMetric.Font, PSP_CHAR_DOWN_ARROW);
+  int widest = 100;
+  int sel_top = 0, last_sel_top = 0;
+  SceCtrlData pad;
+  PspMAC selected;
+
+  char *help_text = strdup(SelectorTemplate);
+  ReplaceIcons(help_text);
+
+  memset(call_list, 0, sizeof(call_list));
+
+  /* Determine width of the longest caption */
+  for (item = menu->First; item; item = item->Next)
+  {
+    if (item->Caption)
+    {
+      int item_w = pspFontGetTextWidth(UiMetric.Font, item->Caption);
+      if (item_w > widest) 
+        widest = item_w;
+    }
+  }
+
+  widest += UiMetric.MenuItemMargin * 2;
+
+  sx = SCR_WIDTH - widest;
+  sy = UiMetric.Top;
+  dx = SCR_WIDTH;
+  dy = UiMetric.Bottom;
+  w = dx - sx;
+  h = dy - sy;
+
+  u32 ticks_per_sec, ticks_per_upd;
+  u64 current_tick, last_tick;
+
+  /* Initialize variables */
+  lnmax = (dy - sy) / fh;
+  lnhalf = lnmax >> 1;
+
+  sel = menu->First;
+  pos.Top = menu->First;
+  pos.Index = pos.Offset = 0;
+
+  pspVideoWaitVSync();
+
+  /* Compute update frequency */
+  ticks_per_sec = sceRtcGetTickResolution();
+  sceRtcGetCurrentTick(&last_tick);
+  ticks_per_upd = ticks_per_sec / UiMetric.MenuFps;
+
+  if (UiMetric.Animate)
+  {
+    /* Intro animation */
+    for (i = 0; i < UI_ANIM_FRAMES; i++)
+    {
+      pspVideoBegin();
+
+      /* Clear screen */
+      pspVideoPutImage(screen, 0, 0, screen->Viewport.Width, screen->Height);
+
+      /* Apply fog and draw right frame */
+      pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+        COLOR(0, 0, 0, UI_ANIM_FOG_STEP * i));
+      pspVideoFillRect(SCR_WIDTH - (i * (widest / UI_ANIM_FRAMES)), 
+        0, dx, SCR_HEIGHT, UiMetric.MenuOptionBoxBg);
+
+      pspVideoEnd();
+
+      /* Swap buffers */
+      pspVideoWaitVSync();
+      pspVideoSwapBuffers();
+    }
+  }
+
+  int fast_scroll, found_psp;
+
+  /* Begin navigation loop */
+  while (!ExitPSP)
+  {
+    if (_adhoc_match_event.NewEvent)
+    {
+      found_psp = 0;
+      PspMenuItem *adhoc_item;
+      _adhoc_match_event.NewEvent = 0;
+
+      if (_adhoc_match_event.EventID == MATCHING_JOINED)
+      {
+        /* Make sure the machine isn't already on the list */
+        for (adhoc_item = menu->First; adhoc_item; adhoc_item = adhoc_item->Next)
+          if (adhoc_item->Param && pspAdhocIsMACEqual((unsigned char*)adhoc_item->Param, 
+            _adhoc_match_event.EventMAC))
+          {
+            found_psp = 1;
+            break;
+          }
+
+        if (!found_psp)
+        {
+          /* Create item */
+          adhoc_item = pspMenuAppendItem(menu, _adhoc_match_event.OptData, 0);
+
+          /* Add MAC */
+          unsigned char *opp_mac = (unsigned char*)malloc(6 * sizeof(unsigned char));
+          memcpy(opp_mac, _adhoc_match_event.EventMAC, sizeof(unsigned char) * 6);
+          adhoc_item->Param = opp_mac;
+
+          if (!pos.Top) 
+            sel = pos.Top = menu->First;
+        }
+      }
+      else if (_adhoc_match_event.EventID == MATCHING_DISCONNECT)
+      {
+        /* Make sure the machine IS on the list */
+        for (adhoc_item = menu->First; adhoc_item; adhoc_item = adhoc_item->Next)
+          if (adhoc_item->Param && pspAdhocIsMACEqual((unsigned char*)adhoc_item->Param, 
+            _adhoc_match_event.EventMAC))
+          {
+            found_psp = 1; 
+            break; 
+          }
+
+        if (found_psp)
+        {
+          /* Free MAC & destroy item */
+          free((void*)adhoc_item->Param);
+          pspMenuDestroyItem(menu, adhoc_item);
+
+          /* Reset items */
+          sel = pos.Top = menu->First;
+          pos.Index = pos.Offset = 0;
+        }
+      }
+      else if (_adhoc_match_event.EventID == MATCHING_REJECTED)
+      {
+        /* Host rejected connection */
+        if (state == ADHOC_WAIT_HOST)
+        {
+          state = ADHOC_PENDING;
+        }
+      }
+      else if (_adhoc_match_event.EventID == MATCHING_ESTABLISHED)
+      {
+        if (state == ADHOC_WAIT_HOST)
+        {
+          state = ADHOC_EST_AS_CLI;
+          break;
+        }
+      }
+    }
+
+    /* Delay */
+    sceKernelDelayThread(1000000/60);
+
+    if (!pspCtrlPollControls(&pad))
+      continue;
+
+    fast_scroll = 0;
+
+    /* Incr/decr animation frame */
+    anim_frame += (UiMetric.Animate) ? anim_incr : 0;
+    if (anim_frame > 2 || anim_frame < 0) 
+      anim_incr *= -1;
+
+    /* Check the directional buttons */
+    if (sel)
+    {
+      if ((pad.Buttons & PSP_CTRL_DOWN || pad.Buttons & PSP_CTRL_ANALDOWN) 
+        && sel->Next)
+      {
+        fast_scroll = pad.Buttons & PSP_CTRL_ANALDOWN;
+        if (pos.Index + 1 >= lnmax) { pos.Offset++; pos.Top = pos.Top->Next; } 
+        else pos.Index++;
+        sel = sel->Next;
+      }
+      else if ((pad.Buttons & PSP_CTRL_UP || pad.Buttons & PSP_CTRL_ANALUP) 
+        && sel->Prev)
+      {
+        fast_scroll = pad.Buttons & PSP_CTRL_ANALUP;
+        if (pos.Index - 1 < 0) { pos.Offset--; pos.Top = pos.Top->Prev; }
+        else pos.Index--;
+        sel = sel->Prev;
+      }
+      else if (pad.Buttons & PSP_CTRL_LEFT)
+      {
+        for (i = 0; sel->Prev && i < lnhalf; i++)
+        {
+          if (pos.Index - 1 < 0) { pos.Offset--; pos.Top = pos.Top->Prev; }
+          else pos.Index--;
+          sel = sel->Prev;
+        }
+      }
+      else if (pad.Buttons & PSP_CTRL_RIGHT)
+      {
+        for (i = 0; sel->Next && i < lnhalf; i++)
+        {
+          if (pos.Index + 1 >= lnmax) { pos.Offset++; pos.Top = pos.Top->Next; }
+          else pos.Index++;
+          sel=sel->Next;
+        }
+      }
+
+      if (pad.Buttons & UiMetric.OkButton) 
+      {
+        if (state == ADHOC_PENDING)
+        {
+          state = ADHOC_WAIT_HOST;
+          memcpy(selected, sel->Param, sizeof(unsigned char) * 6);
+          pspAdhocSelectTarget(selected);
+        }
+      }
+    }
+
+    if (pad.Buttons & UiMetric.CancelButton) { sel = NULL; break; }
+
+    /* Render to a call list */
+    sceGuStart(GU_CALL, call_list);
+
+    /* Apply fog and draw frame */
+    pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+      COLOR(0, 0, 0, UI_ANIM_FOG_STEP * UI_ANIM_FRAMES));
+    pspVideoGlowRect(sx, 0, dx - 1, SCR_HEIGHT - 1, 
+      COLOR(0xff,0xff,0xff,UI_ANIM_FOG_STEP * UI_ANIM_FRAMES), 2);
+
+    /* Title */
+    if (title)
+      pspVideoPrintCenter(UiMetric.Font, sx, 0, dx,
+        title, UiMetric.TitleColor);
+
+    /* Render the items */
+    for (item = (PspMenuItem*)pos.Top, i = 0, j = sy; 
+      item && i < lnmax; item = item->Next, j += fh, i++)
+    {
+      if (item == sel) sel_top = j;
+      pspVideoPrintClipped(UiMetric.Font, sx + 10, j, item->Caption, w - 10, 
+        "...", (item == sel) ? UiMetric.SelectedColor : UiMetric.TextColor);
+    }
+
+    /* Up arrow */
+    if (pos.Top && pos.Top->Prev) pspVideoPrint(UiMetric.Font, 
+      SCR_WIDTH - arrow_w * 2, sy + anim_frame, 
+      PSP_CHAR_UP_ARROW, UiMetric.MenuDecorColor);
+
+    /* Down arrow */
+    if (item) pspVideoPrint(UiMetric.Font, SCR_WIDTH - arrow_w * 2, 
+        dy - fh - anim_frame, PSP_CHAR_DOWN_ARROW, UiMetric.MenuDecorColor);
+
+    /* Shortcuts */
+    pspVideoPrintCenter(UiMetric.Font, sx, SCR_HEIGHT - fh, dx,
+      help_text, UiMetric.StatusBarColor);
+
+    sceGuFinish();
+
+    if (sel != last_sel && !fast_scroll && sel && last_sel 
+      && UiMetric.Animate)
+    {
+      /* Move animation */
+      int f, n = 4;
+      for (f = 1; f <= n; f++)
+      {
+        pspVideoBegin();
+
+        /* Clear screen */
+        pspVideoPutImage(screen, 0, 0, screen->Viewport.Width, screen->Height);
+        pspVideoFillRect(sx, 0, dx, SCR_HEIGHT, UiMetric.MenuOptionBoxBg);
+
+        /* Selection box */
+        int box_top = last_sel_top-((last_sel_top-sel_top)/n)*f;
+        pspVideoFillRect(sx, box_top, sx + w, box_top + fh, 
+          UiMetric.SelectedBgColor);
+
+        sceGuCallList(call_list);
+
+        pspVideoEnd();
+
+        pspVideoWaitVSync();
+        pspVideoSwapBuffers();
+      }
+    }
+
+    pspVideoBegin();
+
+    /* Clear screen */
+    pspVideoPutImage(screen, 0, 0, screen->Viewport.Width, screen->Height);
+    pspVideoFillRect(sx, 0, dx, SCR_HEIGHT, UiMetric.MenuOptionBoxBg);
+
+    if (sel) pspVideoFillRect(sx, sel_top, sx + w, sel_top + fh, 
+      UiMetric.SelectedBgColor);
+
+    sceGuCallList(call_list);
+
+    pspVideoEnd();
+
+    /* Wait if needed */
+    do { sceRtcGetCurrentTick(&current_tick); }
+    while (current_tick - last_tick < ticks_per_upd);
+    last_tick = current_tick;
+
+    /* Swap buffers */
+    pspVideoWaitVSync();
+    pspVideoSwapBuffers();
+
+    last_sel = sel;
+    last_sel_top = sel_top;
+  }
+
+  if (UiMetric.Animate)
+  {
+    /* Exit animation */
+    for (i = UI_ANIM_FRAMES - 1; i >= 0; i--)
+    {
+      pspVideoBegin();
+
+      /* Clear screen */
+      pspVideoPutImage(screen, 0, 0, screen->Viewport.Width, screen->Height);
+
+      /* Apply fog and draw right frame */
+      pspVideoFillRect(0, 0, SCR_WIDTH, SCR_HEIGHT, 
+        COLOR(0, 0, 0, UI_ANIM_FOG_STEP * i));
+      pspVideoFillRect(SCR_WIDTH - (i * (widest / UI_ANIM_FRAMES)), 
+        0, dx, SCR_HEIGHT, UiMetric.MenuOptionBoxBg);
+
+      pspVideoEnd();
+
+      /* Swap buffers */
+      pspVideoWaitVSync();
+      pspVideoSwapBuffers();
+    }
+  }
+
+  free(help_text);
+  pspImageDestroy(screen);
+
+  /* Free memory used for MACs; menu resources */
+  for (item = menu->First; item; item=item->Next)
+    if (item->Param) free((void*)item->Param);
+  pspMenuDestroy(menu);
+
+  if (state == ADHOC_EST_AS_CLI)
+  {
+    memcpy(mac, selected, sizeof(unsigned char) * 6);
+
+    if (!pspAdhocConnect(selected))
+      return 0;
+
+    return 1;
+  }
+
+  /* Shut down ad-hoc networking */
+  pspAdhocShutdown();
+  return 0;
+}
+
 void pspUiFadeout()
 {
   /* Get copy of screen */
@@ -2181,4 +2707,3 @@ void pspUiFadeout()
 
   pspImageDestroy(screen);
 }
-

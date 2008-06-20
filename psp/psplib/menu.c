@@ -14,7 +14,7 @@
 
 #include "menu.h"
 
-static void _pspMenuDestroyItem(PspMenuItem* item);
+static void DestroyItem(PspMenuItem* item);
 
 PspMenu* pspMenuCreate()
 {
@@ -35,7 +35,7 @@ void pspMenuClear(PspMenu *menu)
   for (item = menu->First; item; item = next)
   {
     next = item->Next;
-    _pspMenuDestroyItem(item);
+    DestroyItem(item);
   }
 
   menu->Count = 0;
@@ -78,7 +78,10 @@ void pspMenuLoad(PspMenu *menu, const PspMenuItemDef *def)
   }
 }
 
-PspMenuOption* pspMenuAppendOption(PspMenuItem *item, const char *text, const void *value, int select)
+PspMenuOption* pspMenuAppendOption(PspMenuItem *item, 
+  const char *text, 
+  const void *value, 
+  int select)
 {
   PspMenuOption *option, *o;
 
@@ -225,7 +228,36 @@ PspMenuItem* pspMenuAppendItem(PspMenu *menu, const char *caption,
   return item;
 }
 
-void _pspMenuDestroyItem(PspMenuItem* item)
+int pspMenuDestroyItem(PspMenu *menu, PspMenuItem *which)
+{
+  PspMenuItem *item;
+  int found = 0;
+
+  /* Make sure the item is in the menu */
+  for (item = menu->First; item; item = item->Next)
+    if (item == which)
+    { found = 1; break; }
+  if (!found) return 0;
+
+  /* Redirect pointers */
+  if (item->Prev) item->Prev->Next = item->Next;
+  else menu->First = item->Next;
+  if (item->Next) item->Next->Prev = item->Prev;
+  else menu->Last = item->Prev;
+
+  if (menu->Selected == item) 
+    menu->Selected = item->Next;
+
+  /* Destroy the item */
+  DestroyItem(item);
+
+  /* Recompute stats */
+  menu->Count--;
+
+  return 1;
+}
+
+static void DestroyItem(PspMenuItem* item)
 {
   if (item->Caption) free(item->Caption);
   if (item->HelpText) free(item->HelpText);

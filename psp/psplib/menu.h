@@ -75,6 +75,7 @@ void           pspMenuClear(PspMenu* menu);
 void           pspMenuDestroy(PspMenu* menu);
 PspMenuItem*   pspMenuAppendItem(PspMenu* menu, const char* caption, 
   unsigned int id);
+int            pspMenuDestroyItem(PspMenu *menu, PspMenuItem *which);
 PspMenuOption* pspMenuAppendOption(PspMenuItem *item, const char *text, 
   const void *value, int select);
 void           pspMenuSelectOptionByIndex(PspMenuItem *item, int index);

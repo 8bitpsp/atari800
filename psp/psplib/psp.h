@@ -23,20 +23,6 @@ typedef enum
   PSP_EXIT_CALLBACK
 } CallbackType;
 
-struct _PspTime
-{
-  int Second;
-  int Minute;
-  int Hour;
-  int Day;
-  int Month;
-  int Year; 
-};
-
-typedef struct _PspTime PspTime;
-
-#define MAX_PATH 1024 // ??
-
 extern int  ExitPSP;
 
 void        pspInit(char *app_path);
@@ -45,10 +31,10 @@ const char* pspGetAppDirectory();
 void        pspSetClockFrequency(int freq);
 int         pspGetBatteryTime();
 int         pspGetBatteryPercent();
-void        pspGetTime(PspTime *time);
+
 /* Callbacks */
-int         pspRegisterCallback(CallbackType type, void (*func)(void *param), void *param);
-int         pspStartCallbackThread();
+int pspRegisterCallback(CallbackType type, void (*func)(void *param), void *param);
+int pspStartCallbackThread();
 
 #ifdef __cplusplus
 }
