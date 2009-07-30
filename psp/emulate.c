@@ -5,13 +5,13 @@
 #include <psptypes.h>
 #include <psprtc.h>
 
-#include "audio.h"
+#include "pl_snd.h"
 #include "video.h"
-#include "psp.h"
+#include "pl_psp.h"
 #include "ctrl.h"
-#include "perf.h"
+#include "pl_perf.h"
 #include "image.h"
-#include "kybd.h"
+#include "pl_vk.h"
 
 #include "config.h"
 #include "atari.h"
@@ -51,7 +51,7 @@ static u64 LastTick;
 static u64 CurrentTick;
 static int ShowKybd;
 static int key_ctrl;
-static PspFpsCounter FpsCounter;
+static pl_perf_counter FpsCounter;
 static PspKeyboardLayout *KeyboardLayout, *KeypadLayout;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
 static int TrigState[4] = { 1, 1, 1, 1 };
@@ -61,7 +61,7 @@ PspImage *Screen;
 
 static int ParseInput();
 static void CopyScreenBuffer();
-static void AudioCallback(void* buf, unsigned int *length, void *userdata);
+static void AudioCallback(pl_snd_sample* buf, unsigned int samples, void *userdata);
 static inline void HandleKeyInput(unsigned int code, int on);
 
 /* Initialize emulation */
@@ -91,7 +91,7 @@ int InitEmulation()
   KeypadLayout = pspKybdLoadLayout("atari5200.lyt", NULL, HandleKeyInput);
 
   /* Initialize performance counter */
-  pspPerfInitFps(&FpsCounter);
+  pl_perf_init_counter(&FpsCounter);
 
   /* Initialize emulator */
   int foo = 0;
@@ -100,6 +100,8 @@ int InitEmulation()
     pspImageDestroy(Screen);
     return 0;
   }
+
+  pl_snd_set_callback(0, AudioCallback, 0);
 
   return 1;
 }
@@ -167,7 +169,7 @@ void Atari_DisplayScreen(void)
   if (Config.ShowFps)
   {
     static char fps_display[64];
-    sprintf(fps_display, " %3.02f ", pspPerfGetFps(&FpsCounter));
+    sprintf(fps_display, " %3.02f ", pl_perf_update_counter(&FpsCounter));
 
     int width = pspFontGetTextWidth(&PspStockFont, fps_display);
     int height = pspFontGetLineHeight(&PspStockFont);
@@ -215,9 +217,8 @@ void Sound_Initialise(int *argc, char *argv[])
   Pokey_sound_init(FREQ_17_EXACT, SOUND_FREQ, 1, SND_BIT16);
 }
 
-void AudioCallback(void* buf, unsigned int *length, void *userdata)
+static void AudioCallback(pl_snd_sample* buf, unsigned int samples, void *userdata)
 {
-  PspSample *OutBuf = (PspSample*)buf;
   unsigned int nsamples = 1024;
   static short SoundBuffer[1024];
 
@@ -225,7 +226,7 @@ void AudioCallback(void* buf, unsigned int *length, void *userdata)
 
   int i;
   for (i = 0; i < nsamples; i++) 
-    OutBuf[i].Left = OutBuf[i].Right = SoundBuffer[i];
+    buf[i].stereo.l = buf[i].stereo.r = SoundBuffer[i];
 }
 
 void Sound_Update(void)
@@ -235,12 +236,12 @@ void Sound_Update(void)
 
 void Sound_Pause(void)
 {
-  pspAudioSetChannelCallback(0, NULL, 0);
+  pl_snd_pause(0);
 }
 
 void Sound_Continue(void)
 {
-  pspAudioSetChannelCallback(0, AudioCallback, 0);
+  pl_snd_resume(0);
 }
 
 #endif /* SOUND */
