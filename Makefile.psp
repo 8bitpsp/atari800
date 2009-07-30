@@ -2,7 +2,7 @@ PSPSDK=$(shell psp-config --pspsdk-path)
 
 PSPAPP=./psp
 DATA=$(PSPAPP)/data
-PSPLIB=$(PSPAPP)/psplib
+PSPLIB=$(PSPAPP)/lib
 
 PSP_APP_NAME=Atari800 PSP
 PSP_APP_VER=2.0.3.27
@@ -16,14 +16,9 @@ BUILD_APP=antic.o atari.o binload.o cartridge.o cassette.o compfile.o \
           cpu.o devices.o gtia.o log.o memory.o monitor.o pbi.o pia.o \
           pokey.o rtime.o sio.o util.o statesav.o ui.o input.o screen.o \
           pokeysnd.o colours.o sndsave.o mzpokeysnd.o remez.o ui_basic.o
-BUILD_PSPLIB=$(PSPLIB)/psp.o $(PSPLIB)/font.o $(PSPLIB)/image.o \
-             $(PSPLIB)/video.o $(PSPLIB)/audio.o $(PSPLIB)/fileio.o \
-             $(PSPLIB)/menu.o $(PSPLIB)/ui.o $(PSPLIB)/ctrl.o \
-             $(PSPLIB)/kybd.o $(PSPLIB)/perf.o $(PSPLIB)/util.o \
-             $(PSPLIB)/init.o
 BUILD_PSPAPP=atari_psp.o $(PSPAPP)/menu.o $(PSPAPP)/emulate.o
 
-OBJS=$(BUILD_PSPLIB) $(BUILD_APP) $(BUILD_PSPAPP)
+OBJS=$(BUILD_APP) $(BUILD_PSPAPP)
 
 DEFINES=-DSOUND_FREQ=44100 -DDONT_SYNC_WITH_HOST
 BASE_DEFS=-DPSP \
@@ -35,7 +30,13 @@ ASFLAGS=$(CFLAGS)
 INCDIR=$(PSPLIB) $(PSPAPP)
 LIBS=-lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc
 
+all: build_libs
+clean: clean_libs
+
 include $(PSPSDK)/lib/build.mak
 
-include $(PSPLIB)/build.mak
+build_libs:
+	cd $(PSPLIB) ; $(MAKE)
+clean_libs:
+	cd $(PSPLIB) ; $(MAKE) clean
 

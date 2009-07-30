@@ -17,10 +17,10 @@
 #include "image.h"
 #include "ui.h"
 #include "ctrl.h"
-#include "psp.h"
-#include "util.h"
-#include "init.h"
-#include "fileio.h"
+#include "pl_psp.h"
+#include "pl_util.h"
+#include "pl_ini.h"
+#include "pl_file.h"
 
 #define TAB_QUICKLOAD 0
 #define TAB_STATE     1
@@ -185,280 +185,264 @@ static const char *TabLabel[] =
 };
 
 /* Option definitions */
-static const PspMenuOptionDef
-  ToggleOptions[] = {
-    MENU_OPTION("Disabled", 0),
-    MENU_OPTION("Enabled",  1),
-    MENU_END_OPTIONS
-  },
-  ScreenSizeOptions[] = {
-    MENU_OPTION("Actual size",              DISPLAY_MODE_UNSCALED),
-    MENU_OPTION("4:3 scaled (fit height)",  DISPLAY_MODE_FIT_HEIGHT),
-    MENU_OPTION("16:9 scaled (fit screen)", DISPLAY_MODE_FILL_SCREEN),
-    MENU_END_OPTIONS
-  },
-  FrameSkipOptions[] = {
-    MENU_OPTION("No skipping",   0),
-    MENU_OPTION("Skip 1 frame",  1),
-    MENU_OPTION("Skip 2 frames", 2),
-    MENU_OPTION("Skip 3 frames", 3),
-    MENU_OPTION("Skip 4 frames", 4),
-    MENU_OPTION("Skip 5 frames", 5),
-    MENU_END_OPTIONS
-  },
-  PspClockFreqOptions[] = {
-    MENU_OPTION("222 MHz", 222),
-    MENU_OPTION("266 MHz", 266),
-    MENU_OPTION("300 MHz", 300),
-    MENU_OPTION("333 MHz", 333),
-    MENU_END_OPTIONS
-  },
-  ControlModeOptions[] = {
-    MENU_OPTION("\026\242\020 cancels, \026\241\020 confirms (US)",    0),
-    MENU_OPTION("\026\241\020 cancels, \026\242\020 confirms (Japan)", 1),
-    MENU_END_OPTIONS
-  },
-  MachineTypeOptions[] = {
-    MENU_OPTION("800",                 MACHINE_TYPE(MACHINE_OSB,  48)),
-    MENU_OPTION("800 XL",              MACHINE_TYPE(MACHINE_XLXE, 64)),
-    MENU_OPTION("130 XE",              MACHINE_TYPE(MACHINE_XLXE, 128)),
-    MENU_OPTION("320 XE (Compy Shop)", MACHINE_TYPE(MACHINE_XLXE, RAM_320_COMPY_SHOP)),
-    MENU_OPTION("320 XE (Rambo)",      MACHINE_TYPE(MACHINE_XLXE, RAM_320_RAMBO)),
-    MENU_OPTION("5200",                MACHINE_TYPE(MACHINE_5200, 16)),
-    MENU_END_OPTIONS
-  },
-  TVModeOptions[] = {
-    MENU_OPTION("NTSC", TV_NTSC),
-    MENU_OPTION("PAL",  TV_PAL),
-    MENU_END_OPTIONS
-  },
-  ComputerButtonMapOptions[] = {
-    /* Unmapped */
-    MENU_OPTION("None", 0),
-    /* Special keys */
-    MENU_OPTION("Special: Open Menu",     MET|META_SHOW_MENU),
-    MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS),
-    /* Console */
-    MENU_OPTION("Console: Reset",  SPC|-AKEY_WARMSTART),
-    MENU_OPTION("Console: Option", CSL|CONSOL_OPTION),
-    MENU_OPTION("Console: Select", CSL|CONSOL_SELECT),
-    MENU_OPTION("Console: Start",  CSL|CONSOL_START),
-    MENU_OPTION("Console: Help",   KBD|AKEY_HELP),
-    /* Joystick */
-    MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD),
-    MENU_OPTION("Joystick: Down", JOY|STICK_BACK),
-    MENU_OPTION("Joystick: Left", JOY|STICK_LEFT),
-    MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT),
-    MENU_OPTION("Joystick: Fire", TRG|0),
-    /* Keyboard */
-    MENU_OPTION("Keyboard: Up",   KBD|AKEY_UP), 
-    MENU_OPTION("Keyboard: Down", KBD|AKEY_DOWN),
-    MENU_OPTION("Keyboard: Left", KBD|AKEY_LEFT), 
-    MENU_OPTION("Keyboard: Right",KBD|AKEY_RIGHT),
-    /* Keyboard: Function keys */
-    MENU_OPTION("F1", KBD|AKEY_F1), MENU_OPTION("F2", KBD|AKEY_F2),
-    MENU_OPTION("F3", KBD|AKEY_F3), MENU_OPTION("F4", KBD|AKEY_F4),
-    /* Keyboard: misc */
-    MENU_OPTION("Space",       KBD|AKEY_SPACE), 
-    MENU_OPTION("Return",      KBD|AKEY_RETURN),
-    MENU_OPTION("Tab",         KBD|AKEY_TAB),
-    MENU_OPTION("Backspace",   KBD|AKEY_BACKSPACE),
-    MENU_OPTION("Escape",      KBD|AKEY_ESCAPE),
-    MENU_OPTION("Toggle CAPS", KBD|AKEY_CAPSTOGGLE),
-    MENU_OPTION("Break",       SPC|-AKEY_BREAK),
-    MENU_OPTION("Atari Key",   KBD|AKEY_ATARI),
-    MENU_OPTION("Shift",       STA|AKEY_SHFT),
-    MENU_OPTION("Control",     STA|AKEY_CTRL),
-    /* Keyboard: digits */
-    MENU_OPTION("1", KBD|AKEY_1), MENU_OPTION("2", KBD|AKEY_2),
-    MENU_OPTION("3", KBD|AKEY_3), MENU_OPTION("4", KBD|AKEY_4),
-    MENU_OPTION("5", KBD|AKEY_5), MENU_OPTION("6", KBD|AKEY_6),
-    MENU_OPTION("7", KBD|AKEY_7), MENU_OPTION("8", KBD|AKEY_8),
-    MENU_OPTION("9", KBD|AKEY_9), MENU_OPTION("0", KBD|AKEY_0),
-    /* Keyboard: letters */
-    MENU_OPTION("A", KBD|AKEY_a), MENU_OPTION("B", KBD|AKEY_b),
-    MENU_OPTION("C", KBD|AKEY_c), MENU_OPTION("D", KBD|AKEY_d),
-    MENU_OPTION("E", KBD|AKEY_e), MENU_OPTION("F", KBD|AKEY_f),
-    MENU_OPTION("G", KBD|AKEY_g), MENU_OPTION("H", KBD|AKEY_h),
-    MENU_OPTION("I", KBD|AKEY_i), MENU_OPTION("J", KBD|AKEY_j),
-    MENU_OPTION("K", KBD|AKEY_k), MENU_OPTION("L", KBD|AKEY_l),
-    MENU_OPTION("M", KBD|AKEY_m), MENU_OPTION("N", KBD|AKEY_n),
-    MENU_OPTION("O", KBD|AKEY_o), MENU_OPTION("P", KBD|AKEY_p),
-    MENU_OPTION("Q", KBD|AKEY_q), MENU_OPTION("R", KBD|AKEY_r),
-    MENU_OPTION("S", KBD|AKEY_s), MENU_OPTION("T", KBD|AKEY_t),
-    MENU_OPTION("U", KBD|AKEY_u), MENU_OPTION("V", KBD|AKEY_v),
-    MENU_OPTION("W", KBD|AKEY_w), MENU_OPTION("X", KBD|AKEY_x),
-    MENU_OPTION("Y", KBD|AKEY_y), MENU_OPTION("Z", KBD|AKEY_z),
-    /* Keyboard: symbols */
-    MENU_OPTION("< (less than)",   KBD|AKEY_LESS),
-    MENU_OPTION("> (greater than)",KBD|AKEY_GREATER),
-    MENU_OPTION("= (equals)",      KBD|AKEY_EQUAL),
-    MENU_OPTION("+ (plus)",        KBD|AKEY_PLUS),
-    MENU_OPTION("* (asterisk)",    KBD|AKEY_ASTERISK),
-    MENU_OPTION("/ (slash)",       KBD|AKEY_SLASH),
-    MENU_OPTION(": (colon)",       KBD|AKEY_COLON),
-    MENU_OPTION("; (semicolon)",   KBD|AKEY_SEMICOLON),
-    MENU_OPTION(", (comma)",       KBD|AKEY_COMMA), 
-    MENU_OPTION(". (period)",      KBD|AKEY_FULLSTOP),
-    MENU_OPTION("_ (underscore)",  KBD|AKEY_UNDERSCORE),
-    MENU_END_OPTIONS
-  },
-  ConsoleButtonMapOptions[] = {
-    /* Unmapped */
-    MENU_OPTION("None", 0),
-    /* Special keys */
-    MENU_OPTION("Special: Open Menu",     MET|META_SHOW_MENU),
-    MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS),
-    /* Console */
-    MENU_OPTION("Console: Start", KBD|AKEY_5200_START),
-    MENU_OPTION("Console: Pause", KBD|AKEY_5200_PAUSE),
-    MENU_OPTION("Console: Reset", KBD|AKEY_5200_RESET),
-    /* Joystick */
-    MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD),
-    MENU_OPTION("Joystick: Down", JOY|STICK_BACK),
-    MENU_OPTION("Joystick: Left", JOY|STICK_LEFT),
-    MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT),
-    MENU_OPTION("Joystick: Fire", TRG|0),
-    /* Keypad */
-    MENU_OPTION("1", KBD|AKEY_5200_1), MENU_OPTION("2", KBD|AKEY_5200_2),
-    MENU_OPTION("3", KBD|AKEY_5200_3), MENU_OPTION("4", KBD|AKEY_5200_4),
-    MENU_OPTION("5", KBD|AKEY_5200_5), MENU_OPTION("6", KBD|AKEY_5200_6),
-    MENU_OPTION("7", KBD|AKEY_5200_7), MENU_OPTION("8", KBD|AKEY_5200_8),
-    MENU_OPTION("9", KBD|AKEY_5200_9), MENU_OPTION("0", KBD|AKEY_5200_0),
-    MENU_OPTION("*", KBD|AKEY_5200_ASTERISK),
-    MENU_OPTION("#", KBD|AKEY_5200_HASH),
-    MENU_END_OPTIONS
-  },
-  DiskImageOptions[] = {
-    MENU_OPTION(VacantText, 0),
-    MENU_END_OPTIONS
-  };
+PL_MENU_OPTIONS_BEGIN(ToggleOptions)
+  PL_MENU_OPTION("Disabled", 0)
+  PL_MENU_OPTION("Enabled", 1)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(ScreenSizeOptions)
+  PL_MENU_OPTION("Actual size", DISPLAY_MODE_UNSCALED)
+  PL_MENU_OPTION("4:3 scaled (fit height)", DISPLAY_MODE_FIT_HEIGHT)
+  PL_MENU_OPTION("16:9 scaled (fit screen)", DISPLAY_MODE_FILL_SCREEN)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(PspClockFreqOptions)
+  PL_MENU_OPTION("222 MHz", 222)
+  PL_MENU_OPTION("266 MHz", 266)
+  PL_MENU_OPTION("300 MHz", 300)
+  PL_MENU_OPTION("333 MHz", 333)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(ControlModeOptions)
+  PL_MENU_OPTION("\026\242\020 cancels, \026\241\020 confirms (US)", 0)
+  PL_MENU_OPTION("\026\241\020 cancels, \026\242\020 confirms (Japan)", 1)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(FrameSkipOptions)
+  PL_MENU_OPTION("No skipping",  0)
+  PL_MENU_OPTION("Skip 1 frame", 1)
+  PL_MENU_OPTION("Skip 2 frame", 2)
+  PL_MENU_OPTION("Skip 3 frame", 3)
+  PL_MENU_OPTION("Skip 4 frame", 4)
+  PL_MENU_OPTION("Skip 5 frame", 5)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(MachineTypeOptions)
+  PL_MENU_OPTION("800",  MACHINE_TYPE(MACHINE_OSB,  48))
+  PL_MENU_OPTION("800 XL", MACHINE_TYPE(MACHINE_XLXE, 64))
+  PL_MENU_OPTION("130 XE", MACHINE_TYPE(MACHINE_XLXE, 128))
+  PL_MENU_OPTION("320 XE (Compy Shop)", MACHINE_TYPE(MACHINE_XLXE, RAM_320_COMPY_SHOP))
+  PL_MENU_OPTION("320 XE (Rambo)", MACHINE_TYPE(MACHINE_XLXE, RAM_320_RAMBO))
+  PL_MENU_OPTION("5200", MACHINE_TYPE(MACHINE_5200, 16))
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(TVModeOptions)
+  PL_MENU_OPTION("NTSC", TV_NTSC)
+  PL_MENU_OPTION("PAL",  TV_PAL)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(DiskImageOptions)
+  PL_MENU_OPTION(VacantText, 0)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(ComputerButtonMapOptions)
+  /* Unmapped */
+  PL_MENU_OPTION("None", 0)
+  /* Special keys */
+  PL_MENU_OPTION("Special: Open Menu",     MET|META_SHOW_MENU)
+  PL_MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS)
+  /* Console */
+  PL_MENU_OPTION("Console: Reset",  SPC|-AKEY_WARMSTART)
+  PL_MENU_OPTION("Console: Option", CSL|CONSOL_OPTION)
+  PL_MENU_OPTION("Console: Select", CSL|CONSOL_SELECT)
+  PL_MENU_OPTION("Console: Start",  CSL|CONSOL_START)
+  PL_MENU_OPTION("Console: Help",   KBD|AKEY_HELP)
+  /* Joystick */
+  PL_MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD)
+  PL_MENU_OPTION("Joystick: Down", JOY|STICK_BACK)
+  PL_MENU_OPTION("Joystick: Left", JOY|STICK_LEFT)
+  PL_MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT)
+  PL_MENU_OPTION("Joystick: Fire", TRG|0)
+  /* Keyboard */
+  PL_MENU_OPTION("Keyboard: Up",   KBD|AKEY_UP) 
+  PL_MENU_OPTION("Keyboard: Down", KBD|AKEY_DOWN)
+  PL_MENU_OPTION("Keyboard: Left", KBD|AKEY_LEFT) 
+  PL_MENU_OPTION("Keyboard: Right",KBD|AKEY_RIGHT)
+  /* Keyboard: Function keys */
+  PL_MENU_OPTION("F1", KBD|AKEY_F1) PL_MENU_OPTION("F2", KBD|AKEY_F2)
+  PL_MENU_OPTION("F3", KBD|AKEY_F3) PL_MENU_OPTION("F4", KBD|AKEY_F4)
+  /* Keyboard: misc */
+  PL_MENU_OPTION("Space",       KBD|AKEY_SPACE) 
+  PL_MENU_OPTION("Return",      KBD|AKEY_RETURN)
+  PL_MENU_OPTION("Tab",         KBD|AKEY_TAB)
+  PL_MENU_OPTION("Backspace",   KBD|AKEY_BACKSPACE)
+  PL_MENU_OPTION("Escape",      KBD|AKEY_ESCAPE)
+  PL_MENU_OPTION("Toggle CAPS", KBD|AKEY_CAPSTOGGLE)
+  PL_MENU_OPTION("Break",       SPC|-AKEY_BREAK)
+  PL_MENU_OPTION("Atari Key",   KBD|AKEY_ATARI)
+  PL_MENU_OPTION("Shift",       STA|AKEY_SHFT)
+  PL_MENU_OPTION("Control",     STA|AKEY_CTRL)
+  /* Keyboard: digits */
+  PL_MENU_OPTION("1", KBD|AKEY_1) PL_MENU_OPTION("2", KBD|AKEY_2)
+  PL_MENU_OPTION("3", KBD|AKEY_3) PL_MENU_OPTION("4", KBD|AKEY_4)
+  PL_MENU_OPTION("5", KBD|AKEY_5) PL_MENU_OPTION("6", KBD|AKEY_6)
+  PL_MENU_OPTION("7", KBD|AKEY_7) PL_MENU_OPTION("8", KBD|AKEY_8)
+  PL_MENU_OPTION("9", KBD|AKEY_9) PL_MENU_OPTION("0", KBD|AKEY_0)
+  /* Keyboard: letters */
+  PL_MENU_OPTION("A", KBD|AKEY_a) PL_MENU_OPTION("B", KBD|AKEY_b)
+  PL_MENU_OPTION("C", KBD|AKEY_c) PL_MENU_OPTION("D", KBD|AKEY_d)
+  PL_MENU_OPTION("E", KBD|AKEY_e) PL_MENU_OPTION("F", KBD|AKEY_f)
+  PL_MENU_OPTION("G", KBD|AKEY_g) PL_MENU_OPTION("H", KBD|AKEY_h)
+  PL_MENU_OPTION("I", KBD|AKEY_i) PL_MENU_OPTION("J", KBD|AKEY_j)
+  PL_MENU_OPTION("K", KBD|AKEY_k) PL_MENU_OPTION("L", KBD|AKEY_l)
+  PL_MENU_OPTION("M", KBD|AKEY_m) PL_MENU_OPTION("N", KBD|AKEY_n)
+  PL_MENU_OPTION("O", KBD|AKEY_o) PL_MENU_OPTION("P", KBD|AKEY_p)
+  PL_MENU_OPTION("Q", KBD|AKEY_q) PL_MENU_OPTION("R", KBD|AKEY_r)
+  PL_MENU_OPTION("S", KBD|AKEY_s) PL_MENU_OPTION("T", KBD|AKEY_t)
+  PL_MENU_OPTION("U", KBD|AKEY_u) PL_MENU_OPTION("V", KBD|AKEY_v)
+  PL_MENU_OPTION("W", KBD|AKEY_w) PL_MENU_OPTION("X", KBD|AKEY_x)
+  PL_MENU_OPTION("Y", KBD|AKEY_y) PL_MENU_OPTION("Z", KBD|AKEY_z)
+  /* Keyboard: symbols */
+  PL_MENU_OPTION("< (less than)",   KBD|AKEY_LESS)
+  PL_MENU_OPTION("> (greater than)",KBD|AKEY_GREATER)
+  PL_MENU_OPTION("= (equals)",      KBD|AKEY_EQUAL)
+  PL_MENU_OPTION("+ (plus)",        KBD|AKEY_PLUS)
+  PL_MENU_OPTION("* (asterisk)",    KBD|AKEY_ASTERISK)
+  PL_MENU_OPTION("/ (slash)",       KBD|AKEY_SLASH)
+  PL_MENU_OPTION(": (colon)",       KBD|AKEY_COLON)
+  PL_MENU_OPTION("; (semicolon)",   KBD|AKEY_SEMICOLON)
+  PL_MENU_OPTION(", (comma)",       KBD|AKEY_COMMA) 
+  PL_MENU_OPTION(". (period)",      KBD|AKEY_FULLSTOP)
+  PL_MENU_OPTION("_ (underscore)",  KBD|AKEY_UNDERSCORE)
+PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(ConsoleButtonMapOptions)
+  /* Unmapped */
+  PL_MENU_OPTION("None", 0)
+  /* Special keys */
+  PL_MENU_OPTION("Special: Open Menu",     MET|META_SHOW_MENU)
+  PL_MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS)
+  /* Console */
+  PL_MENU_OPTION("Console: Start", KBD|AKEY_5200_START)
+  PL_MENU_OPTION("Console: Pause", KBD|AKEY_5200_PAUSE)
+  PL_MENU_OPTION("Console: Reset", KBD|AKEY_5200_RESET)
+  /* Joystick */
+  PL_MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD)
+  PL_MENU_OPTION("Joystick: Down", JOY|STICK_BACK)
+  PL_MENU_OPTION("Joystick: Left", JOY|STICK_LEFT)
+  PL_MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT)
+  PL_MENU_OPTION("Joystick: Fire", TRG|0)
+  /* Keypad */
+  PL_MENU_OPTION("1", KBD|AKEY_5200_1) PL_MENU_OPTION("2", KBD|AKEY_5200_2)
+  PL_MENU_OPTION("3", KBD|AKEY_5200_3) PL_MENU_OPTION("4", KBD|AKEY_5200_4)
+  PL_MENU_OPTION("5", KBD|AKEY_5200_5) PL_MENU_OPTION("6", KBD|AKEY_5200_6)
+  PL_MENU_OPTION("7", KBD|AKEY_5200_7) PL_MENU_OPTION("8", KBD|AKEY_5200_8)
+  PL_MENU_OPTION("9", KBD|AKEY_5200_9) PL_MENU_OPTION("0", KBD|AKEY_5200_0)
+  PL_MENU_OPTION("*", KBD|AKEY_5200_ASTERISK)
+  PL_MENU_OPTION("#", KBD|AKEY_5200_HASH)
+PL_MENU_OPTIONS_END
 
 /* Menu definitions */
-static const PspMenuItemDef
-  OptionMenuDef[] = {
-    MENU_HEADER("Video"),
-    MENU_ITEM("Screen size", OPTION_DISPLAY_MODE, ScreenSizeOptions, -1, 
-      "\026\250\020 Change screen size"),
-    MENU_HEADER("Performance"),
-    MENU_ITEM("Frame limiter", OPTION_FRAME_SYNC, ToggleOptions, -1, 
-      "\026\250\020 Enable to run the system at proper speed; disable to run as fast as possible"),
-    MENU_ITEM("Frame skipping", OPTION_FRAMESKIP, FrameSkipOptions, -1, 
-      "\026\250\020 Change number of frames skipped per update"),
-    MENU_ITEM("VSync", OPTION_VSYNC, ToggleOptions, -1, 
-      "\026\250\020 Enable to reduce tearing; disable to increase speed"),
-    MENU_ITEM("PSP clock frequency", OPTION_CLOCK_FREQ, PspClockFreqOptions, -1, 
-      "\026\250\020 Larger values: faster emulation, faster battery depletion (default: 222MHz)"),
-    MENU_ITEM("Show FPS counter", OPTION_SHOW_FPS, ToggleOptions, -1,
-      "\026\250\020 Show/hide the frames-per-second counter"),
-    MENU_HEADER("Menu"),
-    MENU_ITEM("Button mode", OPTION_CONTROL_MODE, ControlModeOptions,  -1,
-      "\026\250\020 Change OK and Cancel button mapping"),
-    MENU_ITEM("Animations", OPTION_ANIMATE, ToggleOptions,  -1,
-      "\026\250\020 Change Enable/disable in-menu animations"),
-    MENU_END_ITEMS
-  },
-  ComputerControlMenuDef[] = {
-    MENU_ITEM(PSP_CHAR_ANALUP, MAP_ANALOG_UP, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_ANALRIGHT, MAP_ANALOG_RIGHT,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_UP, MAP_BUTTON_UP, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_DOWN, MAP_BUTTON_DOWN, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_LEFT, MAP_BUTTON_LEFT, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_RIGHT, MAP_BUTTON_RIGHT,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_SQUARE, MAP_BUTTON_SQUARE, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_CROSS, MAP_BUTTON_CROSS,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_CIRCLE, MAP_BUTTON_CIRCLE, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_SELECT, MAP_BUTTON_SELECT, 
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_START, MAP_BUTTON_START,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, 
-      MAP_BUTTON_LRTRIGGERS, ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
-      ComputerButtonMapOptions, -1, ControlHelpText),
-    MENU_END_ITEMS
-  },
-  ConsoleControlMenuDef[] = {
-    MENU_ITEM(PSP_CHAR_ANALUP, MAP_ANALOG_UP,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_ANALRIGHT, MAP_ANALOG_RIGHT,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_UP, MAP_BUTTON_UP,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_DOWN, MAP_BUTTON_DOWN,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_LEFT, MAP_BUTTON_LEFT,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_RIGHT, MAP_BUTTON_RIGHT,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_SQUARE, MAP_BUTTON_SQUARE,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_CROSS, MAP_BUTTON_CROSS,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_CIRCLE, MAP_BUTTON_CIRCLE,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_SELECT, MAP_BUTTON_SELECT,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_START, MAP_BUTTON_START,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, 
-      MAP_BUTTON_LRTRIGGERS, ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_ITEM(PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
-      ConsoleButtonMapOptions, -1, ControlHelpText),
-    MENU_END_ITEMS
-  },
-  SystemMenuDef[] = {
-    MENU_HEADER("Storage"),
-    MENU_ITEM("Disk drive 0", SYSTEM_DRIVE, DiskImageOptions, 0,
-      "\026\001\020 Load another disk\t\026"PSP_CHAR_TRIANGLE"\020 Eject disk"),
-    MENU_ITEM("Eject all", SYSTEM_EJECT, NULL, -1,
-      "\026\001\020 Eject all disks/cartridges"),
-    MENU_HEADER("Audio"),
-    MENU_ITEM("Stereo sound", SYSTEM_STEREO, ToggleOptions, -1, 
-      "\026\250\020 Toggle stereo sound (dual POKEY emulation)"),
-    MENU_HEADER("Video"),
-    MENU_ITEM("Horizontal crop", SYSTEM_CROP_SCREEN, ToggleOptions, -1, 
-      "\026\250\020 Remove 8-pixel wide strips on each side of the screen"),
-    MENU_ITEM("TV frequency", SYSTEM_TV_MODE, TVModeOptions, -1, 
-      "\026\250\020 Change video frequency of emulated machine"),
-    MENU_HEADER("Hardware"),
-    MENU_ITEM("Machine type", SYSTEM_MACHINE_TYPE, MachineTypeOptions, -1, 
-      "\026\250\020 Change emulated machine"),
-    MENU_HEADER("System"),
-    MENU_ITEM("Reset", SYSTEM_RESET, NULL, -1, "\026\001\020 Reset"),
-    MENU_ITEM("Save screenshot",  SYSTEM_SCRNSHOT, NULL, -1,
-      "\026\001\020 Save screenshot"),
-    MENU_END_ITEMS
-  };
+PL_MENU_ITEMS_BEGIN(OptionMenuDef)
+  PL_MENU_HEADER("Video")
+  PL_MENU_ITEM("Screen size", OPTION_DISPLAY_MODE, ScreenSizeOptions, 
+    "\026\250\020 Change screen size")
+  PL_MENU_HEADER("Performance")
+  PL_MENU_ITEM("Frame limiter", OPTION_FRAME_SYNC, ToggleOptions, 
+    "\026\250\020 Enable to run the system at proper speed; disable to run as fast as possible")
+  PL_MENU_ITEM("Frame skipping", OPTION_FRAMESKIP, FrameSkipOptions, 
+    "\026\250\020 Change number of frames skipped per update")
+  PL_MENU_ITEM("VSync", OPTION_VSYNC, ToggleOptions, 
+    "\026\250\020 Enable to reduce tearing; disable to increase speed")
+  PL_MENU_ITEM("PSP clock frequency", OPTION_CLOCK_FREQ, PspClockFreqOptions, 
+    "\026\250\020 Larger values: faster emulation, faster battery depletion (default: 222MHz)")
+  PL_MENU_ITEM("Show FPS counter", OPTION_SHOW_FPS, ToggleOptions, 
+    "\026\250\020 Show/hide the frames-per-second counter")
+  PL_MENU_HEADER("Menu")
+  PL_MENU_ITEM("Button mode", OPTION_CONTROL_MODE, ControlModeOptions,  
+    "\026\250\020 Change OK and Cancel button mapping")
+  PL_MENU_ITEM("Animations", OPTION_ANIMATE, ToggleOptions,  
+    "\026\250\020 Change Enable/disable in-menu animations")
+PL_MENU_ITEMS_END
+PL_MENU_ITEMS_BEGIN(ComputerControlMenuDef)
+  PL_MENU_ITEM(PSP_CHAR_ANALUP, MAP_ANALOG_UP, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_ANALRIGHT, MAP_ANALOG_RIGHT,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_UP, MAP_BUTTON_UP, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_DOWN, MAP_BUTTON_DOWN, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_LEFT, MAP_BUTTON_LEFT, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_RIGHT, MAP_BUTTON_RIGHT,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_SQUARE, MAP_BUTTON_SQUARE, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_CROSS, MAP_BUTTON_CROSS,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_CIRCLE, MAP_BUTTON_CIRCLE, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_SELECT, MAP_BUTTON_SELECT, 
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_START, MAP_BUTTON_START,
+    ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, 
+    MAP_BUTTON_LRTRIGGERS, ComputerButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
+    ComputerButtonMapOptions, ControlHelpText)
+PL_MENU_ITEMS_END
+PL_MENU_ITEMS_BEGIN(ConsoleControlMenuDef)
+  PL_MENU_ITEM(PSP_CHAR_ANALUP, MAP_ANALOG_UP,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_ANALDOWN, MAP_ANALOG_DOWN,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_ANALLEFT, MAP_ANALOG_LEFT,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_ANALRIGHT, MAP_ANALOG_RIGHT,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_UP, MAP_BUTTON_UP,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_DOWN, MAP_BUTTON_DOWN,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_LEFT, MAP_BUTTON_LEFT,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_RIGHT, MAP_BUTTON_RIGHT,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_SQUARE, MAP_BUTTON_SQUARE,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_CROSS, MAP_BUTTON_CROSS,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_CIRCLE, MAP_BUTTON_CIRCLE,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_TRIANGLE, MAP_BUTTON_TRIANGLE,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_LTRIGGER, MAP_BUTTON_LTRIGGER,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_RTRIGGER, MAP_BUTTON_RTRIGGER,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_SELECT, MAP_BUTTON_SELECT,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_START, MAP_BUTTON_START,
+    ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_LTRIGGER"+"PSP_CHAR_RTRIGGER, 
+    MAP_BUTTON_LRTRIGGERS, ConsoleButtonMapOptions, ControlHelpText)
+  PL_MENU_ITEM(PSP_CHAR_START"+"PSP_CHAR_SELECT, MAP_BUTTON_STARTSELECT,
+    ConsoleButtonMapOptions, ControlHelpText)
+PL_MENU_ITEMS_END
+PL_MENU_ITEMS_BEGIN(SystemMenuDef)
+  PL_MENU_HEADER("Storage")
+  PL_MENU_ITEM("Disk drive 0", SYSTEM_DRIVE, DiskImageOptions,
+    "\026\001\020 Load another disk\t\026"PSP_CHAR_TRIANGLE"\020 Eject disk")
+  PL_MENU_ITEM("Eject all", SYSTEM_EJECT, NULL, 
+    "\026\001\020 Eject all disks/cartridges")
+  PL_MENU_HEADER("Audio")
+  PL_MENU_ITEM("Stereo sound", SYSTEM_STEREO, ToggleOptions, 
+    "\026\250\020 Toggle stereo sound (dual POKEY emulation)")
+  PL_MENU_HEADER("Video")
+  PL_MENU_ITEM("Horizontal crop", SYSTEM_CROP_SCREEN, ToggleOptions, 
+    "\026\250\020 Remove 8-pixel wide strips on each side of the screen")
+  PL_MENU_ITEM("TV frequency", SYSTEM_TV_MODE, TVModeOptions, 
+    "\026\250\020 Change video frequency of emulated machine")
+  PL_MENU_HEADER("Hardware")
+  PL_MENU_ITEM("Machine type", SYSTEM_MACHINE_TYPE, MachineTypeOptions, 
+    "\026\250\020 Change emulated machine")
+  PL_MENU_HEADER("System")
+  PL_MENU_ITEM("Reset", SYSTEM_RESET, NULL, "\026\001\020 Reset")
+  PL_MENU_ITEM("Save screenshot",  SYSTEM_SCRNSHOT, NULL, 
+    "\026\001\020 Save screenshot")
+PL_MENU_ITEMS_END
 
   /* Cartridge types (copied from /ui.c) */
   static const char* CartType[] = 
