@@ -520,15 +520,16 @@ static int OnSplashButtonPress(const struct PspUiSplash *splash,
   u32 button_mask);
 static void OnSplashRender(const void *uiobject, const void *null);
 
-static int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item, 
-  const PspMenuOption* option);
-static int OnMenuButtonPress(const struct PspUiMenu *uimenu, 
-  PspMenuItem* sel_item, u32 button_mask);
+static int OnMenuButtonPress(const struct PspUiMenu *uimenu, pl_menu_item* item,
+                             u32 button_mask);
+static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
+                             const pl_menu_option* option);
 static int OnMenuOk(const void *uimenu, const void* sel_item);
 
 static int OnSaveStateOk(const void *gallery, const void *item);
-static int OnSaveStateButtonPress(const PspUiGallery *gallery, 
-  PspMenuItem* item, u32 button_mask);
+static int OnSaveStateButtonPress(const PspUiGallery *gallery,
+                                  pl_menu_item *sel,
+                                  u32 button_mask);
 
 static void OnSystemRender(const void *uiobject, const void *item_obj);
 
@@ -566,7 +567,6 @@ PspUiFileBrowser DiskBrowser =
 
 PspUiMenu OptionUiMenu =
 {
-  NULL,                  /* PspMenu */
   OnGenericRender,       /* OnRender() */
   OnMenuOk,              /* OnOk() */
   OnGenericCancel,       /* OnCancel() */
@@ -576,7 +576,6 @@ PspUiMenu OptionUiMenu =
 
 PspUiGallery SaveStateGallery = 
 {
-  NULL,                        /* PspMenu */
   OnGenericRender,             /* OnRender() */
   OnSaveStateOk,               /* OnOk() */
   OnGenericCancel,             /* OnCancel() */
@@ -586,7 +585,6 @@ PspUiGallery SaveStateGallery =
 
 PspUiMenu SystemUiMenu =
 {
-  NULL,                  /* PspMenu */
   OnSystemRender,        /* OnRender() */
   OnMenuOk,              /* OnOk() */
   OnGenericCancel,       /* OnCancel() */
@@ -596,7 +594,6 @@ PspUiMenu SystemUiMenu =
 
 PspUiMenu ControlUiMenu =
 {
-  NULL,                  /* PspMenu */
   OnGenericRender,       /* OnRender() */
   OnMenuOk,              /* OnOk() */
   OnGenericCancel,       /* OnCancel() */
@@ -1060,8 +1057,8 @@ void OnSystemRender(const void *uiobject, const void *item_obj)
   OnGenericRender(uiobject, item_obj);
 }
 
-int OnMenuItemChanged(const struct PspUiMenu *uimenu, PspMenuItem* item, 
-  const PspMenuOption* option)
+static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
+                             const pl_menu_option* option)
 {
   if (uimenu == &ControlUiMenu)
   {
@@ -1306,7 +1303,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
   return 0;
 }
 
-int OnMenuButtonPress(const struct PspUiMenu *uimenu, PspMenuItem* sel_item, 
+int OnMenuButtonPress(const struct PspUiMenu *uimenu, pl_menu_item *sel_item, 
   u32 button_mask)
 {
   if (uimenu == &ControlUiMenu)
@@ -1461,7 +1458,7 @@ int OnSaveStateOk(const void *gallery, const void *item)
   return 0;
 }
 
-int OnSaveStateButtonPress(const PspUiGallery *gallery, PspMenuItem *sel, 
+int OnSaveStateButtonPress(const PspUiGallery *gallery, pl_menu_item *sel, 
   u32 button_mask)
 {
   if (button_mask & PSP_CTRL_SQUARE || button_mask & PSP_CTRL_TRIANGLE)
