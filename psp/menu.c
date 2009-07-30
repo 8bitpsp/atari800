@@ -647,14 +647,14 @@ void InitMenu()
 
   /* Initialize paths */
   SaveStatePath = (char*)malloc(sizeof(char) 
-    * (strlen(pspGetAppDirectory()) + strlen(SaveStateDir) + 2));
-  sprintf(SaveStatePath, "%s%s/", pspGetAppDirectory(), SaveStateDir);
+    * (strlen(pl_psp_get_app_directory()) + strlen(SaveStateDir) + 2));
+  sprintf(SaveStatePath, "%s%s/", pl_psp_get_app_directory(), SaveStateDir);
   ScreenshotPath = (char*)malloc(sizeof(char) 
-    * (strlen(pspGetAppDirectory()) + strlen(ScreenshotDir) + 2));
-  sprintf(ScreenshotPath, "%s%s/", pspGetAppDirectory(), ScreenshotDir);
+    * (strlen(pl_psp_get_app_directory()) + strlen(ScreenshotDir) + 2));
+  sprintf(ScreenshotPath, "%s%s/", pl_psp_get_app_directory(), ScreenshotDir);
   ConfigPath = (char*)malloc(sizeof(char) 
-    * (strlen(pspGetAppDirectory()) + strlen(ConfigDir) + 2));
-  sprintf(ConfigPath, "%s%s/", pspGetAppDirectory(), ConfigDir);
+    * (strlen(pl_psp_get_app_directory()) + strlen(ConfigDir) + 2));
+  sprintf(ConfigPath, "%s%s/", pl_psp_get_app_directory(), ConfigDir);
 
   /* Initialize options */
   LoadOptions();
