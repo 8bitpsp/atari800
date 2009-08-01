@@ -28,7 +28,9 @@ CFLAGS=-O2 -G0 -Wall $(BASE_DEFS) $(DEFINES)
 CXXFLAGS=$(CFLAGS) -fno-exceptions -fno-rtti
 ASFLAGS=$(CFLAGS)
 INCDIR=$(PSPLIB) $(PSPAPP)
-LIBS=-lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc
+LIBDIR=$(PSPLIB)
+LIBS=-lpsplib -lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc \
+     -lpspwlan -lpspnet_adhoc -lpspnet_adhocctl -lpspnet_adhocmatching
 
 all: build_libs
 clean: clean_libs

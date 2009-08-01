@@ -52,7 +52,7 @@ static u64 CurrentTick;
 static int ShowKybd;
 static int key_ctrl;
 static pl_perf_counter FpsCounter;
-static PspKeyboardLayout *KeyboardLayout, *KeypadLayout;
+static pl_vk_layout KeyboardLayout, KeypadLayout;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
 static int TrigState[4] = { 1, 1, 1, 1 };
 static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - ATARI_WIDTH;
@@ -86,9 +86,10 @@ int InitEmulation()
           (c & 0x000000ff));
   }
 
-  /* Initialize computer keyboard layout */
-  KeyboardLayout = pspKybdLoadLayout("atari800.lyt", NULL, HandleKeyInput);
-  KeypadLayout = pspKybdLoadLayout("atari5200.lyt", NULL, HandleKeyInput);
+  pl_vk_load(&KeyboardLayout, "vk-atari800.l2", "vk-atari800.png", NULL, 
+             HandleKeyInput);
+  pl_vk_load(&KeypadLayout, "vk-atari5200.l2", "vk-atari5200.png", NULL, 
+             HandleKeyInput);
 
   /* Initialize performance counter */
   pl_perf_init_counter(&FpsCounter);
@@ -110,8 +111,8 @@ int InitEmulation()
 void TrashEmulation()
 {
   /* Destroy keyboard layout */
-  if (KeyboardLayout) pspKybdDestroyLayout(KeyboardLayout);
-  if (KeypadLayout) pspKybdDestroyLayout(KeypadLayout);
+  pl_vk_destroy(&KeyboardLayout);
+  pl_vk_destroy(&KeypadLayout);
 
   pspImageDestroy(Screen);
   Atari800_Exit(FALSE);
@@ -163,8 +164,8 @@ void Atari_DisplayScreen(void)
   pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
   /* Draw keyboard */
-  if (ShowKybd) pspKybdRender((machine_type == MACHINE_5200) 
-    ? KeypadLayout : KeyboardLayout);
+  if (ShowKybd) pl_vk_render((machine_type == MACHINE_5200) 
+    ? &KeypadLayout : &KeyboardLayout);
 
   if (Config.ShowFps)
   {
@@ -389,11 +390,11 @@ int ParseInput()
 #endif
 
   int i, on, code;
-  PspKeyboardLayout *layout = (machine_type == MACHINE_5200) 
-    ? KeypadLayout : KeyboardLayout;
+  pl_vk_layout *layout = (machine_type == MACHINE_5200) 
+    ? &KeypadLayout : &KeyboardLayout;
 
   /* Navigate the virtual keyboard, if shown */
-  if (ShowKybd) pspKybdNavigate(layout, &pad);
+  if (ShowKybd) pl_vk_navigate(layout, &pad);
 
   /* Parse input */
   for (i = 0; ButtonMapId[i] >= 0; i++)
@@ -440,8 +441,8 @@ int ParseInput()
       case META_SHOW_KEYS:
         if (ShowKybd != on && layout)
         {
-          if (on) pspKybdReinit(layout);
-          else { pspKybdReleaseAll(layout); ClearScreen = 1; }
+          if (on) pl_vk_reinit(layout);
+          else { pl_vk_release_all(layout); ClearScreen = 1; }
         }
         ShowKybd = on;
         break;
