@@ -50,6 +50,7 @@ static u32 TicksPerSecond;
 static u64 LastTick;
 static u64 CurrentTick;
 static int ShowKybd;
+static int KybdVis;
 static int key_ctrl;
 static pl_perf_counter FpsCounter;
 static pl_vk_layout KeyboardLayout, KeypadLayout;
@@ -164,7 +165,7 @@ void Atari_DisplayScreen(void)
   pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
   /* Draw keyboard */
-  if (ShowKybd) pl_vk_render((machine_type == MACHINE_5200) 
+  if (KybdVis) pl_vk_render((machine_type == MACHINE_5200) 
     ? &KeypadLayout : &KeyboardLayout);
 
   if (Config.ShowFps)
@@ -289,6 +290,7 @@ void RunEmulation()
   ScreenY = (SCR_HEIGHT / 2) - (ScreenH / 2);
   ClearScreen = 1;
   ShowKybd = 0;
+  KybdVis = 0;
 
   /* Recompute update frequency */
   TicksPerSecond = sceRtcGetTickResolution();
@@ -364,7 +366,7 @@ int ParseInput()
   JoyState[0] = 0xff;
   TrigState[0] = 1;
 
-  if (!ShowKybd)
+  if (!KybdVis)
   {
 	  key_code = AKEY_NONE;
 	  key_consol = CONSOL_NONE;
@@ -387,7 +389,7 @@ int ParseInput()
     ? &KeypadLayout : &KeyboardLayout;
 
   /* Navigate the virtual keyboard, if shown */
-  if (ShowKybd) pl_vk_navigate(layout, &pad);
+  if (KybdVis) pl_vk_navigate(layout, &pad);
 
   /* Parse input */
   for (i = 0; ButtonMapId[i] >= 0; i++)
@@ -432,11 +434,33 @@ int ParseInput()
         if (on) return 1;
         break;
       case META_SHOW_KEYS:
-        if (ShowKybd != on && layout)
+        if (Config.ToggleVK)
         {
-          if (on) pl_vk_reinit(layout);
-          else { pl_vk_release_all(layout); ClearScreen = 1; }
+          if (ShowKybd != on && on)
+          {
+            KybdVis = !KybdVis;
+            pl_vk_release_all(layout);
+
+            if (KybdVis) 
+              pl_vk_reinit(layout);
+            else ClearScreen = 1;
+          }
         }
+        else
+        {
+          if (ShowKybd != on)
+          {
+            KybdVis = on;
+            if (on) 
+              pl_vk_reinit(layout);
+            else
+            {
+              ClearScreen = 1;
+              pl_vk_release_all(layout);
+            }
+          }
+        }
+
         ShowKybd = on;
         break;
       }

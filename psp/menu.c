@@ -38,6 +38,7 @@
 #define OPTION_CONTROL_MODE 6
 #define OPTION_FRAME_SYNC   7
 #define OPTION_ANIMATE      8
+#define OPTION_TOGGLE_VK    9
 
 #define SYSTEM_SCRNSHOT     1
 #define SYSTEM_RESET        2
@@ -321,12 +322,19 @@ PL_MENU_OPTIONS_BEGIN(ConsoleButtonMapOptions)
   PL_MENU_OPTION("*", KBD|AKEY_5200_ASTERISK)
   PL_MENU_OPTION("#", KBD|AKEY_5200_HASH)
 PL_MENU_OPTIONS_END
+PL_MENU_OPTIONS_BEGIN(VkModeOptions)
+  PL_MENU_OPTION("Display when button is held down (classic mode)", 0)
+  PL_MENU_OPTION("Toggle display on and off when button is pressed", 1)
+PL_MENU_OPTIONS_END
 
 /* Menu definitions */
 PL_MENU_ITEMS_BEGIN(OptionMenuDef)
   PL_MENU_HEADER("Video")
   PL_MENU_ITEM("Screen size", OPTION_DISPLAY_MODE, ScreenSizeOptions, 
     "\026\250\020 Change screen size")
+  PL_MENU_HEADER("Input")
+  PL_MENU_ITEM("Virtual keyboard mode",OPTION_TOGGLE_VK,VkModeOptions,
+               "\026\250\020 Select virtual keyboard mode")
   PL_MENU_HEADER("Performance")
   PL_MENU_ITEM("Frame limiter", OPTION_FRAME_SYNC, ToggleOptions, 
     "\026\250\020 Enable to run the system at proper speed; disable to run as fast as possible")
@@ -738,6 +746,8 @@ void DisplayMenu()
       pl_menu_select_option_by_value(item, (void*)UiMetric.Animate);
       item = pl_menu_find_item_by_id(&OptionUiMenu.Menu, OPTION_FRAME_SYNC);
       pl_menu_select_option_by_value(item, (void*)Config.FrameSync);
+      item = pl_menu_find_item_by_id(&OptionUiMenu.Menu, OPTION_TOGGLE_VK);
+      pl_menu_select_option_by_value(item, (void*)Config.ToggleVK);
       pspUiOpenMenu(&OptionUiMenu, NULL);
       break;
 
@@ -874,6 +884,7 @@ void LoadOptions()
   Config.ShowFps   = pl_ini_get_int(&init, "Video", "Show FPS", 0);
   Config.ControlMode = pl_ini_get_int(&init, "Menu", "Control Mode", 0);
   UiMetric.Animate = pl_ini_get_int(&init, "Menu",  "Animations", 1);
+  Config.ToggleVK = pl_ini_get_int(&init, "Input", "VK Mode", 0);
 
   CropScreen = pl_ini_get_int(&init, "System", "Crop screen", 0);
   machine_type = pl_ini_get_int(&init, "System", "Machine Type", MACHINE_XLXE);
@@ -906,6 +917,7 @@ static int SaveOptions()
   pl_ini_set_int(&init, "Video", "Show FPS", Config.ShowFps);
   pl_ini_set_int(&init, "Menu",  "Control Mode", Config.ControlMode);
   pl_ini_set_int(&init, "Menu",  "Animations", UiMetric.Animate);
+  pl_ini_set_int(&init, "Input",  "VK Mode", Config.ToggleVK);
 
   pl_ini_set_int(&init, "System", "Crop screen", CropScreen);
   pl_ini_set_int(&init, "System", "Machine Type", machine_type);
@@ -1128,6 +1140,9 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
       break;
     case OPTION_CLOCK_FREQ:
       Config.ClockFreq = (int)option->value;
+      break;
+    case OPTION_TOGGLE_VK:
+      Config.ToggleVK = (int)option->value;
       break;
     case OPTION_FRAME_SYNC:
       Config.FrameSync = (int)option->value;

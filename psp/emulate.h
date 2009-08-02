@@ -52,6 +52,7 @@ typedef struct
   int VSync;
   int Frameskip;
   int FrameSync;
+  int ToggleVK;
 } EmulatorConfig;
 
 typedef struct
