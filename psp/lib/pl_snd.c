@@ -291,6 +291,28 @@ static void free_buffers()
   }
 }
 
+int pl_snd_mute(int channel)
+{
+  if (channel < 0 || channel > AUDIO_CHANNELS)
+    return 0;
+  volatile pl_snd_channel_info *pci = &sound_stream[channel];
+  pci->left_vol = 0;
+  pci->right_vol = 0;
+
+  return 1;
+}
+
+int pl_snd_unmute(int channel)
+{
+  if (channel < 0 || channel > AUDIO_CHANNELS)
+    return 0;
+  volatile pl_snd_channel_info *pci = &sound_stream[channel];
+  pci->left_vol = VOLUME_MAX;
+  pci->right_vol = VOLUME_MAX;
+
+  return 1;
+}
+
 int pl_snd_set_callback(int channel,
                         pl_snd_callback callback,
                         void *userdata)

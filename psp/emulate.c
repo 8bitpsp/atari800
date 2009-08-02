@@ -220,14 +220,7 @@ void Sound_Initialise(int *argc, char *argv[])
 
 static void AudioCallback(pl_snd_sample* buf, unsigned int samples, void *userdata)
 {
-  unsigned int nsamples = 1024;
-  static short SoundBuffer[1024];
-
-  Pokey_process(SoundBuffer, nsamples);
-
-  int i;
-  for (i = 0; i < nsamples; i++) 
-    buf[i].stereo.l = buf[i].stereo.r = SoundBuffer[i];
+  Pokey_process((short*)buf, samples);
 }
 
 void Sound_Update(void)

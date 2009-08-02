@@ -144,16 +144,15 @@ static PspImage *Background;
 static PspImage *NoSaveIcon;
 
 static char *LoadedGame;
-static char *GamePath;
-static char *SaveStatePath;
-static char *ConfigPath;
-char *ScreenshotPath;
+static pl_file_path GamePath;
+static pl_file_path SaveStatePath;
+static pl_file_path ConfigPath;
+static pl_file_path ScreenshotPath;
 
 static const char 
   *BasicName = "BASIC",
   *EmptyCartName = "5200",
   *OptionsFile = "options.ini",
-  *ScreenshotDir = "screens",
   *ConfigDir = "config",
   *SaveStateDir = "savedata",
   *DefaultComputerConfigFile = "comp_def",
@@ -603,6 +602,20 @@ PspUiMenu ControlUiMenu =
 
 void InitMenu()
 {
+  /* Reset variables */
+  TabIndex = TAB_ABOUT;
+  Background = NULL;
+  NoSaveIcon = NULL;
+  LoadedGame = NULL;
+
+  /* Initialize emulation */
+  if (!InitEmulation()) return;
+
+  /* Initialize paths */
+  sprintf(SaveStatePath, "%s%s/", pl_psp_get_app_directory(), SaveStateDir);
+  sprintf(ScreenshotPath, "ms0:/PSP/PHOTO/%s/", PSP_APP_NAME);
+  sprintf(ConfigPath, "%s%s/", pl_psp_get_app_directory(), ConfigDir);
+
   /* Initialize UI components */
   UiMetric.Font = &PspStockFont;
   UiMetric.Left = 8;
@@ -634,27 +647,8 @@ void InitMenu()
   UiMetric.MenuFps = 30;
   UiMetric.TabBgColor = COLOR(0xcc,0xdb,0xe3, 0xff);
   UiMetric.Animate = 1;
-
-  /* Reset variables */
-  TabIndex = TAB_ABOUT;
-  Background = NULL;
-  NoSaveIcon = NULL;
-  LoadedGame = NULL;
-  GamePath = NULL;
-
-  /* Initialize emulation */
-  if (!InitEmulation()) return;
-
-  /* Initialize paths */
-  SaveStatePath = (char*)malloc(sizeof(char) 
-    * (strlen(pl_psp_get_app_directory()) + strlen(SaveStateDir) + 2));
-  sprintf(SaveStatePath, "%s%s/", pl_psp_get_app_directory(), SaveStateDir);
-  ScreenshotPath = (char*)malloc(sizeof(char) 
-    * (strlen(pl_psp_get_app_directory()) + strlen(ScreenshotDir) + 2));
-  sprintf(ScreenshotPath, "%s%s/", pl_psp_get_app_directory(), ScreenshotDir);
-  ConfigPath = (char*)malloc(sizeof(char) 
-    * (strlen(pl_psp_get_app_directory()) + strlen(ConfigDir) + 2));
-  sprintf(ConfigPath, "%s%s/", pl_psp_get_app_directory(), ConfigDir);
+  UiMetric.BrowserScreenshotPath = ScreenshotPath;
+  UiMetric.BrowserScreenshotDelay = 30;
 
   /* Initialize options */
   LoadOptions();
@@ -714,7 +708,8 @@ void DisplayMenu()
     switch (TabIndex)
     {
     case TAB_QUICKLOAD:
-      pspUiOpenBrowser(&QuickloadBrowser, (LoadedGame) ? LoadedGame : GamePath);
+      pspUiOpenBrowser(&QuickloadBrowser, (LoadedGame) 
+        ? LoadedGame : ((GamePath[0]) ? GamePath : NULL));
       break;
 
     case TAB_STATE:
@@ -862,9 +857,8 @@ static void DisplayStateTab()
 /* Load options */
 void LoadOptions()
 {
-  char *path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
-    + strlen(OptionsFile) + 1));
-  sprintf(path, "%s%s", ConfigPath, OptionsFile);
+  pl_file_path path;
+  sprintf(path, "%s%s", pl_psp_get_app_directory(), OptionsFile);
 
   /* Read the file */
   pl_ini_file init;
@@ -887,25 +881,17 @@ void LoadOptions()
   tv_mode = pl_ini_get_int(&init, "System", "TV mode", TV_PAL);
   stereo_enabled = pl_ini_get_int(&init, "System", "Stereo", 0);
 
-  if (GamePath)
-  {
-    free(GamePath); 
-    GamePath = (char*)malloc(512);
-  }
-
-  pl_ini_get_string(&init, "File", "Game Path", NULL, GamePath, 512);
+  pl_ini_get_string(&init, "File", "Game Path", NULL, GamePath, sizeof(GamePath));
 
   /* Clean up */
-  free(path);
   pl_ini_destroy(&init);
 }
 
 /* Save options */
 static int SaveOptions()
 {
-  char *path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
-    + strlen(OptionsFile) + 1));
-  sprintf(path, "%s%s", ConfigPath, OptionsFile);
+  pl_file_path path;
+  sprintf(path, "%s%s", pl_psp_get_app_directory(), OptionsFile);
 
   /* Initialize INI structure */
   pl_ini_file init;
@@ -927,14 +913,13 @@ static int SaveOptions()
   pl_ini_set_int(&init, "System", "TV mode", tv_mode);
   pl_ini_set_int(&init, "System", "Stereo", stereo_enabled);
 
-  if (GamePath) pl_ini_set_string(&init, "File", "Game Path", GamePath);
+  pl_ini_set_string(&init, "File", "Game Path", GamePath);
 
   /* Save INI file */
   int status = pl_ini_save(&init, path);
 
   /* Clean up */
   pl_ini_destroy(&init);
-  free(path);
 
   return status;
 }
@@ -1215,9 +1200,7 @@ static int OnSwitchDiskImageOk(const void *browser, const void *path)
   LoadedGame = strdup((char*)path);
 
   /* Reset current game path */
-  if (GamePath) free(GamePath);
-  GamePath = (char*)malloc(512);
-  pl_file_get_parent_directory(LoadedGame, GamePath, 512);
+  pl_file_get_parent_directory(path, GamePath, sizeof(GamePath));
 
   /* Load control set */
   LoadGameConfig(LoadedGame, &ActiveGameConfig);
@@ -1246,7 +1229,8 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
     switch (((const pl_menu_item*)sel_item)->id)
     {
     case SYSTEM_DRIVE:
-      pspUiOpenBrowser(&DiskBrowser, (LoadedGame) ? LoadedGame : GamePath);
+      pspUiOpenBrowser(&DiskBrowser, (LoadedGame) 
+        ? LoadedGame : ((GamePath[0]) ? GamePath : NULL));
       break;
 
     case SYSTEM_EJECT:
@@ -1629,9 +1613,7 @@ int OnQuickloadOk(const void *browser, const void *path)
   LoadedGame = strdup(path);
 
   /* Reset current game path */
-  if (GamePath) free(GamePath);
-  GamePath = (char*)malloc(512);
-  pl_file_get_parent_directory(LoadedGame, GamePath, 512);
+  pl_file_get_parent_directory(path, GamePath, sizeof(GamePath));
 
   /* Load control set */
   LoadGameConfig(LoadedGame, &ActiveGameConfig);
@@ -1722,9 +1704,5 @@ void TrashMenu()
   if (NoSaveIcon) pspImageDestroy(NoSaveIcon);
 
   if (LoadedGame) free(LoadedGame);
-  if (GamePath) free(GamePath);
-  if (SaveStatePath) free(SaveStatePath);
-  if (ScreenshotPath) free(ScreenshotPath);
-  if (ConfigPath) free(ConfigPath);
 }
 

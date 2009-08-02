@@ -58,6 +58,8 @@ int  pl_snd_set_callback(int channel,
                          void *userdata);
 int  pl_snd_pause(int channel);
 int  pl_snd_resume(int channel);
+int  pl_snd_mute(int channel);
+int  pl_snd_unmute(int channel);
 void pl_snd_shutdown();
 
 #ifdef __cplusplus
