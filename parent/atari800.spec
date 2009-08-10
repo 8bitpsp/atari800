@@ -1,5 +1,5 @@
 %define name	atari800
-%define ver	2.0.3
+%define ver	2.1.0
 %define rel	1
 %define copy	GPL
 %define ich Petr Stehlik <pstehlik@sophics.cz>
@@ -10,6 +10,14 @@
 ## If you change the targets, you'll have to change the files list at the
 ## bottom of this file as well
 %define maintarget sdl
+Requires:	SDL >= 1.2.10
+BuildRequires:	SDL-devel >= 1.2.10
+Requires:	ncurses
+BuildRequires:	ncurses-devel
+Requires:	zlib
+BuildRequires:	zlib-devel
+Requires:	readline
+BuildRequires:	readline-devel
 Summary:	An emulator of 8-bit Atari personal computers.
 Name:		%{name}
 Version:	%{ver}
@@ -79,7 +87,9 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/doc/atari800/NEWS
 
 %changelog
-* Wen Jul 11 2007 Petr Stehlik <pstehlik@sophics.cz>
+* Fri Mar 27 2009 Petr Stehlik <pstehlik@sophics.cz>
+New upstream release. Requires and BuildRequires added.
+* Wed Jul 11 2007 Petr Stehlik <pstehlik@sophics.cz>
 Version increased. Changes documented in the NEWS file.
 * Sat Apr 08 2006 Petr Stehlik <pstehlik@sophics.cz>
 Version increased. Changes documented in the NEWS file.

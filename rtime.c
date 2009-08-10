@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
@@ -34,8 +34,9 @@
 
 #include "atari.h"
 #include "log.h"
+#include "rtime.h"
 
-int rtime_enabled = 1;
+int RTIME_enabled = 1;
 
 static int rtime_state = 0;
 				/* 0 = waiting for register # */
@@ -46,24 +47,26 @@ static int rtime_tmp2 = 0;
 
 static UBYTE regset[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-void RTIME_Initialise(int *argc, char *argv[])
+int RTIME_Initialise(int *argc, char *argv[])
 {
 	int i;
 	int j;
 	for (i = j = 1; i < *argc; i++) {
 		if (strcmp(argv[i], "-rtime") == 0)
-			rtime_enabled = TRUE;
+			RTIME_enabled = TRUE;
 		else if (strcmp(argv[i], "-nortime") == 0)
-			rtime_enabled = FALSE;
+			RTIME_enabled = FALSE;
 		else {
 			if (strcmp(argv[i], "-help") == 0) {
-				Aprint("\t-rtime           Enable R-Time 8 emulation");
-				Aprint("\t-nortime         Disable R-Time 8 emulation");
+				Log_print("\t-rtime           Enable R-Time 8 emulation");
+				Log_print("\t-nortime         Disable R-Time 8 emulation");
 			}
 			argv[j++] = argv[i];
 		}
 	}
 	*argc = j;
+
+	return TRUE;
 }
 
 #if defined(WIN32) || (defined(HAVE_TIME) && defined(HAVE_LOCALTIME))
@@ -129,7 +132,7 @@ UBYTE RTIME_GetByte(void)
 {
 	switch (rtime_state) {
 	case 0:
-		/* Aprint("pretending rtime not busy, returning 0"); */
+		/* Log_print("pretending rtime not busy, returning 0"); */
 		return 0;
 	case 1:
 		rtime_state = 2;

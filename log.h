@@ -1,10 +1,10 @@
-#ifndef _LOG_H_
-#define _LOG_H_
+#ifndef LOG_H_
+#define LOG_H_
 
-#define MAX_LOG_SIZE 8192
-extern char memory_log[MAX_LOG_SIZE];
+#define Log_BUFFER_SIZE 8192
+extern char Log_buffer[Log_BUFFER_SIZE];
 
-void Aprint(char *format, ...);
-void Aflushlog(void);
+void Log_print(char *format, ...);
+void Log_flushlog(void);
 
-#endif /* _LOG_H_ */
+#endif /* LOG_H_ */

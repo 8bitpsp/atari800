@@ -1,3 +1,547 @@
+** 2.1.0 released on 2009-03-27
+
+2009-03-27  Petr Stehlik <pstehlik@sophics.cz>
+* atari800.spec: added dependencies to SDL, ncurses, zlib and readline
+* debian/control: added dependency to libreadline5-dev
+* debian/changelog, debian/atari800.cfg: updated for release
+* emuos.{h,lis}: (c) 2005 -> 2009
+* DOC/FAQ: updated for release (SDL keyboard joysticks are configurable now)
+* DOC/NEWS: yet another update (thanks Piotr for help with final editing)
+
+
+2009-03-27  Piotr Fusik  <fox@scene.pl>
+* DOC/TODO: updated
+
+
+2009-03-26  Petr Stehlik <pstehlik@sophics.cz>
+* DOC/NEWS, DOC/CREDITS, atari800.man, atari.spec, README: release update
+* configure.ac, atari.h, util/export: version increased
+
+
+2009-03-23  Petr Stehlik <pstehlik@sophics.cz>
+* DOC/NEWS, DOC/CREDITS: updated for upcoming release
+* configure.ac: readline support in monitor enabled by default,
+  simple Autoconf readline check added.
+
+
+2009-03-22  Perry McFarlane  <perry_m@fastmail.fm>
+* atari_sdl.c: fix warning
+* atari.c: fix basic/curses version compile error
+* DOC/TODO: update
+
+
+2009-03-20  Petr Stehlik <pstehlik@sophics.cz>
+  Commiting patch submitted by Tomasz Krasuski <kr0tki@poczta.onet.pl>
+* too_many_files: check for existence of required parameter of some command
+  line options before using it. Let all *_Initialise() functions return
+  status (FALSE in case something failed).
+
+
+2009-03-17  Piotr Fusik  <fox@scene.pl>
+* colours.c, win32/sound.c: killed MSVC 2008 warnings
+
+
+2009-03-16  Perry McFarlane  <perry_m@fastmail.fm>
+* antic.c: fix for Ilusia demo
+
+
+2009-03-01  Perry McFarlane  <perry_m@fastmail.fm>
+* DOC/USAGE, input.c: specify CX85 port
+* atari_sdl.c: minor fix for CX85
+
+
+2009-02-28  Perry McFarlane  <perry_m@fastmail.fm>
+* /DOC/USAGE akey.h atari_sdl.c javanvm/atari_javanvm.c input.[ch]: Emulate
+  CX85 numeric keypad
+
+
+2009-02-25  Perry McFarlane  <perry_m@fastmail.fm>
+  Commiting patch submitted by Tomasz <kr0tki@poczta.onet.pl> with my changes
+* atari.c atari_sdl.c atari_ntsc.[ch] configure.ac platform.h ui.c: NTSC
+Filter option in the UI.
+
+
+2009-02-05  Perry McFarlane  <perry_m@fastmail.fm>
+  Commiting patch submitted by Tomasz Krasuski <kr0tki@poczta.onet.pl>
+* atari_sdl.c: cleaned up display modes.
+
+
+2009-01-11  Petr Stehlik <pstehlik@sophics.cz>
+  Commiting patch submitted by Tomasz Krasuski <kr0tki@poczta.onet.pl>
+* atari_sdl.c: -audio16 fixed
+* pokeysnd.[ch]: Sound recording must stop when POKEY is reinitialised
+* sndsave.c: Chunks in WAV format must be word-aligned,
+             16-bit sound recording fixed.
+
+
+2008-12-27  Petr Stehlik <pstehlik@sophics.cz>
+  Commiting patch submitted by Tomasz Krasuski <kr0tki@poczta.onet.pl>
+* atari.c: initialize color palette after loading saved state
+* cfg.c, mzpokeysnd.c, pokeysnd.c, ui.c: serio_sound* -> POKEYSND_serio_sound*
+
+
+2008-11-03  Perry McFarlane  <perry_m@fastmail.fm>
+* configure.ac: fix syntax error
+
+
+2008-10-30  Perry McFarlane  <perry_m@fastmail.fm>
+* memory.c: 5200 GTIA c000-cfff and POKEY e800-efff mirrors.
+* configure.ac: minor fix for Cygwin.
+
+
+2008-10-29  Perry McFarlane  <perry_m@fastmail.fm>
+* afile.[ch], atari.c, sio.c:  Support .pro images
+* ui.c: replace ^R in source with \022
+* pbi_bb.c, pbi_mio.c: correct Util_filenamenotset error.
+* mzpokeysnd.c, pokey.c, pokey.h: rename SKCTLS -> SKCTL
+* monitor.c: 5200 equates.
+* DOC/BUGS: add Extract demo.
+* Makefile.in: use NestedVM javasource and UnixRuntime by default
+* monitor.c: SKCTL and SKSTAT in pokey state output.
+
+
+2008-10-13  Matthias Reichl  <hias@horus.com>
+* pokey.c: fixed the ALLPOT register - it didn't work
+  and there was an access outside array bounds
+
+
+2008-09-21  Petr Stehlik  <pstehlik@sophics.cz>
+* ui.c: visual configuration of keyboard joysticks layout, at long last!
+  Currently for the SDL target only. Also default joystick mapping
+  changed to num pad 4,8,6,5 + right ctrl and A,W,D,S + left ctrl keys.
+  Feel free to set up your own mapping and then save the configuration.
+
+* atari_sdl.c: removed keys for combined joystick directions (left+up, etc.)
+
+* util.[ch]: safe_strncpy() added
+
+
+2008-09-21  B Watson  <yalhcru@gmail.com>
+* input.[ch]: "-directmouse" added (directly converting the mouse's absolute
+  X/Y position to the POKEY pot. Used only for "-mouse pad", "-mouse koala",
+  or "-mouse touch". The "-mousespeed" option does nothing when "-directmouse"
+  is enabled.
+
+* atari_sdl.c: mouse support ("-mouse xxx", "-mousespeed N") added, including
+  the direct mouse support. Also adds a new "-grabmouse" command line option
+  and a new keystroke, alt-M, to grab/ungrab the mouse.
+
+* atari_x11.c: direct mouse support added
+
+
+2008-09-17  Piotr Fusik  <fox@scene.pl>
+* win32/msc/Makefile: added new source files
+
+
+2008-09-17  B Watson  <yalhcru@gmail.com>
+* configure.ac, monitor.c: --enable-readline option for the configure script
+  - the monitor supports arrow keys (including up-arrow for command history),
+  home/end, etc. using the "readline" library
+
+
+2008-08-28  Perry McFarlane  <perry_m@fastmail.fm>
+* javanvm/atari800.java: gain applet focus
+* sio.h: remove Id tag
+* xep80.c: XEP80_BlitGraphChar(int x, int y), add int before x and y
+* pokeysnd.[ch], mzpokeysnd.c: SAMPBUF_MAX -> POKEYSND_SAMPBUF_MAX
+* mzpokeysnd.c, pokeymix.inc: changed NONLINEAR_MIXING to use a better
+  method, pokeymix.inc is no longer needed.
+
+
+2008-08-22  Petr Stehlik  <pstehlik@sophics.cz>
+* atari_svgalib.c, configure.ac, Makefile.in, DOC/*: SVGAlib target dropped
+  definitely. SVGAlib is long time dead and running programs setuid 'root'
+  is so dangerous. Use/improve the SDL target instead!
+
+
+2008-07-12  Perry McFarlane  <perry_m@fastmail.fm>
+* most files: finished renaming globals.  New files: akey.h, (AKEY_*),
+esc.[ch](patches), afile.[ch](file loading), cfg.[ch] (configuration),
+ui_basic.h
+
+
+2008-07-03  Perry McFarlane  <perry_m@fastmail.fm>
+* remez.[ch], mzpokeysnd.c: rename Remez_, remez -> Remez_CreateFilter.
+* devices.[ch], atari.c, binload.c, rdevice.c, ui.c: rename Devices_, Device_
+-> Devices.
+* cpu.[ch], antic.c, atari.c, binload.c, cassette.c, devices.c,
+input.c, monitor.c, pbi.c, pbi_bb.c, pbi_mio.c, pokey.c, rdevice.c, sio.c,
+ui.c: rename CPU_.
+* sio.[ch], atari.c, atari_x11.c, binload.c, pbi_xld.c, pia.c, pokey.c,
+screen.c, ui.c: rename SIO_
+
+
+2008-07-02  Perry McFarlane  <perry_m@fastmail.fm>
+* javanvm/atari_javanvm.c: compile without SOUND
+* atari_sdl.c: name changes
+* sndsave.[ch], atari.c, pokeysnd.c, ui.c: rename externals with SndSave_
+* statesav.[ch], antic.c, atari.c, cartridge.c, cpu.c, dc/atari_dc.c, gtia.c,
+memory.c, pbi.c, pbi_bb.c, pbi_mio.c, pbi_xld.c, pia.c, pokey.c, sio.c, ui.c,
+xep80.c: rename externals with StateSav_
+* log.[ch], antic.c, atari.c, atari_basic.c, atari_curses.c, atari_falcon.c,
+atari_ntsc.c, atari_ps2.c, atari_sdl.c, atari_svgalib.c, atari_x11.c,
+binload.c, cassette.c, colours.c, devices.c, dos/atari_vga.c, dos/dos_sb.c,
+dos/sound_dos.c, input.c, javanvm/atari_javanvm.c, memory.c, pbi_bb.c,
+pbi_mio.c, pbi_xld.c, rdevice.c, remez.c, rtime.c, screen.c, sio.c,
+sound_oss.c, statesav.c, ui_basic.c, win32/atari_win32.c, win32/joystick.c,
+win32/screen_win32.c, win32/sound.c, wince/port/atari_wince.c,
+wince/port/sound.c, xep80.c: rename externals with Log_, Aprint -> Log_print
+Aflushlog -> Log_flushlog.
+* compfile.[ch], sio.c, ui.c rename CompressedFile_ to CompFile_ so that it
+matches the filename.
+* xep80_fonts.[ch] xep80.c: rename externals with XEP80_Fonts_.
+* votrax.[ch], pbi_xld.c: rename externals with Votrax_, INT16 -> SWORD.
+* binload.[ch], atari.c, cartridge.c, devices.c, sio.c: rename externals with
+BINLOAD_
+* colours.[ch], atari.[ch], atari_falcon.c, atari_ps2.c, atari_sdl.c,
+atari_svgalib.c, atari_x11.c, dc/atari_dc.c, dos/atari_vga.c, atari_javanvm.c,
+screen.c, win32/screen_win32.c, wince/port/screen_wince.cpp: rename externals
+with Colours_, Palette -> Colours_ so that it matches the filename.
+* screen.[ch], antic.c, atari.[ch], atari_falcon.c, atari_ps2.c, atari_sdl.c,
+atari_x11.c, dc/atari_dc.c, dos/atari_vga.c, input.c, ui.c,
+ui_basic.c, win32/atari_win32.c, wince/port/atari_wince.c, wince/port/main.c,
+wince/port/screen_wince.cpp: rename externals to Screen_, atari_screen ->
+Screen_atari, etc. move entire_screen_dirty from antic.c to screen.c, rename
+Screen_EntireDirty.
+* xep80.[ch]: rename ATARI_EOL -> XEP80_ATARI_EOL
+* rtime.[ch], cartridge.c, ui.c: rename rtime_enabled -> RTIME_enabled
+* cassette.[ch], atari.c, gtia.c, input.c, sio.c, ui.c, rename CASSETTE_, make
+some vars static.
+* rdevice.[ch], devices.c, atari.c: rename RDevice_
+* monitor.[ch], atari_basic.c, atari_curses.c, atari_falcon.c, atari_ps2.c,
+atari_sdl.c, atari_svgalib.c, atari_x11.c, cpu.c, dos/atari_vga.c,
+win32/atari_win32.c: rename Monitor_
+
+
+2008-06-30  Perry McFarlane  <perry_m@fastmail.fm>
+* atari.c, atari_sdl.c, configure.ac, javanvm/atari800.java,
+javanvm/atari_javanvm.c, pokeysnd.c, sound.h, ui.c, win32/sound.c:
+add support for stereo, new sound.h function Sound_Reint on some platforms,
+fixes to sdl sound, minor fixes.
+* win32/sound.c: fix STEREO_SOUND undefined
+
+
+2008-06-29  Perry McFarlane  <perry_m@fastmail.fm>
+* configure.ac: -source 1.4 to suppress javac warnings
+
+
+2008-06-28  Perry McFarlane  <perry_m@fastmail.fm>
+* memory.h: suppress PAGED_MEM warning
+
+
+2008-06-27  Perry McFarlane  <perry_m@fastmail.fm>
+* atari.c: add -basic_rom none
+* Makefile.in fix javanvm variables
+* util.[ch] cassette.c, configure.ac: Util_strncpy to fix javanvm bug
+* INSTALL, UnixRuntime.patch, atari800.java, atari_javanvm.c: Java applet
+
+
+2008-06-24  Perry McFarlane  <perry_m@fastmail.fm>
+* pbi.[ch], pbi_xld.[ch], pbi_bb.[ch], pbi_mio.[ch], statesav.c: state saving
+for MIO, Black Box, XLD.
+
+
+2008-06-19  Perry McFarlane  <perry_m@fastmail.fm>
+* ui.c, xep80.c: improve XEP80 state saving
+
+
+2008-06-18  Perry McFarlane  <perry_m@fastmail.fm>
+* DOC/CREDITS, DOC/TODO, USAGE, atari.c, atari_sdl.c, configure.ac, pia.c,
+platform.h, statesav.c, ui.c, xep80.[ch], xep80_fonts.[ch]:
+Added XEP80 emulation by Mark Grebe to the SDL version, from Atari800MacX
+
+
+2008-06-18  Christian Groessler  <chris@groessler.org>
+* dc/atari_dc.c (Atari_Keyboard): recognize TAB key.
+* atari_x11.c (Atari_DisplayScreen): add missing XSync call in not-SHM
+part.
+* ui.c, ui.h: add additional parameter to the fMessage function,
+indicating whether to wait for a key press. Display a "please wait"
+message in SaveState and LoadState.
+* ui_basic.c: adapt to fMessage change. Change BasicUIMessage to use
+the new parameter and clear status line before writing the new
+message.
+
+
+2008-06-15  Christian Groessler  <chris@groessler.org>
+* rdevice.c, dc/Makefile.dc, dc/config.h, dc/atari_dc.c: add serial R:
+support for Dreamcast
+
+
+2008-06-14  Perry McFarlane  <perry_m@fastmail.fm>
+* input.c: 5200 bit 5 toggle fix (Star Trek)
+* atari_sdl.c, input.c: fix shift+control keys
+* atari_sdl.c, dos/atari_vga.c, javanvm/atari_javanvm.c,
+  win32/atari_win32.c: further shift+control fixes
+* USAGE: updated keyboard
+* statesav.c: fix gzFile
+
+
+2008-06-13  Perry McFarlane  <perry_m@fastmail.fm>
+* rdevice.c, configure.ac: fix for win32 R: device
+* pokey.c: IRQEN fix
+* pokeysnd.c: add #ifdef PBI_XLD
+
+
+2008-06-12  Christian Groessler  <chris@groessler.org>
+* rdevice.c, configure.ac: R: device now not longer inherently supports
+network (with serial as an additional option). Now serial-only,
+network-only, or both can be selected.
+
+
+2008-05-31  Piotr Fusik  <fox@scene.pl>
+* atari.c, pokey.c: made the BASIC version compilable
+
+
+2008-05-29  Perry McFarlane  <perry_m@fastmail.fm>
+* atari_sdl.c, cassette.c, input.c, memory.c, pbi_bb.c, pbi_proto80.c,
+pbi_xld.c, pokeysnd.c, sio.c, statesav.c, ui.h, util.[ch], votrax.c:
+made compilable with g++. Fixed some bugs, and a bugfix for pbi_xld.c,
+other minor fixes.
+
+
+2008-05-28  Perry McFarlane  <perry_m@fastmail.fm>
+* DOC/USAGE, atari_sdl.c, configure.ac, pbi.c, pbi_proto80.c, pbi_proto80.h,
+pbi_xld.c: added emulation of a prototype 80 column card for the Atari 1090
+expansion box (SDL version).  Also fixed a problem with LoadImage in pbi_xld.c
+* DOC/INSTALL: Improved documentation a bit, suggested use of SDL.
+* input.[ch], pokey.c: record random_scanline_counter for event recording.
+
+
+2008-05-27  Perry McFarlane  <perry_m@fastmail.fm>
+* antic.c, atari_ntsc.h, cassette.c, gtia.c, joycfg.c, monitor.c,
+mzpokeysnd.c, pbi.c, pokeysnd.c, screen.c, sio.c, votrax.c:
+Some spelling in comments corrected.
+* mzpokeysnd.c: fix warnings
+
+
+2008-05-26  Perry McFarlane  <perry_m@fastmail.fm>
+* antic.[ch], atari.[ch], atari_sdl.c, cartridge.h, cassette.c, cpu.h,
+gtia.[ch], javanvm/atari_javanvm.c, mzpokeysnd.c, pbi_bb.c, pbi_mio.c, 
+pbi_scsi.c, pbi_xld.[ch], pia.h, platform.h, pokey.h, rtime.[ch], sio.h,
+statesav.c, ui.c, ui_basic.c, util.[ch], votrax.[ch]:
+  I compiled with:
+  CC = gcc -ansi -pedantic -Wall -Waggregate-return -Wmissing-declarations 
+  -Wmissing-prototypes -Wredundant-decls -Wstrict-prototypes -Winline 
+  and I found missing headers and lack of static in many places.
+  Black Box and MIO will now continue with SCSI disabled if the disk image
+  is not found.
+
+* Makefile.in, configure.ac, cpu.c, atari_vga.c, sound_dos.c, vga_gfx.c,
+javanvm/atari_javanvm.c, rdevice.c, win32/atari_win32.c, win32/keyboard.h,
+win32/main.h, win32/screen_win32.c:
+  Made windx, sdl, and javanvm compile with -ansi -pedantic. Fixed more
+  warnings. Made improved gcc warnings the default for windx, sdl, javanvm
+  and dosvga.
+
+* rdevice.c: removed // comments and warnings.
+
+* cpu.c: gcc will use goto and use of __extension__ will avoid -pedantic
+  warnings.
+
+
+2008-05-25  Perry McFarlane  <perry_m@fastmail.fm>
+* atari_sdl.c, cpu.c, pbi_mio.c, pbi_xld.c, win32/atari_win32.c,
+win32/screen_win32.c: some gcc -ansi -pedantic fixes
+
+
+2008-05-25  Piotr Fusik  <fox@scene.pl>
+* win32/msc/Makefile: added votrax and pbi_xld
+
+* sio.c, pbi_xld.c: made compilable with VC2005
+
+
+2008-05-25  Perry McFarlane  <perry_m@fastmail.fm>
+* votrax.[ch] vtxsmpls.inc pbi.[ch] pbi_xld.[ch] pbi_mio.[ch] pbi_bb.[ch]
+pbi_scsi.[ch] sio.[ch] atari.c configure.ac atari_sdl.c
+dos/atari_vga.c javanvm/atari_javanvm.c win32/atari_win32.c memory.c
+pokeysnd.c DOC/CREDITS DOC/README DOC/TODO DOC/USAGE:
+Added emulation of the 1400XL, 1450XLD, MIO and Black Box.
+
+
+2008-05-24  Achim Haertel  <achim.haertel@e-technik.tu-chemnitz.de>
+* cassette.c: implemented loading with variable baud rate
+
+
+2008-05-22  Petr Stehlik  <pstehlik@sophics.cz>
+* cpu_m68k.asm: made linkable (missing cim_encountered and rts_handler).
+  Surprisingly it is working (ATARI BASIC READY) eventhough it is 5 years
+  outdated and needs many changes to be in sync with cpu.c again.
+
+* cpu_m68k.S: made compilable and linkable. It even sort of works but
+  fails before reaching the ATARI BASIC READY prompt :-( The conversion
+  is still not correct but debugging it is hard...
+
+
+2008-05-21  Petr Stehlik  <pstehlik@sophics.cz>
+* atari_x11.c: removed "-fps" support, use "-showspeed" instead
+* USAGE, atari800.man: updated wrt. removed "-fps"
+* cpu_m68k.S: added fresh conversion of 5 years outdated cpu_m68k.asm
+* configure.ac: default LDFLAGS will be without the "-s" (strip binary)
+  since package maintainers don't like autostriping of the debug symbols.
+
+
+2008-05-20  Petr Stehlik  <pstehlik@sophics.cz>
+* .asm->.S: Devpac syntax of asm files converted to gcc one
+* gst2gcc: removed, no longer needed
+* Makefike.in: updated for compiling/assembling the .S files
+* atari_falcon.c: corrected include path to "falcon.h"
+* atari.c: corrected C++-ism (my old gcc 2.91 didn't like it)
+* DOC/INSTALL.falcon updated (an optimized rebuild script added)
+
+
+2008-05-15  Perry McFarlane  <perry_m@fastmail.fm>
+* rdevice.[ch] atari.c configure.ac: Windows support for R: device.
+* USAGE: added record/playback
+
+
+2008-05-14  Perry McFarlane  <perry_m@fastmail.fm>
+* input.c: stdlib for exit()
+
+
+2008-05-13  Perry McFarlane  <perry_m@fastmail.fm>
+* configure.ac: nonlinear mixing minor fix
+* input.[ch], configure.ac, pokey.c, atari.c, TODO: event recording
+
+
+2008-05-11  Perry McFarlane  <perry_m@fastmail.fm>
+* dos/atari_vga.c, configure.ac: Atari_PaletteUpdate
+* win32/sound.c, pokeysnd.h SND_STEREO removed (obsolete)
+
+
+2008-05-10  Perry McFarlane  <perry_m@fastmail.fm>
+* mzpokeysnd.c, pokeymix.inc: use shorts for smaller file size with table
+
+
+2008-05-09  Perry McFarlane  <perry_m@fastmail.fm>
+* mzpokeysnd.c, pokey.c: fixed two-tone
+
+
+2008-05-08  Petr Stehlik  <pstehlik@sophics.cz>
+* atari.c: get rid of #ifdef USE_CLOCK and also #ifdef DONT_SYNC_WITH_HOST
+* configure.ac: get rid of USE_CLOCK for Falcon
+
+
+2008-05-07  Petr Stehlik  <pstehlik@sophics.cz>
+* screen.c: DrawAtariSpeed() now computes the real speed by itself and always
+  shows it (if enabled) even if it is at 100% or around (previously it was
+  hidden when in range 99% - 101%). It even shows speed < 100% (previously
+  it didn't) - hopefully this will help profiling various ./configure
+  options on slow Atari800 hosts.
+
+* atari.c: just some cleanup around the atari_sync(), no functional changes.
+
+
+2008-05-07  Perry McFarlane  <perry_m@fastmail.fm>
+* mzpokeysnd.c, configure.ac, pokey.h, pokeymix.inc: Nonlinear mixing,
+  two-tone filter, corrected STIMER.
+
+
+2008-05-05  Perry McFarlane  <perry_m@fastmail.fm>
+* javanvm/atari_javanvm.c, atari_sdl.c: remove // comments
+* javanvm/atari800.java: fix frame.pack()
+* Makefile.in, DOC/INSTALL: changed to make jar file by default for Java
+* Makefile.in: added comments to build from NestedVM javasource compiler
+
+
+2008-04-16  Piotr Fusik  <fox@scene.pl>
+* antic.c, atari.c, memory.c: in C code local variable definitions should
+  precede statements
+
+
+2008-04-16  Achim Haertel  <achim.haertel@e-technik.tu-chemnitz.de>
+* cassette.[ch], pia.c, pokey.c, screen.c, sio.[ch]:
+  implemented raw writing (via HW registers, not SIO) to cassette files
+
+
+2008-04-08  Perry McFarlane  <perry_m@fastmail.fm>
+* javanvm/atari_javanvm.c, javanvm/atari800.java, configure.ac: sound support
+for the Java NestedVM port
+
+
+2007-11-28  Marcin Zukowski  <marcin.zukowski@gmail.com>
+* cartridge.c: fixed Atrax cartridge bank switching
+
+
+2007-10-19  Perry McFarlane  <perry_m@fastmail.fm>
+* javanvm/atari_javanvm.c: keypad fix 
+
+
+2007-10-18  Perry McFarlane  <perry_m@fastmail.fm>
+* javanvm/atari_javanvm.[ch] javanvm/atari800.java added for Java NestedVM
+  port configure.ac, Makefile.in, platform.h, INSTALL, USAGE: modified for
+  NestedVM port
+
+* screen.c, USAGE: -showspeed command line option
+* win32/*: suppress gcc warnings
+* win32/screen_win32.c, configure.ac: support Atari_PaletteUpdate
+
+
+2007-10-11  Perry McFarlane  <perry_m@fastmail.fm>
+* devices.h: make h_current_dir extern
+* monitor.c: COLOUR -> COLOR
+
+
+2007-10-04  Perry McFarlane  <perry_m@fastmail.fm>
+* colours.[ch], atari.[ch], platform.h, USAGE, atari_sdl.c, atari_ntsc.c,
+  configure.ac, TODO: added support for switching between NTSC and PAL
+  palettes.
+  The platform-specific function Atari_PaletteUpdate is now required in those
+  ports which calculate their own palette from colortable.  The SDL version
+  is working but other ports will need to be updated.
+
+
+2007-10-02  Perry McFarlane  <perry_m@fastmail.fm>
+* antic.c: cleaner macros
+* cycle_map.c: minor cleanup
+* ui.c, README, amiga/Atari800.guide: GPL version 2 now, not 1
+* most files: FSF address change in GPL notices.
+
+
+2007-09-30  Perry McFarlane  <perry_m@fastmail.fm>
+* antic.c: Added better support for GTIA bug mode.
+
+
+2007-09-12  Perry McFarlane  <perry_m@fastmail.fm>
+* memory.c: Fix PAGED_MEM error (missing break in switch) with POKEY in
+  loading saved states.
+
+* memory.[ch], statesav.c, cpu.c Support Axlon and Mosaic state saving.
+  SAVE_VERSION_NUMBER upgraded to from 4 to 5
+
+
+2007-09-06  Perry McFarlane  <perry_m@fastmail.fm>
+* memory.[ch], atari.c, TODO, USAGE: add Axlon and Mosaic RAM expansions
+  for the 400/800.
+
+
+2007-08-04  Perry McFarlane  <perry_m@fastmail.fm>
+* memory.c: fix PBIM1/M2_Get/PutByte in MemStateRead
+* atari_ntsc.c: tweak default parameters a bit
+
+
+2007-08-02  Perry McFarlane  <perry_m@fastmail.fm>
+* atari_sdl.c: fix broken Caps Lock key handling
+* atari_sdl.c: reduce default NTSC scanlines percentage from 20 to 5
+
+
+2007-07-31  Perry McFarlane  <perry_m@fastmail.fm>
+* configure.ac, INSTALL: fix for windows sdl version.  Don't use -mwindows or
+  -Dmain=SDL_main and use -mno-cygwin on Cygwin.  SDL_win32_main.c is now 
+  required from the sdl source.  Update documentation in INSTALL. This fixes
+  the stdout.txt problem.
+
+* atari_sdl.c: fix for windows sdl version.  Make SDL_VIDEODRIVER=directx by
+  default because it is much faster.  SDL 1.2.10+ uses windib as the default.
+
+* atari_sdl.c: added interpolated scanlines, made it the default, added
+  -scanlinesnoint option to disable it
+
+
+2007-07-30  Perry McFarlane  <perry_m@fastmail.fm>
+* configure.ac: fix for windows sdl version.  Don't require winmm or gdi32
+
+
 ** 2.0.3 released on 2007-07-11
 
 2007-04-23  Piotr Fusik  <fox@scene.pl>

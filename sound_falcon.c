@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
@@ -86,12 +86,12 @@ void timer_A_v_C(void)
 
 	if (first) {
 		Setbuffer((long)dsp_buffer1, sndbufsize);		/* set next DMA buffer */
-		Pokey_process(dsp_buffer1, sndbufsize);		/* quickly compute it */
+		POKEYSND_Process(dsp_buffer1, sndbufsize);		/* quickly compute it */
 		first = FALSE;
 	}
 	else {
 		Setbuffer((long)dsp_buffer2, sndbufsize);
-		Pokey_process(dsp_buffer2, sndbufsize);
+		POKEYSND_Process(dsp_buffer2, sndbufsize);
 		first = TRUE;
 	}
 }
@@ -172,7 +172,7 @@ void Sound_Initialise(int *argc, char *argv[])
 #ifdef STEREO_SOUND
 #  error "Unsupported Stereo Sound"
 #else
-		Pokey_sound_init(FREQ_17_EXACT, dsprate, 1, 0);
+		POKEYSND_Init(POKEYSND_FREQ_17_EXACT, dsprate, 1, 0);
 #endif
 		Supexec(MFP_IRQ_on);
 	}

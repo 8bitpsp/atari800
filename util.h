@@ -1,9 +1,10 @@
-#ifndef _UTIL_H_
-#define _UTIL_H_
+#ifndef UTIL_H_
+#define UTIL_H_
 
 #include "config.h"
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #ifdef WIN32
 #include <windows.h>
 #endif
@@ -17,7 +18,11 @@
    in different case. */
 int Util_chrieq(char c1, char c2);
 
-#ifdef WIN32
+#ifdef __STRICT_ANSI__
+/* Returns a positive integer if str1>str2, negative if str1<str2
+ * 0 if str1 == str2, case insensitive */
+int Util_stricmp(const char *str1, const char *str2);
+#elif defined(WIN32)
 #define Util_stricmp _stricmp
 #elif defined(HAVE_STRCASECMP)
 #define Util_stricmp strcasecmp
@@ -28,6 +33,13 @@ int Util_chrieq(char c1, char c2);
 /* Same as stpcpy() in some C libraries: copies src to dest
    and returns a pointer to the trailing NUL in dest. */
 char *Util_stpcpy(char *dest, const char *src);
+
+/* NestedVM strncpy from newlib has a bug */
+#ifdef HAVE_STRNCPY
+#define Util_strncpy strncpy
+#else
+char *Util_strncpy(char *dest, const char *src, size_t size);
+#endif
 
 /* Same as strlcpy() in some C libraries: copies src to dest
    and terminates the string. Never writes more than size characters
@@ -57,6 +69,8 @@ int Util_sscanhex(const char *s);
 /* Likewise, but allows only 0 and 1. */
 int Util_sscanbool(const char *s);
 
+/* safe_strncpy guarantees that the dest. buffer ends with '\0' */
+char *safe_strncpy(char *, const char *, int);
 
 /* Memory management ----------------------------------------------------- */
 
@@ -74,15 +88,15 @@ char *Util_strdup(const char *s);
 
 /* I assume here that '\n' is not valid in filenames,
    at least not as their first character. */
-#define FILENAME_NOT_SET               "\n"
+#define Util_FILENAME_NOT_SET               "\n"
 #define Util_filenamenotset(filename)  ((filename)[0] == '\n')
 
-#ifdef BACK_SLASH
-#define DIR_SEP_CHAR '\\'
-#define DIR_SEP_STR  "\\"
+#ifdef DIR_SEP_BACKSLASH
+#define Util_DIR_SEP_CHAR '\\'
+#define Util_DIR_SEP_STR  "\\"
 #else
-#define DIR_SEP_CHAR '/'
-#define DIR_SEP_STR  "/"
+#define Util_DIR_SEP_CHAR '/'
+#define Util_DIR_SEP_STR  "/"
 #endif
 
 /* Splits a filename into directory part and file part. */
@@ -116,11 +130,7 @@ int Util_flen(FILE *fp);
 
 /* Deletes a file, returns 0 on success, -1 on failure. */
 #ifdef WIN32
-#ifdef UNICODE
 int Util_unlink(const char *filename);
-#else
-#define Util_unlink(filename)  ((DeleteFile(filename) != 0) ? 0 : -1)
-#endif /* UNICODE */
 #define HAVE_UTIL_UNLINK
 #elif defined(HAVE_UNLINK)
 #define Util_unlink  unlink
@@ -165,4 +175,4 @@ FILE *Util_uniqopen(char *filename, const char *mode);
 #define Util_fclose(fp, tmpbuf)             fclose(fp)
 #endif
 
-#endif /* _UTIL_H_ */
+#endif /* UTIL_H_ */

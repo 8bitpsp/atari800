@@ -6,12 +6,16 @@
 #include "menu.h"
 #include "emulate.h"
 
+#include "akey.h"
+#include "afile.h"
 #include "pokeysnd.h"
 #include "sio.h"
 #include "cartridge.h"
 #include "statesav.h"
 #include "atari.h"
 #include "input.h"
+#include "memory.h"
+#include "screen.h"
 
 #include "video.h"
 #include "image.h"
@@ -61,10 +65,10 @@ GameConfig ActiveGameConfig;
 GameConfig DefaultComputerConfig =
 {
   {
-    JOY|STICK_FORWARD,   /* Analog Up    */
-    JOY|STICK_BACK,      /* Analog Down  */
-    JOY|STICK_LEFT,      /* Analog Left  */
-    JOY|STICK_RIGHT,     /* Analog Right */
+    JOY|INPUT_STICK_FORWARD,   /* Analog Up    */
+    JOY|INPUT_STICK_BACK,      /* Analog Down  */
+    JOY|INPUT_STICK_LEFT,      /* Analog Left  */
+    JOY|INPUT_STICK_RIGHT,     /* Analog Right */
     KBD|AKEY_UP,         /* D-pad Up     */
     KBD|AKEY_DOWN,       /* D-pad Down   */
     KBD|AKEY_LEFT,       /* D-pad Left   */
@@ -75,8 +79,8 @@ GameConfig DefaultComputerConfig =
     0,                   /* Triangle     */
     0,                   /* L Trigger    */
     MET|META_SHOW_KEYS,  /* R Trigger    */
-    CSL|CONSOL_SELECT,   /* Select       */
-    CSL|CONSOL_START,    /* Start        */
+    CSL|INPUT_CONSOL_SELECT,   /* Select       */
+    CSL|INPUT_CONSOL_START,    /* Start        */
     MET|META_SHOW_MENU,  /* L+R Triggers */
     0,                   /* Start+Select */
   }
@@ -84,14 +88,14 @@ GameConfig DefaultComputerConfig =
 DefaultConsoleConfig = 
 {
   {
-    JOY|STICK_FORWARD,    /* Analog Up    */
-    JOY|STICK_BACK,       /* Analog Down  */
-    JOY|STICK_LEFT,       /* Analog Left  */
-    JOY|STICK_RIGHT,      /* Analog Right */
-    JOY|STICK_FORWARD,    /* D-pad Up     */
-    JOY|STICK_BACK,       /* D-pad Down   */
-    JOY|STICK_LEFT,       /* D-pad Left   */
-    JOY|STICK_RIGHT,      /* D-pad Right  */
+    JOY|INPUT_STICK_FORWARD,    /* Analog Up    */
+    JOY|INPUT_STICK_BACK,       /* Analog Down  */
+    JOY|INPUT_STICK_LEFT,       /* Analog Left  */
+    JOY|INPUT_STICK_RIGHT,      /* Analog Right */
+    JOY|INPUT_STICK_FORWARD,    /* D-pad Up     */
+    JOY|INPUT_STICK_BACK,       /* D-pad Down   */
+    JOY|INPUT_STICK_LEFT,       /* D-pad Left   */
+    JOY|INPUT_STICK_RIGHT,      /* D-pad Right  */
     0,                    /* Square       */
     TRG|0,                /* Cross        */
     0,                    /* Circle       */
@@ -213,16 +217,16 @@ PL_MENU_OPTIONS_BEGIN(FrameSkipOptions)
   PL_MENU_OPTION("Skip 5 frame", 5)
 PL_MENU_OPTIONS_END
 PL_MENU_OPTIONS_BEGIN(MachineTypeOptions)
-  PL_MENU_OPTION("800",  MACHINE_TYPE(MACHINE_OSB,  48))
-  PL_MENU_OPTION("800 XL", MACHINE_TYPE(MACHINE_XLXE, 64))
-  PL_MENU_OPTION("130 XE", MACHINE_TYPE(MACHINE_XLXE, 128))
-  PL_MENU_OPTION("320 XE (Compy Shop)", MACHINE_TYPE(MACHINE_XLXE, RAM_320_COMPY_SHOP))
-  PL_MENU_OPTION("320 XE (Rambo)", MACHINE_TYPE(MACHINE_XLXE, RAM_320_RAMBO))
-  PL_MENU_OPTION("5200", MACHINE_TYPE(MACHINE_5200, 16))
+  PL_MENU_OPTION("800",  MACHINE_TYPE(Atari800_MACHINE_OSB,  48))
+  PL_MENU_OPTION("800 XL", MACHINE_TYPE(Atari800_MACHINE_XLXE, 64))
+  PL_MENU_OPTION("130 XE", MACHINE_TYPE(Atari800_MACHINE_XLXE, 128))
+  PL_MENU_OPTION("320 XE (Compy Shop)", MACHINE_TYPE(Atari800_MACHINE_XLXE, MEMORY_RAM_320_COMPY_SHOP))
+  PL_MENU_OPTION("320 XE (Rambo)", MACHINE_TYPE(Atari800_MACHINE_XLXE, MEMORY_RAM_320_RAMBO))
+  PL_MENU_OPTION("5200", MACHINE_TYPE(Atari800_MACHINE_5200, 16))
 PL_MENU_OPTIONS_END
 PL_MENU_OPTIONS_BEGIN(TVModeOptions)
-  PL_MENU_OPTION("NTSC", TV_NTSC)
-  PL_MENU_OPTION("PAL",  TV_PAL)
+  PL_MENU_OPTION("NTSC", Atari800_TV_NTSC)
+  PL_MENU_OPTION("PAL",  Atari800_TV_PAL)
 PL_MENU_OPTIONS_END
 PL_MENU_OPTIONS_BEGIN(DiskImageOptions)
   PL_MENU_OPTION(VacantText, 0)
@@ -235,15 +239,15 @@ PL_MENU_OPTIONS_BEGIN(ComputerButtonMapOptions)
   PL_MENU_OPTION("Special: Show Keyboard", MET|META_SHOW_KEYS)
   /* Console */
   PL_MENU_OPTION("Console: Reset",  SPC|-AKEY_WARMSTART)
-  PL_MENU_OPTION("Console: Option", CSL|CONSOL_OPTION)
-  PL_MENU_OPTION("Console: Select", CSL|CONSOL_SELECT)
-  PL_MENU_OPTION("Console: Start",  CSL|CONSOL_START)
+  PL_MENU_OPTION("Console: Option", CSL|INPUT_CONSOL_OPTION)
+  PL_MENU_OPTION("Console: Select", CSL|INPUT_CONSOL_SELECT)
+  PL_MENU_OPTION("Console: Start",  CSL|INPUT_CONSOL_START)
   PL_MENU_OPTION("Console: Help",   KBD|AKEY_HELP)
   /* Joystick */
-  PL_MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD)
-  PL_MENU_OPTION("Joystick: Down", JOY|STICK_BACK)
-  PL_MENU_OPTION("Joystick: Left", JOY|STICK_LEFT)
-  PL_MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT)
+  PL_MENU_OPTION("Joystick: Up",   JOY|INPUT_STICK_FORWARD)
+  PL_MENU_OPTION("Joystick: Down", JOY|INPUT_STICK_BACK)
+  PL_MENU_OPTION("Joystick: Left", JOY|INPUT_STICK_LEFT)
+  PL_MENU_OPTION("Joystick: Right",JOY|INPUT_STICK_RIGHT)
   PL_MENU_OPTION("Joystick: Fire", TRG|0)
   /* Keyboard */
   PL_MENU_OPTION("Keyboard: Up",   KBD|AKEY_UP) 
@@ -308,10 +312,10 @@ PL_MENU_OPTIONS_BEGIN(ConsoleButtonMapOptions)
   PL_MENU_OPTION("Console: Pause", KBD|AKEY_5200_PAUSE)
   PL_MENU_OPTION("Console: Reset", KBD|AKEY_5200_RESET)
   /* Joystick */
-  PL_MENU_OPTION("Joystick: Up",   JOY|STICK_FORWARD)
-  PL_MENU_OPTION("Joystick: Down", JOY|STICK_BACK)
-  PL_MENU_OPTION("Joystick: Left", JOY|STICK_LEFT)
-  PL_MENU_OPTION("Joystick: Right",JOY|STICK_RIGHT)
+  PL_MENU_OPTION("Joystick: Up",   JOY|INPUT_STICK_FORWARD)
+  PL_MENU_OPTION("Joystick: Down", JOY|INPUT_STICK_BACK)
+  PL_MENU_OPTION("Joystick: Left", JOY|INPUT_STICK_LEFT)
+  PL_MENU_OPTION("Joystick: Right",JOY|INPUT_STICK_RIGHT)
   PL_MENU_OPTION("Joystick: Fire", TRG|0)
   /* Keypad */
   PL_MENU_OPTION("1", KBD|AKEY_5200_1) PL_MENU_OPTION("2", KBD|AKEY_5200_2)
@@ -710,7 +714,7 @@ void DisplayMenu()
 
     /* Reset viewport */
     Screen->Viewport.Width = 336;
-    Screen->Viewport.X = (ATARI_WIDTH-336)/2;
+    Screen->Viewport.X = (Screen_WIDTH-336)/2;
 
     /* Display appropriate tab */
     switch (TabIndex)
@@ -753,16 +757,16 @@ void DisplayMenu()
 
     case TAB_SYSTEM:
       item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_STEREO);
-      pl_menu_select_option_by_value(item, (void*)stereo_enabled);
+      pl_menu_select_option_by_value(item, (void*)POKEYSND_stereo_enabled);
       item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_DRIVE);
       pl_menu_update_option(item->options,
-        pl_file_get_filename(sio_filename[0]), NULL);
+        pl_file_get_filename(SIO_filename[0]), NULL);
       item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_MACHINE_TYPE);
-      pl_menu_select_option_by_value(item, (void*)(MACHINE_TYPE(machine_type, ram_size)));
+      pl_menu_select_option_by_value(item, (void*)(MACHINE_TYPE(Atari800_machine_type, MEMORY_ram_size)));
       item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_CROP_SCREEN);
       pl_menu_select_option_by_value(item, (void*)CropScreen);
       item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_TV_MODE);
-      pl_menu_select_option_by_value(item, (void*)tv_mode);
+      pl_menu_select_option_by_value(item, (void*)Atari800_tv_mode);
       pspUiOpenMenu(&SystemUiMenu, NULL);
       break;
 
@@ -795,14 +799,14 @@ static void DisplayControlTab()
   pl_menu_item *item;
   const char *config_name;
   config_name = (LoadedGame) ? pl_file_get_filename(LoadedGame)
-    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+    : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
   char *game_name = strdup(config_name);
   char *dot = strrchr(game_name, '.');
   if (dot) *dot='\0';
 
   /* Reinitialize the control menu to reflect console or computer */
   pl_menu_destroy(&ControlUiMenu.Menu);
-  pl_menu_create(&ControlUiMenu.Menu, (machine_type == MACHINE_5200) 
+  pl_menu_create(&ControlUiMenu.Menu, (Atari800_machine_type == Atari800_MACHINE_5200) 
     ? ConsoleControlMenuDef : ComputerControlMenuDef);
 
   /* Load current button mappings */
@@ -821,7 +825,7 @@ static void DisplayStateTab()
 
   const char *config_name;
   config_name = (LoadedGame) ? pl_file_get_filename(LoadedGame)
-    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+    : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
   char *path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
   char *game_name = strdup(config_name);
   char *dot = strrchr(game_name, '.');
@@ -887,10 +891,10 @@ void LoadOptions()
   Config.ToggleVK = pl_ini_get_int(&init, "Input", "VK Mode", 0);
 
   CropScreen = pl_ini_get_int(&init, "System", "Crop screen", 0);
-  machine_type = pl_ini_get_int(&init, "System", "Machine Type", MACHINE_XLXE);
-  ram_size = pl_ini_get_int(&init, "System", "RAM Size", 64);
-  tv_mode = pl_ini_get_int(&init, "System", "TV mode", TV_PAL);
-  stereo_enabled = pl_ini_get_int(&init, "System", "Stereo", 0);
+  Atari800_machine_type = pl_ini_get_int(&init, "System", "Machine Type", Atari800_MACHINE_XLXE);
+  MEMORY_ram_size = pl_ini_get_int(&init, "System", "RAM Size", 64);
+  Atari800_tv_mode = pl_ini_get_int(&init, "System", "TV mode", Atari800_TV_PAL);
+  POKEYSND_stereo_enabled = pl_ini_get_int(&init, "System", "Stereo", 0);
 
   pl_ini_get_string(&init, "File", "Game Path", NULL, GamePath, sizeof(GamePath));
 
@@ -920,10 +924,10 @@ static int SaveOptions()
   pl_ini_set_int(&init, "Input",  "VK Mode", Config.ToggleVK);
 
   pl_ini_set_int(&init, "System", "Crop screen", CropScreen);
-  pl_ini_set_int(&init, "System", "Machine Type", machine_type);
-  pl_ini_set_int(&init, "System", "RAM Size", ram_size);
-  pl_ini_set_int(&init, "System", "TV mode", tv_mode);
-  pl_ini_set_int(&init, "System", "Stereo", stereo_enabled);
+  pl_ini_set_int(&init, "System", "Machine Type", Atari800_machine_type);
+  pl_ini_set_int(&init, "System", "RAM Size", MEMORY_ram_size);
+  pl_ini_set_int(&init, "System", "TV mode", Atari800_tv_mode);
+  pl_ini_set_int(&init, "System", "Stereo", POKEYSND_stereo_enabled);
 
   pl_ini_set_string(&init, "File", "Game Path", GamePath);
 
@@ -1064,13 +1068,13 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
       break;
 
     case SYSTEM_STEREO:
-      stereo_enabled = (int)option->value;
+      POKEYSND_stereo_enabled = (int)option->value;
       break;
 
     case SYSTEM_TV_MODE:
       if (Config.VSync
-        && (((int)option->value == TV_NTSC && pspVideoGetVSyncFreq() != 60)
-          || ((int)option->value == TV_PAL && pspVideoGetVSyncFreq() != 50)))
+        && (((int)option->value == Atari800_TV_NTSC && pspVideoGetVSyncFreq() != 60)
+          || ((int)option->value == Atari800_TV_PAL && pspVideoGetVSyncFreq() != 50)))
       {
         if (!pspUiConfirm("The frequency of your PSP's video clock\n"
           "does not match the video frequency you selected.\n"
@@ -1078,25 +1082,25 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
           "Are you sure you want to switch frequencies?"))
             return 0;
       }
-      tv_mode = (int)option->value;
+      Atari800_tv_mode = (int)option->value;
       break;
 
     case SYSTEM_MACHINE_TYPE:
-      if ((MACHINE((int)option->value) == machine_type 
-        && RAM((int)option->value) == ram_size)
+      if ((MACHINE((int)option->value) == Atari800_machine_type 
+        && RAM((int)option->value) == MEMORY_ram_size)
           || !pspUiConfirm("This will reset the system. Proceed?")) return 0;
 
-      if ((reinit_controls = machine_type == MACHINE_5200 
-        || MACHINE((int)option->value) == MACHINE_5200))
+      if ((reinit_controls = Atari800_machine_type == Atari800_MACHINE_5200 
+        || MACHINE((int)option->value) == Atari800_MACHINE_5200))
       {
 			  /* Eject disk and cartridge */
-			  CART_Remove();
+			  CARTRIDGE_Remove();
 			  SIO_Dismount(1);
       }
 
       /* Reconfigure machine type & RAM size */
-      machine_type = MACHINE((int)option->value);
-      ram_size = RAM((int)option->value);
+      Atari800_machine_type = MACHINE((int)option->value);
+      MEMORY_ram_size = RAM((int)option->value);
 
       if (reinit_controls)
       {
@@ -1112,7 +1116,7 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
     
     /* Refresh disk image indicator */
     pl_menu_item *item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_DRIVE);
-    pl_menu_update_option(item->options, pl_file_get_filename(sio_filename[0]),
+    pl_menu_update_option(item->options, pl_file_get_filename(SIO_filename[0]),
       NULL);
   }
   else if (uimenu == &OptionUiMenu)
@@ -1127,8 +1131,8 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
       break;
     case OPTION_VSYNC:
       if ((int)option->value 
-        && ((tv_mode == TV_NTSC && pspVideoGetVSyncFreq() != 60)
-          || (tv_mode == TV_PAL && pspVideoGetVSyncFreq() != 50)))
+        && ((Atari800_tv_mode == Atari800_TV_NTSC && pspVideoGetVSyncFreq() != 60)
+          || (Atari800_tv_mode == Atari800_TV_PAL && pspVideoGetVSyncFreq() != 50)))
       {
         if (!pspUiConfirm("The frequency of your PSP's video clock\n"
           "does not match the video frequency of the emulated hardware.\n"
@@ -1169,7 +1173,7 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
 static int OnSwitchDiskImageOk(const void *browser, const void *path)
 {
   /* Detect disk type */
-  switch(Atari800_DetectFileType((char*)path))
+  switch(AFILE_DetectFileType((char*)path))
   {
   case AFILE_ATR:
   case AFILE_XFD:
@@ -1186,24 +1190,24 @@ static int OnSwitchDiskImageOk(const void *browser, const void *path)
   SIO_Dismount(1);
 
   /* Switch system if necessary */
-  int old_mach = machine_type;
-  int old_ram = ram_size;
+  int old_mach = Atari800_machine_type;
+  int old_ram = MEMORY_ram_size;
   int reset = 0;
-  if (machine_type == MACHINE_5200)
+  if (Atari800_machine_type == Atari800_MACHINE_5200)
   {
     reset = 1;
-    machine_type = MACHINE_XLXE;
-    ram_size = 64;
+    Atari800_machine_type = Atari800_MACHINE_XLXE;
+    MEMORY_ram_size = 64;
     Atari800_InitialiseMachine();
   }
 
   /* Load image */
-  if (!Atari800_OpenFile((char*)path, reset, 1, 0))
+  if (!AFILE_OpenFile((char*)path, reset, 1, 0))
   {
     if (reset)
     {
-      machine_type = old_mach;
-      ram_size = old_ram;
+      Atari800_machine_type = old_mach;
+      MEMORY_ram_size = old_ram;
       Atari800_InitialiseMachine();
       pspUiAlert("Error loading file");
       return 0;
@@ -1233,7 +1237,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
     /* Save to MS */
     const char *config_name = (LoadedGame) 
       ? pl_file_get_filename(LoadedGame)
-      : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+      : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
 
     if (SaveGameConfig(config_name, &ActiveGameConfig)) 
       pspUiAlert("Layout saved successfully");
@@ -1254,7 +1258,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
         break;
 
       /* Eject cart & disk (if applicable) */
-		  CART_Remove();
+		  CARTRIDGE_Remove();
 		  SIO_Dismount(1);
 
 		  /* Reset loaded game */
@@ -1270,7 +1274,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
       if (pspUiConfirm("Reset the system?"))
       {
         ResumeEmulation = 1;
-        Coldstart();
+        Atari800_Coldstart();
         return 1;
       }
       break;
@@ -1279,7 +1283,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
 
       /* Save screenshot */
       game_name = (LoadedGame) ? pl_file_get_filename(LoadedGame)
-        : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+        : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
       if (!pl_util_save_image_seq(ScreenshotPath, game_name, Screen))
         pspUiAlert("ERROR: Screenshot not saved");
       else pspUiAlert("Screenshot saved successfully");
@@ -1288,7 +1292,7 @@ int OnMenuOk(const void *uimenu, const void* sel_item)
 
     /* Refresh disk image indicator */
     pl_menu_item *item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_DRIVE);
-    pl_menu_update_option(item->options, pl_file_get_filename(sio_filename[0]),
+    pl_menu_update_option(item->options, pl_file_get_filename(SIO_filename[0]),
       NULL);
   }
 
@@ -1302,7 +1306,7 @@ int OnMenuButtonPress(const struct PspUiMenu *uimenu, pl_menu_item *sel_item,
   {
     if (button_mask & PSP_CTRL_SQUARE)
     {
-      const char *default_file = (machine_type == MACHINE_5200)
+      const char *default_file = (Atari800_machine_type == Atari800_MACHINE_5200)
         ? DefaultConsoleConfigFile : DefaultComputerConfigFile;
 
       /* Save to MS as default mapping */
@@ -1310,7 +1314,7 @@ int OnMenuButtonPress(const struct PspUiMenu *uimenu, pl_menu_item *sel_item,
         pspUiAlert("ERROR: Changes not saved");
       else
       {
-			  GameConfig *config = (machine_type == MACHINE_5200) 
+			  GameConfig *config = (Atari800_machine_type == Atari800_MACHINE_5200) 
 			    ? &DefaultConsoleConfig : &DefaultComputerConfig;
 
         /* Modify in-memory defaults */
@@ -1338,7 +1342,7 @@ int OnMenuButtonPress(const struct PspUiMenu *uimenu, pl_menu_item *sel_item,
   else if (uimenu == &SystemUiMenu)
   {
     if (sel_item->id == SYSTEM_DRIVE && (button_mask & PSP_CTRL_TRIANGLE)
-      && (drive_status[0] != Off && drive_status[0] != NoDisk)
+      && (SIO_drive_status[0] != SIO_OFF && SIO_drive_status[0] != SIO_NO_DISK)
       && pspUiConfirm("Eject disk?"))
     {
       /* Eject disk */
@@ -1346,7 +1350,7 @@ int OnMenuButtonPress(const struct PspUiMenu *uimenu, pl_menu_item *sel_item,
 
       /* Refresh disk image indicator */
       pl_menu_item *item = pl_menu_find_item_by_id(&SystemUiMenu.Menu, SYSTEM_DRIVE);
-      pl_menu_update_option(item->options, pl_file_get_filename(sio_filename[0]),
+      pl_menu_update_option(item->options, pl_file_get_filename(SIO_filename[0]),
         NULL);
     }
   }
@@ -1383,14 +1387,14 @@ PspImage* LoadStateIcon(const char *path)
 /* Load state */
 int LoadState(const char *path)
 {
-  return ReadAtariState(path, "r");
+  return StateSav_ReadAtariState(path, "r");
 }
 
 /* Save state */
 PspImage* SaveState(const char *path, PspImage *icon)
 {
   /* Save state */
-  if (!SaveAtariState(path, "w", 1))
+  if (!StateSav_SaveAtariState(path, "w", 1))
     return NULL;
 
   /* Create thumbnail */
@@ -1427,7 +1431,7 @@ int OnSaveStateOk(const void *gallery, const void *item)
   char *path;
   const char *config_name;
   config_name = (LoadedGame) ? pl_file_get_filename(LoadedGame)
-    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+    : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
   path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
   sprintf(path, "%s%s.s%02i", SaveStatePath, config_name,
     ((const pl_menu_item*)item)->id);
@@ -1459,7 +1463,7 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery, pl_menu_item *sel,
     char caption[32];
 	  const char *config_name;
 	  config_name = (LoadedGame) ? pl_file_get_filename(LoadedGame)
-      : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+      : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
     pl_menu_item *item = pl_menu_find_item_by_id(&gallery->Menu, sel->id);
 
     path = (char*)malloc(strlen(SaveStatePath) + strlen(config_name) + 8);
@@ -1535,17 +1539,17 @@ int OnSaveStateButtonPress(const PspUiGallery *gallery, pl_menu_item *sel,
 
 int LoadCartridge(const char *path)
 {
-  int type = CART_Insert(path);
+  int type = CARTRIDGE_Insert(path);
 
   switch(type)
   {
-	case CART_CANT_OPEN:
+	case CARTRIDGE_CANT_OPEN:
 		pspUiAlert("Cannot open file");
 		return 0;
-	case CART_BAD_CHECKSUM:
+	case CARTRIDGE_BAD_CHECKSUM:
 		pspUiAlert("Invalid cartridge checksum");
 		return 0;
-  case CART_BAD_FORMAT:
+  case CARTRIDGE_BAD_FORMAT:
     pspUiAlert("Unknown cartridge format");
     return 0;
   case 0:
@@ -1557,11 +1561,11 @@ int LoadCartridge(const char *path)
       pl_menu_create(&menu, NULL);
 
 	    for (i = 0; CartType[i]; i++)
-  	    if (cart_kb[i + 1] == type) 
+  	    if (CARTRIDGE_kb[i + 1] == type) 
           pl_menu_append_item(&menu, i + 1, CartType[i]);
 
 	    const pl_menu_item *item = pspUiSelect("Select cartridge type", &menu);
-	    if (item) cart_type = item->id;
+	    if (item) CARTRIDGE_type = item->id;
 
 	    pl_menu_destroy(&menu);
       if (!item) return 0;
@@ -1569,17 +1573,17 @@ int LoadCartridge(const char *path)
 	  break;
   }
 
-	if (cart_type != CART_NONE) 
+	if (CARTRIDGE_type != CARTRIDGE_NONE) 
 	{
-		int for5200 = CART_IsFor5200(cart_type);
-		if (for5200 && machine_type != MACHINE_5200) {
-			machine_type = MACHINE_5200;
-			ram_size = 16;
+		int for5200 = CARTRIDGE_IsFor5200(CARTRIDGE_type);
+		if (for5200 && Atari800_machine_type != Atari800_MACHINE_5200) {
+			Atari800_machine_type = Atari800_MACHINE_5200;
+			MEMORY_ram_size = 16;
 			Atari800_InitialiseMachine();
 		}
-		else if (!for5200 && machine_type == MACHINE_5200) {
-			machine_type = MACHINE_XLXE;
-			ram_size = 64;
+		else if (!for5200 && Atari800_machine_type == Atari800_MACHINE_5200) {
+			Atari800_machine_type = Atari800_MACHINE_XLXE;
+			MEMORY_ram_size = 64;
 			Atari800_InitialiseMachine();
 		}
 	}
@@ -1590,10 +1594,10 @@ int LoadCartridge(const char *path)
 int OnQuickloadOk(const void *browser, const void *path)
 {
   /* Eject disk and cartridge */
-  CART_Remove();
+  CARTRIDGE_Remove();
   SIO_Dismount(1);
 
-  switch (Atari800_DetectFileType(path))
+  switch (AFILE_DetectFileType(path))
   {
 	case AFILE_CART:
 	case AFILE_ROM:
@@ -1601,20 +1605,20 @@ int OnQuickloadOk(const void *browser, const void *path)
 	  break;
 	default:
 	  {
-	    int old_mach = machine_type;
-	    int old_ram = ram_size;
+	    int old_mach = Atari800_machine_type;
+	    int old_ram = MEMORY_ram_size;
 
-      if (machine_type == MACHINE_5200)
+      if (Atari800_machine_type == Atari800_MACHINE_5200)
       {
-				machine_type = MACHINE_XLXE;
-				ram_size = 64;
+				Atari800_machine_type = Atari800_MACHINE_XLXE;
+				MEMORY_ram_size = 64;
 				Atari800_InitialiseMachine();
 			}
 
-		  if (!Atari800_OpenFile(path, 1, 1, 0))
+		  if (!AFILE_OpenFile(path, 1, 1, 0))
 		  {
-				machine_type = old_mach;
-				ram_size = old_ram;
+				Atari800_machine_type = old_mach;
+				MEMORY_ram_size = old_ram;
 				Atari800_InitialiseMachine();
 		    pspUiAlert("Error loading file"); 
 		    return 0; 
@@ -1634,7 +1638,7 @@ int OnQuickloadOk(const void *browser, const void *path)
   LoadGameConfig(LoadedGame, &ActiveGameConfig);
 
   ResumeEmulation = 1;
-	Coldstart();
+	Atari800_Coldstart();
 
 	return 1;
 }
@@ -1644,7 +1648,7 @@ static void InitGameConfig(GameConfig *config)
 {
   if (config != &DefaultConsoleConfig && config != &DefaultComputerConfig) 
   {
-	  GameConfig *default_config = (machine_type == MACHINE_5200) 
+	  GameConfig *default_config = (Atari800_machine_type == Atari800_MACHINE_5200) 
 	    ? &DefaultConsoleConfig : &DefaultComputerConfig;
     memcpy(config, default_config, sizeof(GameConfig));
   }
@@ -1655,7 +1659,7 @@ static int LoadGameConfig(const char *config_name, GameConfig *config)
 {
   char *path;
   config_name = (config_name) ? pl_file_get_filename(config_name)
-    : ((machine_type == MACHINE_5200) ? EmptyCartName : BasicName);
+    : ((Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName);
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);
@@ -1689,7 +1693,7 @@ static int SaveGameConfig(const char *config_name, const GameConfig *config)
 {
   char *path;
   config_name = (config_name) ? config_name
-    : (machine_type == MACHINE_5200) ? EmptyCartName : BasicName;
+    : (Atari800_machine_type == Atari800_MACHINE_5200) ? EmptyCartName : BasicName;
   if (!(path = (char*)malloc(sizeof(char) * (strlen(ConfigPath) 
     + strlen(config_name) + 5)))) return 0;
   sprintf(path, "%s%s.cnf", ConfigPath, config_name);

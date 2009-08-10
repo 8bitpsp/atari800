@@ -1,7 +1,7 @@
 dnl   configure.ac - Autoconf script for building configure
 dnl
 dnl   Copyright (C) 2001 Krzysztof Nikiel
-dnl   Copyright (C) 2001-2006 Atari800 development team (see DOC/CREDITS)
+dnl   Copyright (C) 2001-2009 Atari800 development team (see DOC/CREDITS)
 dnl
 dnl   This file is part of the Atari800 emulator project which emulates
 dnl   the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
@@ -18,10 +18,10 @@ dnl   GNU General Public License for more details.
 dnl
 dnl   You should have received a copy of the GNU General Public License
 dnl   along with Atari800; if not, write to the Free Software
-dnl   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+dnl   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 AC_PREREQ(2.57)
-AC_INIT(Atari800, 2.0.3, pstehlik@sophics.cz)
+AC_INIT(Atari800, 2.1.0, pstehlik@sophics.cz)
 AC_CONFIG_SRCDIR(atari.c)
 AC_CONFIG_HEADER(config.h)
 
@@ -29,7 +29,7 @@ AC_CONFIG_HEADER(config.h)
 dnl Set a8_target...
 
 case "$target" in
-    basic | curses | ncurses | pdcurses | dosvga | falcon | ps2 | sdl | svgalib | windx | x11 | x11-shm | x11-motif | x11-xview | x11-xview-shm)
+    basic | curses | ncurses | pdcurses | dosvga | falcon | javanvm | javanvm-basic | ps2 | sdl | windx | x11 | x11-shm | x11-motif | x11-xview | x11-xview-shm)
         a8_target="$target"
         ;;
     shm | motif | xview | xview-shm)
@@ -48,8 +48,9 @@ case "$target" in
         echo "    pdcurses         (text mode using PDCurses library)"
         echo "    dosvga           (DOS only)"
         echo "    falcon           (Atari Falcon systems only)"
+        echo "    javanvm          (Java NestedVM: set --host=mips-unknown-elf)"
+        echo "    javanvm-basic    (Java NestedVM text-mode: set --host=mips-unknown-elf)"
         echo "    ps2              (Sony PlayStation 2)"
-        echo "    svgalib          (Linux system with SVGALib library)"
         echo "    sdl              (System with Simple Direct Media Layer library)"
         echo "    windx            (Windows with DirectX only)"
         echo "    x11              (Standard X11)"
@@ -62,33 +63,34 @@ case "$target" in
         ;;
 esac
 
+AC_CANONICAL_BUILD
 
 dnl Set a8_host...
 
 AC_CANONICAL_HOST
+
+if [[ "$host_os" = "cygwin" ]]; then
+    if [[ "$a8_target" = "windx" -o "$a8_target" = "sdl" ]]; then
+        CC="gcc -mno-cygwin"
+        echo
+        echo "Using CC=\"$CC\" to disable cygwin library...";
+        echo
+        host_os="mingw32"
+    fi
+fi
+
 case $host_os in
     i386-pc-os2-emx)
         a8_host="os/2"
         ;;
-    cygwin)
-        a8_host="win"
-        AC_DEFINE(BACK_SLASH,1,[Define to use back slash as directory separator.])
-        AC_DEFINE(DOS_DRIVES,1,[Define to enable DOS style drives support.])
-        if [[ "$a8_target" = "windx" ]]; then
-            CC="gcc -mno-cygwin"
-            echo
-            echo "Using CC=\"$CC\" to disable cygwin library...";
-            echo
-        fi
-        ;;
     mingw32)
         a8_host="win"
-        AC_DEFINE(BACK_SLASH,1,[Define to use back slash as directory separator.])
+        AC_DEFINE(DIR_SEP_BACKSLASH,1,[Define to use back slash as directory separator.])
         AC_DEFINE(DOS_DRIVES,1,[Define to enable DOS style drives support.])
         ;;
     msdosdjgpp)
         a8_host="dos"
-        AC_DEFINE(BACK_SLASH,1,[Define to use back slash as directory separator.])
+        AC_DEFINE(DIR_SEP_BACKSLASH,1,[Define to use back slash as directory separator.])
         AC_DEFINE(DEFAULT_CFG_NAME,"atari800.cfg",[Alternate config filename due to 8+3 fs limit.])
         AC_DEFINE(DOS_DRIVES,1,[Define to enable DOS style drives support.])
         AC_DEFINE(SYSTEM_WIDE_CFG_FILE,"c:\\atari800.cfg",[Alternate system-wide config file for non-Unix OS.])
@@ -98,11 +100,10 @@ case $host_os in
         ;;
     mint)
         a8_host="falcon"
-        AC_DEFINE(BACK_SLASH,1,[Define to use back slash as directory separator.])
+        AC_DEFINE(DIR_SEP_BACKSLASH,1,[Define to use back slash as directory separator.])
         AC_DEFINE(DEFAULT_CFG_NAME,"atari800.cfg",[Alternate config filename due to 8+3 fs limit.])
         AC_DEFINE(DOS_DRIVES,1,[Define to enable DOS style drives support.])
         AC_DEFINE(SYSTEM_WIDE_CFG_FILE,"c:\\atari800.cfg",[Alternate system-wide config file for non-Unix OS.])
-        AC_DEFINE(USE_CLOCK,1,[Define to use clock() instead of gettimeofday().])
         ;;
     *unix*)
         a8_host="unix"
@@ -119,7 +120,7 @@ if [[ "X_$CFLAGS" = "X_" ]]; then
     CFLAGS="-O2 -Wall"
 fi
 if [[ "X_$LDFLAGS" = "X_" ]]; then
-    LDFLAGS="-s"
+    LDFLAGS=""
 fi
 if [[ "$a8_target" = "ps2" ]]; then
     CC="ee-gcc"
@@ -149,6 +150,11 @@ case "$a8_target" in
         sdlcheck="X_`sdl-config --cflags`"
         if [[ "$sdlcheck" != "X_" ]]; then
             CFLAGS="$CFLAGS `sdl-config --cflags`"
+dnl Don't redefine main -- SDL.h will do it for us in atari_sdl.c  Otherwise
+dnl the autoconf tests don't work.
+            if [[ "$a8_host" = "win" ]]; then
+                CFLAGS=${CFLAGS/-Dmain=SDL_main/}
+            fi
         else
             AC_MSG_ERROR("No output from sdl-config!  Is sdl-config installed?")
         fi
@@ -169,7 +175,11 @@ AC_CHECK_HEADERS([direct.h errno.h file.h signal.h sys/time.h time.h unistd.h un
 SUPPORTS_SOUND_OSS=yes
 AC_CHECK_HEADERS([fcntl.h sys/ioctl.h sys/soundcard.h],,SUPPORTS_SOUND_OSS=no)
 SUPPORTS_RDEVICE=yes
-AC_CHECK_HEADERS([arpa/inet.h netdb.h netinet/in.h sys/socket.h termios.h],,SUPPORTS_RDEVICE=no)
+if [[ "$a8_host" = "win" ]]; then
+    AC_CHECK_HEADERS([winsock2.h],,SUPPORTS_RDEVICE=no)
+else
+    AC_CHECK_HEADERS([arpa/inet.h netdb.h netinet/in.h sys/socket.h termios.h],,SUPPORTS_RDEVICE=no)
+fi
 
 
 dnl Check for libraries...
@@ -180,13 +190,12 @@ AC_CHECK_LIB(png,png_get_libpng_ver)
 AC_CHECK_LIB(m,cos,[LIBS="-lm $LIBS"])
 AC_CHECK_LIB(ossaudio,_oss_ioctl,[LIBS="-lossaudio $LIBS"])
 
-
 dnl Set OBJS and libraries depending on host and target...
 
 dnl OBJS is not an AC "precious" variable but is used in the Makefile, so
 dnl it must be explicitly AC_SUBST'ed at the end of this file.
 OBJS=
-if [[ "$a8_host" = "win" ]]; then
+if [[ "$a8_host" = "win" -a "$a8_target" != "sdl" ]]; then
     A8_NEED_LIB(gdi32)
     A8_NEED_LIB(winmm)
 fi
@@ -194,35 +203,66 @@ case "$a8_target" in
     basic)
         AC_DEFINE(BASIC,1,[Target: standard I/O.])
         OBJS="atari_basic.o"
+	WANT_EVENT_RECORDING=no
         ;;
     dosvga)
         if [[ "$a8_host" != "dos" ]]; then
             AC_MSG_ERROR("the dosvga target is valid only on a DOS system!")
         fi
         AC_DEFINE(DOSVGA,1,[Target: DOS VGA.])
-        AC_DEFINE(SUPPORTS_ATARI_CONFIGURE,1,[Additional config file options.])
+        AC_DEFINE(SUPPORTS_PLATFORM_CONFIGURE,1,[Additional config file options.])
+        AC_DEFINE(SUPPORTS_PLATFORM_PALETTEUPDATE,1,[Update the Palette if it changed.])
         OBJS="dos/atari_vga.o dos/vga_gfx.o dos/vga_asm.o"
+        CFLAGS="$CFLAGS -Waggregate-return -Wmissing-declarations -Wmissing-prototypes -Wredundant-decls -Wstrict-prototypes -Winline"
         ;;
     curses)
         AC_DEFINE(USE_CURSES,1,[Target: Curses-compatible library.])
         A8_NEED_LIB(curses)
         OBJS="atari_curses.o"
+	WANT_EVENT_RECORDING=no
         ;;
     ncurses)
         AC_DEFINE(USE_CURSES,1,[Target: Curses-compatible library.])
         AC_DEFINE(USE_NCURSES,1,[Target: Ncurses library.])
         A8_NEED_LIB(ncurses)
         OBJS="atari_curses.o"
+	WANT_EVENT_RECORDING=no
         ;;
     pdcurses)
         AC_DEFINE(USE_CURSES,1,[Target: Curses-compatible library.])
         A8_NEED_LIB(pdcurses)
         OBJS="atari_curses.o"
+	WANT_EVENT_RECORDING=no
         ;;
     falcon)
         AC_DEFINE(FALCON,1,[Target: Atari Falcon system.])
         A8_NEED_LIB(gem)
         OBJS="atari_falcon.o falcon/c2p_uni.o falcon/c2p_unid.o falcon/videl.o falcon/ikbd.o"
+        ;;
+    javanvm)
+        AC_DEFINE(JAVANVM,1,[Target: Java NestedVM.])
+        AC_DEFINE(SUPPORTS_PLATFORM_PALETTEUPDATE,1,[Update the Palette if it changed.])
+        AC_DEFINE(SUPPORTS_PLATFORM_SLEEP,1,[Platform-specific sleep function.])
+        AC_DEFINE(SUPPORTS_SOUND_REINIT,1,[Reinitialise the sound system.])
+        OBJS="javanvm/atari_javanvm.o"
+        EXEEXT=".mips"
+        enable_unalignedwords=no
+        if [[ "$build_os" = "cygwin" ]]; then
+            JAVAFLAGS="-classpath '""`cygpath -wp $CLASSPATH`'"
+            JAVACFLAGS="-source 1.4 -classpath '""`cygpath -wp $CLASSPATH`'"
+        fi
+        CFLAGS="$CFLAGS -ansi -pedantic -Waggregate-return -Wmissing-declarations -Wmissing-prototypes -Wredundant-decls -Wstrict-prototypes -Winline"
+        ;;
+    javanvm-basic)
+        AC_DEFINE(BASIC,1,[Target: standard I/O.])
+        OBJS="atari_basic.o"
+        EXEEXT=".mips"
+        enable_unalignedwords=no
+        enable_sound=no
+        if [[ "$build_os" = "cygwin" ]]; then
+            JAVAFLAGS="-classpath '""`cygpath -wp $CLASSPATH`'"
+            JAVACFLAGS="-classpath '""`cygpath -wp $CLASSPATH`'"
+        fi
         ;;
     ps2)
         AC_DEFINE(PS2,1,[Target: Sony PlayStation 2.])
@@ -243,24 +283,38 @@ case "$a8_target" in
         ;;
     sdl)
         AC_DEFINE(SDL,1,[Target: SDL library.])
-        AC_DEFINE(SUPPORTS_ATARI_CONFIGURE,1,[Additional config file options.])
-        AC_DEFINE(SUPPORTS_ATARI_CONFIGSAVE,1,[Save additional config file options.])
+        AC_DEFINE(SUPPORTS_PLATFORM_CONFIGURE,1,[Additional config file options.])
+        AC_DEFINE(SUPPORTS_PLATFORM_CONFIGSAVE,1,[Save additional config file options.])
+        AC_DEFINE(SUPPORTS_PLATFORM_PALETTEUPDATE,1,[Update the Palette if it changed.])
+        AC_DEFINE(SUPPORTS_SOUND_REINIT,1,[Reinitialise the sound system.])
+	WANT_XEP80_EMULATION=yes
+	WANT_NTSC_FILTER=yes
         LIBS="$LIBS `sdl-config --libs`"
-        OBJS="atari_sdl.o atari_ntsc.o"
-        ;;
-    svgalib)
-        AC_DEFINE(SVGALIB,1,[Target: Linux with SVGALib.])
-        A8_NEED_LIB(vga)
-        OBJS="atari_svgalib.o"
+        OBJS="atari_sdl.o"
+        CFLAGS="$CFLAGS -ansi -pedantic -Waggregate-return -Wmissing-declarations -Wmissing-prototypes -Wredundant-decls -Wstrict-prototypes -Winline"
+        if [[ "$a8_host" = "win" ]]; then
+dnl Avoid making stdout.txt on Windows sdl target by compiling our own SDL_main
+dnl Get SDL_win32_main.c from the SDL source and copy it to the src directory.
+            LIBS=${LIBS/-lSDLmain/}
+            OBJS="$OBJS SDL_win32_main.o"
+            CFLAGS="$CFLAGS -DNO_STDIO_REDIRECT"
+dnl Don't make this a windowed app, make it a console app.
+            LIBS=${LIBS/-mwindows/}
+        fi
+        AC_DEFINE(PBI_PROTO80,1,[A prototype 80 column card for the 1090 expansion box.])
+        OBJS="$OBJS pbi_proto80.o"
         ;;
     windx)
         AC_DEFINE(DIRECTX,1,[Target: Windows with DirectX.])
+        AC_DEFINE(SUPPORTS_PLATFORM_PALETTEUPDATE,1,[Update the Palette if it changed.])
+        AC_DEFINE(SUPPORTS_SOUND_REINIT,1,[Reinitialise the sound system.])
         A8_NEED_LIB(ddraw)
         A8_NEED_LIB(dinput)
         A8_NEED_LIB(dsound)
         A8_NEED_LIB(dxguid)
         A8_NEED_LIB(ws2_32)
         OBJS="win32/atari_win32.o win32/screen_win32.o win32/main.o win32/keyboard.o win32/joystick.o win32/atari.ro"
+        CFLAGS="$CFLAGS -ansi -pedantic -Waggregate-return -Wmissing-declarations -Wmissing-prototypes -Wredundant-decls -Wstrict-prototypes -Winline"
         ;;
     x11*)
         AC_DEFINE(X11,1,[Target: Standard X11.])
@@ -382,10 +436,16 @@ AC_FUNC_STAT
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([atexit chmod clock fdopen fflush floor fstat getcwd])
 AC_CHECK_FUNCS([gettimeofday localtime memmove memset mkdir mkstemp mktemp])
-AC_CHECK_FUNCS([modf nanosleep opendir rename rewind rmdir select signal snprintf])
+AC_CHECK_FUNCS([modf nanosleep opendir rename rewind rmdir signal snprintf])
 AC_CHECK_FUNCS([stat strcasecmp strchr strdup strerror strrchr strstr])
-AC_CHECK_FUNCS([strtol system time tmpfile tmpnam uclock unlink usleep vsnprintf])
-AC_CHECK_FUNCS([gethostbyaddr gethostbyname inet_ntoa socket],,SUPPORTS_RDEVICE=no)
+AC_CHECK_FUNCS([strtol system time tmpfile tmpnam uclock unlink vsnprintf])
+dnl select usleep strncpy are broken on javanvm targets
+if [[ "$a8_target" != "javanvm" -a "$a8_target" != "javanvm-basic" ]]; then
+    AC_CHECK_FUNCS([select usleep strncpy])
+fi
+if [[ "$a8_host" != "win" ]]; then
+    AC_CHECK_FUNCS([gethostbyaddr gethostbyname inet_ntoa socket],,SUPPORTS_RDEVICE=no)
+fi
 
 
 dnl Select optional Atari800 features...
@@ -405,7 +465,7 @@ AC_DEFUN([A8_OPTION],[
     fi
 ])
 
-if [[ "$a8_target" != "basic" ]]; then
+if [[ "$a8_target" != "basic" -a "$a8_target" != "javanvm-basic" ]]; then
 
     dnl These objects are not compiled in BASIC target
     OBJS="$OBJS input.o statesav.o ui_basic.o ui.o"
@@ -485,6 +545,52 @@ A8_OPTION(monitortrace,no,
           MONITOR_TRACE,[Define to activate TRACE command in monitor.]
          )
 
+if [[ "$WANT_MONITOR_READLINE" != "no" ]]; then
+	AC_CHECK_LIB(readline,readline,
+		[A8_OPTION(readline,yes,
+          		[Support readline in the monitor (default=ON)],
+          		MONITOR_READLINE,[Define to activate readline support in monitor.]
+			)],
+		WANT_MONITOR_READLINE="no"
+	)
+fi
+
+if [[ "$WANT_MONITOR_READLINE" != "no" ]]; then
+	LIBS="-lreadline -ltermcap $LIBS"
+fi
+
+if [[ "$WANT_EVENT_RECORDING" != "no" ]]; then
+dnl we already checked for libz and added it to LIBS
+    AC_CHECK_LIB(z,adler32,
+              [A8_OPTION(eventrecording,yes,
+                    [Support event recording (default=ON)],
+                    EVENT_RECORDING,[Define to enable event recording.]
+                   )],
+              WANT_EVENT_RECORDING="no"
+             )
+fi
+
+A8_OPTION(pbi_mio,yes,
+      [Emulate the MIO board (default=ON)],
+      PBI_MIO,[Define to emulate the MIO board.]
+     )
+
+if [[ "$WANT_PBI_MIO" = "yes" ]]; then
+    OBJS="$OBJS pbi_mio.o"
+fi
+
+A8_OPTION(pbi_bb,yes,
+      [Emulate the Black Box (default=ON)],
+      PBI_BB,[Define to emulate the Black Box.]
+     )
+
+if [[ "$WANT_PBI_BB" = "yes" ]]; then
+    OBJS="$OBJS pbi_bb.o"
+fi
+
+if [[ "$WANT_PBI_BB" = "yes" -o "$WANT_PBI_MIO" = "yes" ]]; then
+    OBJS="$OBJS pbi_scsi.o"
+fi
 
 dnl Set sound support options...
 
@@ -496,7 +602,7 @@ if [[ "$WANT_SOUND" = "yes" ]]; then
 
     OBJS="$OBJS pokeysnd.o mzpokeysnd.o remez.o sndsave.o"
 
-    if [[ "$a8_target" != "ps2" -a "$a8_target" != "sdl" ]]; then
+    if [[ "$a8_target" != "ps2" -a "$a8_target" != "sdl" -a "$a8_target" != "javanvm" ]]; then
         case "$a8_host" in
             dos)
                 OBJS="$OBJS dos/sound_dos.o dos/dos_sb.o"
@@ -516,6 +622,11 @@ if [[ "$WANT_SOUND" = "yes" ]]; then
                 ;;
         esac
     fi
+
+    A8_OPTION(nonlinear_mixing,no,
+              [Use nonlinear POKEY mixing (default=OFF)],
+              NONLINEAR_MIXING,[Define to use nonlinear POKEY mixing.]
+             )
 
     A8_OPTION(interpolatesound,yes,
               [Use sound interpolation (default=ON)],
@@ -549,13 +660,22 @@ if [[ "$WANT_SOUND" = "yes" ]]; then
               [Use sound clipping (default=OFF)],
               CLIP_SOUND,[Define to allow sound clipping.]
              )
+    A8_OPTION(pbi_xld,yes,
+              [Emulate 1450XLD (default=ON)],
+              PBI_XLD,[Define to emulate the 1400XL/1450XLD.]
+             )
+    if [[ "$WANT_PBI_XLD" = "yes" ]]; then
+        OBJS="$OBJS pbi_xld.o votrax.o"
+    fi
 else
+    WANT_NONLINEAR_MIXING="no"
     WANT_INTERPOLATE_SOUND="no"
     WANT_STEREO_SOUND="no"
     WANT_VOL_ONLY_SOUND="no"
     WANT_CONSOLE_SOUND="no"
     WANT_SERIO_SOUND="no"
     WANT_CLIP_SOUND="no"
+    WANT_PBI_XLD_SOUND="no"
 fi
 
 
@@ -573,39 +693,51 @@ fi
 
 if [[ "$a8_host" = "linux" ]]; then
     case "$a8_target" in
-        svgalib | x11*)
+        x11*)
             A8_OPTION(linuxjoystick,yes,
-                      [Use LINUX joystick (linux svgalib/x11 targets only) (default=ON)],
+                      [Use LINUX joystick (linux x11 targets only) (default=ON)],
                       LINUX_JOYSTICK,[Define to use LINUX joystick.]
                       )
     esac
 fi
 
-if [[ "$a8_target" = "svgalib" ]]; then
-    A8_OPTION(svgaspeedup,no,
-              [Drawing every 1/50 sec only 1/refresh of screen (svgalib target only) (default=OFF)],
-              SVGA_SPEEDUP,[Define for drawing every 1/50 sec only 1/refresh of screen.]
-             )
-    A8_OPTION(svgajoymouse,no,
-              [Using Toshiba Joystick Mouse support (svgalib target only) (default=OFF)],
-              SVGA_JOYMOUSE,[Define to use Toshiba Joystick Mouse support.]
-             )
-fi
-
-if [[ "$a8_target" = "svgalib" -o "$a8_target" = "windx" ]]; then
+if [[ "$a8_target" = "windx" ]]; then
     A8_OPTION(cursorblock,no,
-              [Using cursor/ctrl keys for keyboard joystick (svgalib/windx targets only) (default=OFF)],
+              [Using cursor/ctrl keys for keyboard joystick (windx targets only) (default=OFF)],
               USE_CURSORBLOCK,[Define for using cursor/ctrl keys for keyboard joystick.]
              )
 fi
 
+if [[ "$WANT_XEP80_EMULATION" = "yes" ]]; then
+    AC_DEFINE(XEP80_EMULATION,1,[Emulate the XEP80.])
+    OBJS="$OBJS xep80.o xep80_fonts.o"
+fi
+
+if [[ "$WANT_NTSC_FILTER" = "yes" ]]; then
+	AC_DEFINE(NTSC_FILTER,1,[Use NTSC video filter.])
+    OBJS="$OBJS atari_ntsc.o"
+fi
+
 if [[ "$SUPPORTS_RDEVICE" = "yes" ]]; then
     A8_OPTION(riodevice,no,
-              [Use the R: networking device (Linux/Unix only) (default=ON)],
+              [Use the R: networking device (Linux/Unix/Win32) (default=OFF)],
               R_IO_DEVICE,[Define to use R: device.]
              )
     if [[ "$WANT_R_IO_DEVICE" = "yes" ]]; then
         OBJS="$OBJS rdevice.o"
+        A8_OPTION(rnetwork,yes,
+                 [Use IP network connection with the R: networking device (Linux/Unix/Win32) (default=ON)],
+                 R_NETWORK,[Define to use IP network connection with the R: device.]
+                )
+        if [[ "$a8_host" != "win" ]]; then
+            A8_OPTION(rserial,yes,
+                     [Use the host serial port with the R: networking device (Linux/Unix only) (default=ON)],
+                     R_SERIAL,[Define to use the host serial port with the R: device.]
+                    )
+        else
+            A8_NEED_LIB(ws2_32)
+            WANT_R_SERIAL="no"
+        fi
     fi
 fi
 
@@ -613,6 +745,10 @@ fi
 dnl Wrapup: export OBJS and write Makefile...
 
 AC_SUBST(OBJS)
+AC_SUBST(JAVAFLAGS)
+AC_SUBST(JAVACFLAGS)
+CONFIGURE_TARGET="$target"
+AC_SUBST(CONFIGURE_TARGET)
 AC_CONFIG_FILES(Makefile)
 AC_OUTPUT
 
@@ -625,7 +761,7 @@ echo "-------------------------------------------------------"
 echo "Host OS...............................: $a8_host"
 echo "Target ...............................: $a8_target"
 echo
-if [[ "$a8_target" != "basic" ]]; then
+if [[ "$a8_target" != "basic" -a "$a8_target" != "javanvm-basic" ]]; then
     case "$a8_target" in
         *curses)
             echo "Using no bitmap graphics emulation?...: $WANT_CURSES_BASIC"
@@ -645,8 +781,13 @@ echo "Using user-defined breakpoints?.......: $WANT_MONITOR_BREAKPOINTS"
 echo "Using monitor hints?..................: $WANT_MONITOR_HINTS"
 echo "Using 6502 opcode profiling?..........: $WANT_MONITOR_PROFILE"
 echo "Using TRACE monitor command?..........: $WANT_MONITOR_TRACE"
+echo "Using readline support in monitor?....: $WANT_MONITOR_READLINE"
+echo "Using event recording?................: $WANT_EVENT_RECORDING"
+echo "Using MIO emulation?..................: $WANT_PBI_MIO"
+echo "Using Black Box emulation?............: $WANT_PBI_BB"
 echo "Using sound?..........................: $WANT_SOUND"
 if [[ "$WANT_SOUND" = "yes" ]]; then
+    echo "    Using nonlinear mixing?...........: $WANT_NONLINEAR_MIXING"
     echo "    Using sound interpolation?........: $WANT_INTERPOLATE_SOUND"
     echo "    Using stereo sound?...............: $WANT_STEREO_SOUND"
     echo "    Using volume only sound?..........: $WANT_VOL_ONLY_SOUND"
@@ -656,6 +797,7 @@ if [[ "$WANT_SOUND" = "yes" ]]; then
     else
         echo "        (Volume only sound sub-options disabled)"
     fi
+    echo "    Using 1400XL/1450XLD emulation?...: $WANT_PBI_XLD"
     echo "    Using sound clipping?.............: $WANT_CLIP_SOUND"
 else
     echo "    (Sound sub-options disabled)"
@@ -665,19 +807,19 @@ if [[ "$a8_target" = "falcon" ]]; then
 fi
 if [[ "$a8_host" = "linux" ]]; then
     case "$a8_target" in
-        svgalib | x11*)
+        x11*)
             echo "Using Linux joystick?.................: $WANT_LINUX_JOYSTICK"
     esac
 fi
-if [[ "$a8_target" = "svgalib" ]]; then
-    echo "Using SVGA speedups?..................: $WANT_SVGA_SPEEDUP"
-    echo "Using Toshiba Joystick mouse?.........: $WANT_SVGA_JOYMOUSE"
-fi
-if [[ "$a8_target" = "svgalib" -o "$a8_target" = "windx" ]]; then
+if [[ "$a8_target" = "windx" ]]; then
     echo "Using cursor/ctrl keys?...............: $WANT_USE_CURSORBLOCK"
 fi
 if [[ "$SUPPORTS_RDEVICE" = "yes" ]]; then
     echo "Using R: device?......................: $WANT_R_IO_DEVICE"
+        if [[ "$a8_host" != "win" -a "$WANT_R_IO_DEVICE" = "yes" ]]; then
+            echo "Using R: with the host serial port?...: $WANT_R_SERIAL"
+            echo "Using R: with IP network support......: $WANT_R_NETWORK"
+        fi
 fi
 echo
 echo "Main build variables:"

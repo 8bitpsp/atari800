@@ -2,7 +2,7 @@
  * sio.c - Serial I/O emulation
  *
  * Copyright (C) 1995-1998 David Firth
- * Copyright (C) 1998-2005 Atari800 development team (see DOC/CREDITS)
+ * Copyright (C) 1998-2008 Atari800 development team (see DOC/CREDITS)
  *
  * This file is part of the Atari800 emulator project which emulates
  * the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
@@ -27,12 +27,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "antic.h"  /* ypos */
+#include "afile.h"
+#include "antic.h"  /* ANTIC_ypos */
 #include "atari.h"
 #include "binload.h"
 #include "cassette.h"
 #include "compfile.h"
 #include "cpu.h"
+#include "esc.h"
 #include "log.h"
 #include "memory.h"
 #include "platform.h"
@@ -56,28 +58,47 @@
 #define BOOT_SECTORS_LOGICAL	0
 #define BOOT_SECTORS_PHYSICAL	1
 #define BOOT_SECTORS_SIO2PC		2
-static int boot_sectors_type[MAX_DRIVES];
+static int boot_sectors_type[SIO_MAX_DRIVES];
 
-static int header_size[MAX_DRIVES];
-static FILE *disk[MAX_DRIVES] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
-static int sectorcount[MAX_DRIVES];
-static int sectorsize[MAX_DRIVES];
-static int format_sectorcount[MAX_DRIVES];
-static int format_sectorsize[MAX_DRIVES];
-static int io_success[MAX_DRIVES];
+static int image_type[SIO_MAX_DRIVES];
+#define IMAGE_TYPE_XFD 0
+#define IMAGE_TYPE_ATR 1
+#define IMAGE_TYPE_PRO 2
+static FILE *disk[SIO_MAX_DRIVES] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+static int sectorcount[SIO_MAX_DRIVES];
+static int sectorsize[SIO_MAX_DRIVES];
+/* these two are used by the 1450XLD parallel disk device */
+int SIO_format_sectorcount[SIO_MAX_DRIVES];
+int SIO_format_sectorsize[SIO_MAX_DRIVES];
+static int io_success[SIO_MAX_DRIVES];
+/* stores dup sector counter for PRO images */
+typedef struct tagpro_additional_info_t {
+	int max_sector;
+	unsigned char *count;
+} pro_additional_info_t;
+static void *additional_info[SIO_MAX_DRIVES];
 
-UnitStatus drive_status[MAX_DRIVES];
-char sio_filename[MAX_DRIVES][FILENAME_MAX];
+SIO_UnitStatus SIO_drive_status[SIO_MAX_DRIVES];
+char SIO_filename[SIO_MAX_DRIVES][FILENAME_MAX];
 
-Util_tmpbufdef(static, sio_tmpbuf[MAX_DRIVES])
+Util_tmpbufdef(static, sio_tmpbuf[SIO_MAX_DRIVES])
 
-int sio_last_op;
-int sio_last_op_time = 0;
-int sio_last_drive;
-int sio_last_sector;
-char sio_status[256];
+int SIO_last_op;
+int SIO_last_op_time = 0;
+int SIO_last_drive;
+int SIO_last_sector;
+char SIO_status[256];
 
 /* Serial I/O emulation support */
+#define SIO_NoFrame         (0x00)
+#define SIO_CommandFrame    (0x01)
+#define SIO_StatusRead      (0x02)
+#define SIO_ReadFrame       (0x03)
+#define SIO_WriteFrame      (0x04)
+#define SIO_FinalStatus     (0x05)
+#define SIO_FormatFrame     (0x06)
+#define SIO_CasRead         (0x60)
+#define SIO_CasWrite        (0x61)
 static UBYTE CommandFrame[6];
 static int CommandIndex = 0;
 static UBYTE DataBuffer[256 + 3];
@@ -87,33 +108,35 @@ static int ExpectedBytes = 0;
 
 int ignore_header_writeprotect = FALSE;
 
-void SIO_Initialise(int *argc, char *argv[])
+int SIO_Initialise(int *argc, char *argv[])
 {
 	int i;
-	for (i = 0; i < MAX_DRIVES; i++) {
-		strcpy(sio_filename[i], "Off");
-		drive_status[i] = Off;
-		format_sectorsize[i] = 128;
-		format_sectorcount[i] = 720;
+	for (i = 0; i < SIO_MAX_DRIVES; i++) {
+		strcpy(SIO_filename[i], "Off");
+		SIO_drive_status[i] = SIO_OFF;
+		SIO_format_sectorsize[i] = 128;
+		SIO_format_sectorcount[i] = 720;
 	}
 	TransferStatus = SIO_NoFrame;
+
+	return TRUE;
 }
 
 /* umount disks so temporary files are deleted */
 void SIO_Exit(void)
 {
 	int i;
-	for (i = 1; i <= MAX_DRIVES; i++)
+	for (i = 1; i <= SIO_MAX_DRIVES; i++)
 		SIO_Dismount(i);
 }
 
 int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 {
 	FILE *f = NULL;
-	UnitStatus status = ReadWrite;
-	struct ATR_Header header;
+	SIO_UnitStatus status = SIO_READ_WRITE;
+	struct AFILE_ATR_Header header;
 
-	/* avoid overruns in sio_filename[] */
+	/* avoid overruns in SIO_filename[] */
 	if (strlen(filename) >= FILENAME_MAX)
 		return FALSE;
 
@@ -127,11 +150,11 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 		f = Util_fopen(filename, "rb", sio_tmpbuf[diskno - 1]);
 		if (f == NULL)
 			return FALSE;
-		status = ReadOnly;
+		status = SIO_READ_ONLY;
 	}
 
 	/* read header */
-	if (fread(&header, 1, sizeof(struct ATR_Header), f) != sizeof(struct ATR_Header)) {
+	if (fread(&header, 1, sizeof(struct AFILE_ATR_Header), f) != sizeof(struct AFILE_ATR_Header)) {
 		fclose(f);
 		return FALSE;
 	}
@@ -146,7 +169,7 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 			if (f2 == NULL)
 				return FALSE;
 			Util_rewind(f);
-			if (!CompressedFile_DCMtoATR(f, f2)) {
+			if (!CompFile_DCMtoATR(f, f2)) {
 				Util_fclose(f2, sio_tmpbuf[diskno - 1]);
 				fclose(f);
 				return FALSE;
@@ -155,12 +178,12 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 			f = f2;
 		}
 		Util_rewind(f);
-		if (fread(&header, 1, sizeof(struct ATR_Header), f) != sizeof(struct ATR_Header)) {
+		if (fread(&header, 1, sizeof(struct AFILE_ATR_Header), f) != sizeof(struct AFILE_ATR_Header)) {
 			Util_fclose(f, sio_tmpbuf[diskno - 1]);
 			return FALSE;
 		}
-		status = ReadOnly;
-		/* XXX: status = b_open_readonly ? ReadOnly : ReadWrite; */
+		status = SIO_READ_ONLY;
+		/* XXX: status = b_open_readonly ? SIO_READ_ONLY : SIO_READ_WRITE; */
 		break;
 	case 0x1f:
 		if (header.magic2 == 0x8b) {
@@ -169,17 +192,17 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 			f = Util_tmpopen(sio_tmpbuf[diskno - 1]);
 			if (f == NULL)
 				return FALSE;
-			if (!CompressedFile_ExtractGZ(filename, f)) {
+			if (!CompFile_ExtractGZ(filename, f)) {
 				Util_fclose(f, sio_tmpbuf[diskno - 1]);
 				return FALSE;
 			}
 			Util_rewind(f);
-			if (fread(&header, 1, sizeof(struct ATR_Header), f) != sizeof(struct ATR_Header)) {
+			if (fread(&header, 1, sizeof(struct AFILE_ATR_Header), f) != sizeof(struct AFILE_ATR_Header)) {
 				Util_fclose(f, sio_tmpbuf[diskno - 1]);
 				return FALSE;
 			}
-			status = ReadOnly;
-			/* XXX: status = b_open_readonly ? ReadOnly : ReadWrite; */
+			status = SIO_READ_ONLY;
+			/* XXX: status = b_open_readonly ? SIO_READ_ONLY : SIO_READ_WRITE; */
 		}
 		break;
 	default:
@@ -188,9 +211,9 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 
 	boot_sectors_type[diskno - 1] = BOOT_SECTORS_LOGICAL;
 
-	if (header.magic1 == MAGIC1 && header.magic2 == MAGIC2) {
+	if (header.magic1 == AFILE_ATR_MAGIC1 && header.magic2 == AFILE_ATR_MAGIC2) {
 		/* ATR (may be temporary from DCM or ATR/ATR.GZ) */
-		header_size[diskno - 1] = 16;
+		image_type[diskno - 1] = IMAGE_TYPE_ATR;
 
 		sectorsize[diskno - 1] = (header.secsizehi << 8) + header.secsizelo;
 		if (sectorsize[diskno - 1] != 128 && sectorsize[diskno - 1] != 256) {
@@ -199,7 +222,7 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 		}
 
 		if (header.writeprotect != 0 && !ignore_header_writeprotect)
-			status = ReadOnly;
+			status = SIO_READ_ONLY;
 
 		/* ATR header contains length in 16-byte chunks. */
 		/* First compute number of 128-byte chunks
@@ -236,36 +259,68 @@ int SIO_Mount(int diskno, const char *filename, int b_open_readonly)
 		}
 	}
 	else {
-		/* XFD (may be temporary from XFZ/XFD.GZ) */
 		int file_length = Util_flen(f);
-
-		header_size[diskno - 1] = 0;
-
-		if (file_length <= (1040 * 128)) {
-			/* single density */
+		/* check for PRO */
+		if ((file_length-16)%(128+12) == 0 &&
+				(header.magic1*256 + header.magic2 == (file_length-16)/(128+12)) &&
+				header.seccountlo == 'P') {
+			pro_additional_info_t *info;
+			/* .pro is read only for now */
+			if (!b_open_readonly) {
+				fclose(f);
+				f = Util_fopen(filename, "rb", sio_tmpbuf[diskno - 1]);
+				if (f == NULL)
+					return FALSE;
+				status = SIO_READ_ONLY;
+			}
+			image_type[diskno - 1] = IMAGE_TYPE_PRO;
 			sectorsize[diskno - 1] = 128;
-			sectorcount[diskno - 1] = file_length >> 7;
+			if (file_length >= 1040*(128+12)+16) {
+				/* assume enhanced density */
+				sectorcount[diskno - 1] = 1040;
+			}
+			else {
+				/* assume single density */
+				sectorcount[diskno - 1] = 720;
+			}
+
+			info = Util_malloc(sizeof(pro_additional_info_t));
+			additional_info[diskno-1] = info;
+			info->count = Util_malloc(sectorcount[diskno - 1]);
+			memset(info->count, 0, sectorcount[diskno -1]);
+			info->max_sector = (file_length-16)/(128+12);
 		}
 		else {
-			/* double density */
-			sectorsize[diskno - 1] = 256;
-			if ((file_length & 0xff) == 0) {
-				boot_sectors_type[diskno - 1] = BOOT_SECTORS_PHYSICAL;
-				sectorcount[diskno - 1] = file_length >> 8;
+			/* XFD (may be temporary from XFZ/XFD.GZ) */
+
+			image_type[diskno - 1] = IMAGE_TYPE_XFD;
+
+			if (file_length <= (1040 * 128)) {
+				/* single density */
+				sectorsize[diskno - 1] = 128;
+				sectorcount[diskno - 1] = file_length >> 7;
 			}
-			else
-				sectorcount[diskno - 1] = (file_length + 0x180) >> 8;
+			else {
+				/* double density */
+				sectorsize[diskno - 1] = 256;
+				if ((file_length & 0xff) == 0) {
+					boot_sectors_type[diskno - 1] = BOOT_SECTORS_PHYSICAL;
+					sectorcount[diskno - 1] = file_length >> 8;
+				}
+				else
+					sectorcount[diskno - 1] = (file_length + 0x180) >> 8;
+			}
 		}
 	}
 
 #ifdef DEBUG
-	Aprint("sectorcount = %d, sectorsize = %d",
+	Log_print("sectorcount = %d, sectorsize = %d",
 		   sectorcount[diskno - 1], sectorsize[diskno - 1]);
 #endif
-	format_sectorsize[diskno - 1] = sectorsize[diskno - 1];
-	format_sectorcount[diskno - 1] = sectorcount[diskno - 1];
-	strcpy(sio_filename[diskno - 1], filename);
-	drive_status[diskno - 1] = status;
+	SIO_format_sectorsize[diskno - 1] = sectorsize[diskno - 1];
+	SIO_format_sectorcount[diskno - 1] = sectorcount[diskno - 1];
+	strcpy(SIO_filename[diskno - 1], filename);
+	SIO_drive_status[diskno - 1] = status;
 	disk[diskno - 1] = f;
 	return TRUE;
 }
@@ -275,24 +330,30 @@ void SIO_Dismount(int diskno)
 	if (disk[diskno - 1] != NULL) {
 		Util_fclose(disk[diskno - 1], sio_tmpbuf[diskno - 1]);
 		disk[diskno - 1] = NULL;
-		drive_status[diskno - 1] = NoDisk;
-		strcpy(sio_filename[diskno - 1], "Empty");
+		SIO_drive_status[diskno - 1] = SIO_NO_DISK;
+		strcpy(SIO_filename[diskno - 1], "Empty");
+		if (image_type[diskno - 1] == IMAGE_TYPE_PRO) {
+			free(((pro_additional_info_t *)additional_info[diskno-1])->count);
+		}
+		free(additional_info[diskno - 1]);
+		additional_info[diskno - 1] = 0;
 	}
 }
 
 void SIO_DisableDrive(int diskno)
 {
 	SIO_Dismount(diskno);
-	drive_status[diskno - 1] = Off;
-	strcpy(sio_filename[diskno - 1], "Off");
+	SIO_drive_status[diskno - 1] = SIO_OFF;
+	strcpy(SIO_filename[diskno - 1], "Off");
 }
 
-static void SizeOfSector(UBYTE unit, int sector, int *sz, ULONG *ofs)
+void SIO_SizeOfSector(UBYTE unit, int sector, int *sz, ULONG *ofs)
 {
 	int size;
 	ULONG offset;
+	int header_size = (image_type[unit] == IMAGE_TYPE_ATR ? 16 : 0);
 
-	if (start_binloading) {
+	if (BINLOAD_start_binloading) {
 		if (sz)
 			*sz = 128;
 		if (ofs)
@@ -300,14 +361,18 @@ static void SizeOfSector(UBYTE unit, int sector, int *sz, ULONG *ofs)
 		return;
 	}
 
-	if (sector < 4) {
+	if (image_type[unit] == IMAGE_TYPE_PRO) {
+		size = 128;
+		offset = 16 + (128+12)*(sector -1); /* returns offset of header */
+	}
+	else if (sector < 4) {
 		/* special case for first three sectors in ATR and XFD image */
 		size = 128;
-		offset = header_size[unit] + (sector - 1) * (boot_sectors_type[unit] == BOOT_SECTORS_PHYSICAL ? 256 : 128);
+		offset = header_size + (sector - 1) * (boot_sectors_type[unit] == BOOT_SECTORS_PHYSICAL ? 256 : 128);
 	}
 	else {
 		size = sectorsize[unit];
-		offset = header_size[unit] + (boot_sectors_type[unit] == BOOT_SECTORS_LOGICAL ? 0x180 : 0x300) + (sector - 4) * size;
+		offset = header_size + (boot_sectors_type[unit] == BOOT_SECTORS_LOGICAL ? 0x180 : 0x300) + (sector - 4) * size;
 	}
 
 	if (sz)
@@ -322,58 +387,93 @@ static int SeekSector(int unit, int sector)
 	ULONG offset;
 	int size;
 
-	sio_last_sector = sector;
-	sprintf(sio_status, "%d: %d", unit + 1, sector);
-	SizeOfSector((UBYTE) unit, sector, &size, &offset);
+	SIO_last_sector = sector;
+	sprintf(SIO_status, "%d: %d", unit + 1, sector);
+	SIO_SizeOfSector((UBYTE) unit, sector, &size, &offset);
 	fseek(disk[unit], offset, SEEK_SET);
 
 	return size;
 }
 
 /* Unit counts from zero up */
-static int ReadSector(int unit, int sector, UBYTE *buffer)
+int SIO_ReadSector(int unit, int sector, UBYTE *buffer)
 {
 	int size;
-	if (start_binloading)
-		return BIN_loader_start(buffer);
+	if (BINLOAD_start_binloading)
+		return BINLOAD_LoaderStart(buffer);
 
 	io_success[unit] = -1;
-	if (drive_status[unit] == Off)
+	if (SIO_drive_status[unit] == SIO_OFF)
 		return 0;
 	if (disk[unit] == NULL)
 		return 'N';
 	if (sector <= 0 || sector > sectorcount[unit])
 		return 'E';
-	sio_last_op = SIO_LAST_READ;
-	sio_last_op_time = 1;
-	sio_last_drive = unit + 1;
+	SIO_last_op = SIO_LAST_READ;
+	SIO_last_op_time = 1;
+	SIO_last_drive = unit + 1;
 	/* FIXME: what sector size did the user expect? */
 	size = SeekSector(unit, sector);
+	if (image_type[unit] == IMAGE_TYPE_PRO) {
+		pro_additional_info_t *info;
+		unsigned char *count;
+		info = (pro_additional_info_t *)additional_info[unit];
+		count = info->count;
+		fread(buffer, 1, 12, disk[unit]);
+		/* handle duplicate sectors */
+		if (buffer[5] != 0) {
+			int dupnum = count[sector];
+#ifdef DEBUG_PRO
+			Log_print("duplicate sector:%d dupnum:%d",sector, dupnum);
+#endif
+			count[sector] = (count[sector]+1) % (buffer[5]+1);
+			if (dupnum != 0)  {
+				sector = sectorcount[unit] + buffer[6+dupnum];
+				/* can dupnum be 5? */
+				if (dupnum > 4 || sector <= 0 || sector > info->max_sector) {
+					Log_print("Error in .pro image: sector:%d dupnum:%d", sector, dupnum);
+					return 'E';
+				}
+				size = SeekSector(unit, sector);
+				/* read sector header */
+				fread(buffer, 1, 12, disk[unit]);
+			}
+		}
+		/* bad sector */
+		if (buffer[1] != 0xff) {
+			fread(buffer, 1, size, disk[unit]);
+			io_success[unit] = sector;
+#ifdef DEBUG_PRO
+			Log_print("bad sector:%d", sector);
+#endif
+			return 'E';
+		}
+	}
 	fread(buffer, 1, size, disk[unit]);
 	io_success[unit] = 0;
 	return 'C';
 }
 
-static int WriteSector(int unit, int sector, const UBYTE *buffer)
+int SIO_WriteSector(int unit, int sector, const UBYTE *buffer)
 {
 	int size;
 	io_success[unit] = -1;
-	if (drive_status[unit] == Off)
+	if (SIO_drive_status[unit] == SIO_OFF)
 		return 0;
 	if (disk[unit] == NULL)
 		return 'N';
-	if (drive_status[unit] != ReadWrite || sector <= 0 || sector > sectorcount[unit])
+	if (SIO_drive_status[unit] != SIO_READ_WRITE || sector <= 0 || sector > sectorcount[unit])
 		return 'E';
-	sio_last_op = SIO_LAST_WRITE;
-	sio_last_op_time = 1;
-	sio_last_drive = unit + 1;
+	SIO_last_op = SIO_LAST_WRITE;
+	SIO_last_op_time = 1;
+	SIO_last_drive = unit + 1;
 	size = SeekSector(unit, sector);
 	fwrite(buffer, 1, size, disk[unit]);
 	io_success[unit] = 0;
 	return 'C';
 }
 
-static int FormatDisk(int unit, UBYTE *buffer, int sectsize, int sectcount)
+int SIO_FormatDisk(int unit, UBYTE *buffer, int sectsize, int sectcount)
 {
 	char fname[FILENAME_MAX];
 	int is_atr;
@@ -383,19 +483,19 @@ static int FormatDisk(int unit, UBYTE *buffer, int sectsize, int sectcount)
 	FILE *f;
 	int i;
 	io_success[unit] = -1;
-	if (drive_status[unit] == Off)
+	if (SIO_drive_status[unit] == SIO_OFF)
 		return 0;
 	if (disk[unit] == NULL)
 		return 'N';
-	if (drive_status[unit] != ReadWrite)
+	if (SIO_drive_status[unit] != SIO_READ_WRITE)
 		return 'E';
 	/* Note formatting the disk can change size of the file.
 	   There is no portable way to truncate the file at given position.
 	   We have to close the "rb+" open file and open it in "wb" mode.
 	   First get the information about the disk image, because we are going
 	   to umount it. */
-	memcpy(fname, sio_filename[unit], FILENAME_MAX);
-	is_atr = (header_size[unit] == 16);
+	memcpy(fname, SIO_filename[unit], FILENAME_MAX);
+	is_atr = (image_type[unit] == IMAGE_TYPE_ATR);
 	save_boot_sectors_type = boot_sectors_type[unit];
 	bootsectsize = 128;
 	if (sectsize == 256 && save_boot_sectors_type != BOOT_SECTORS_LOGICAL)
@@ -405,16 +505,16 @@ static int FormatDisk(int unit, UBYTE *buffer, int sectsize, int sectcount)
 	SIO_Dismount(unit + 1);
 	f = fopen(fname, "wb");
 	if (f == NULL) {
-		Aprint("FormatDisk: failed to open %s for writing", fname);
+		Log_print("SIO_FormatDisk: failed to open %s for writing", fname);
 		return 'E';
 	}
 	/* Write ATR header if necessary */
 	if (is_atr) {
-		struct ATR_Header header;
+		struct AFILE_ATR_Header header;
 		ULONG disksize = (bootsectsize * bootsectcount + sectsize * (sectcount - bootsectcount)) >> 4;
 		memset(&header, 0, sizeof(header));
-		header.magic1 = MAGIC1;
-		header.magic2 = MAGIC2;
+		header.magic1 = AFILE_ATR_MAGIC1;
+		header.magic2 = AFILE_ATR_MAGIC2;
 		header.secsizelo = (UBYTE) sectsize;
 		header.secsizehi = (UBYTE) (sectsize >> 8);
 		header.seccountlo = (UBYTE) disksize;
@@ -450,16 +550,16 @@ static int FormatDisk(int unit, UBYTE *buffer, int sectsize, int sectcount)
    (previously sectorsize/sectorcount were used which could result in
    a corrupted image).
 */
-static int WriteStatusBlock(int unit, const UBYTE *buffer)
+int SIO_WriteStatusBlock(int unit, const UBYTE *buffer)
 {
 	int size;
 #ifdef DEBUG
-	Aprint("Write Status-Block: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+	Log_print("Write Status-Block: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
 		buffer[0], buffer[1], buffer[2], buffer[3],
 		buffer[4], buffer[5], buffer[6], buffer[7],
 		buffer[8], buffer[9], buffer[10], buffer[11]);
 #endif
-	if (drive_status[unit] == Off)
+	if (SIO_drive_status[unit] == SIO_OFF)
 		return 0;
 	/* We only care about the density and the sector count here.
 	   Setting everything else right here seems to be non-sense.
@@ -467,20 +567,20 @@ static int WriteStatusBlock(int unit, const UBYTE *buffer)
 	   honors only the sector size and ignores the density */
 	size = buffer[6] * 256 + buffer[7];
 	if (size == 128 || size == 256)
-		format_sectorsize[unit] = size;
+		SIO_format_sectorsize[unit] = size;
 	/* Note that the number of heads are minus 1 */
-	format_sectorcount[unit] = buffer[0] * (buffer[2] * 256 + buffer[3]) * (buffer[4] + 1);
-	if (format_sectorcount[unit] < 1 || format_sectorcount[unit] > 65535)
-		format_sectorcount[unit] = 720;
+	SIO_format_sectorcount[unit] = buffer[0] * (buffer[2] * 256 + buffer[3]) * (buffer[4] + 1);
+	if (SIO_format_sectorcount[unit] < 1 || SIO_format_sectorcount[unit] > 65535)
+		SIO_format_sectorcount[unit] = 720;
 	return 'C';
 }
 
-static int ReadStatusBlock(int unit, UBYTE *buffer)
+int SIO_ReadStatusBlock(int unit, UBYTE *buffer)
 {
 	UBYTE tracks;
 	UBYTE heads;
 	int spt;
-	if (drive_status[unit] == Off)
+	if (SIO_drive_status[unit] == SIO_OFF)
 		return 0;
 	/* default to 1 track, 1 side for non-standard images */
 	tracks = 1;
@@ -540,9 +640,9 @@ static int ReadStatusBlock(int unit, UBYTE *buffer)
    Bit 5 = 1 indicates double density
    Bit 7 = 1 indicates dual density disk (1050 format)
  */
-static int DriveStatus(int unit, UBYTE *buffer)
+int SIO_DriveStatus(int unit, UBYTE *buffer)
 {
-	if (start_binloading) {
+	if (BINLOAD_start_binloading) {
 		buffer[0] = 16 + 8;
 		buffer[1] = 255;
 		buffer[2] = 1;
@@ -550,17 +650,25 @@ static int DriveStatus(int unit, UBYTE *buffer)
 		return 'C';
 	}
 
-	if (drive_status[unit] == Off)
+	if (SIO_drive_status[unit] == SIO_OFF)
 		return 0;
+
+	/* .PRO contains status information in the sector header */
+	if (io_success[unit] != 0  && image_type[unit] == IMAGE_TYPE_PRO) {
+		int sector = io_success[unit];
+		SeekSector(unit, sector);
+		fread(buffer, 1, 4, disk[unit]);
+		return 'C';
+	}
 	buffer[0] = 16;         /* drive active */
 	buffer[1] = disk[unit] != NULL ? 255 /* WD 177x OK */ : 127 /* no disk */;
 	if (io_success[unit] != 0)
 		buffer[0] |= 4;     /* failed RW-operation */
-	if (drive_status[unit] == ReadOnly)
+	if (SIO_drive_status[unit] == SIO_READ_ONLY)
 		buffer[0] |= 8;     /* write protection */
-	if (format_sectorsize[unit] == 256)
+	if (SIO_format_sectorsize[unit] == 256)
 		buffer[0] |= 32;    /* double density */
-	if (format_sectorcount[unit] == 1040)
+	if (SIO_format_sectorcount[unit] == 1040)
 		buffer[0] |= 128;   /* 1050 enhanced density */
 	buffer[2] = 1;
 	buffer[3] = 0;
@@ -577,38 +685,45 @@ static int last_ypos = 0;
 #endif
 
 /* SIO patch emulation routine */
-void SIO(void)
+void SIO_Handler(void)
 {
-	int sector = dGetWordAligned(0x30a);
-	UBYTE unit = dGetByte(0x301) - 1;
+	int sector = MEMORY_dGetWordAligned(0x30a);
+	UBYTE unit = (MEMORY_dGetByte(0x300) + MEMORY_dGetByte(0x301) + 0xff ) - 0x31;
 	UBYTE result = 0x00;
-	UWORD data = dGetWordAligned(0x304);
-	int length = dGetWordAligned(0x308);
+	UWORD data = MEMORY_dGetWordAligned(0x304);
+	int length = MEMORY_dGetWordAligned(0x308);
 	int realsize = 0;
-	int cmd = dGetByte(0x302);
+	int cmd = MEMORY_dGetByte(0x302);
 
-	/* FIXME: add dGetByte(0x300) and dGetByte(0x301) */
-	if (dGetByte(0x300) == 0x31 && unit < MAX_DRIVES) {	/* UBYTE range ! */
+	if ((unsigned int)MEMORY_dGetByte(0x300) + (unsigned int)MEMORY_dGetByte(0x301) > 0xff) {
+		/* carry */
+		unit++;
+	}
+	/* A real atari just adds the bytes and 0xff. The result could wrap.*/
+	/* XL OS: E99D: LDA $0300 ADC $0301 ADC #$FF STA 023A */
+	/* Disk 1 is ASCII '1' = 0x31 etc */
+	/* Disk 1 -> unit = 0 */
+	if (MEMORY_dGetByte(0x300) != 0x60 && unit < SIO_MAX_DRIVES) {	/* UBYTE range ! */
 #ifdef DEBUG
-		Aprint("SIO disk command is %02x %02x %02x %02x %02x   %02x %02x %02x %02x %02x %02x",
-			cmd, dGetByte(0x303), dGetByte(0x304), dGetByte(0x305), dGetByte(0x306),
-			dGetByte(0x308), dGetByte(0x309), dGetByte(0x30a), dGetByte(0x30b),
-			dGetByte(0x30c), dGetByte(0x30d));
+		Log_print("SIO disk command is %02x %02x %02x %02x %02x   %02x %02x %02x %02x %02x %02x",
+			cmd, MEMORY_dGetByte(0x303), MEMORY_dGetByte(0x304), MEMORY_dGetByte(0x305), MEMORY_dGetByte(0x306),
+			MEMORY_dGetByte(0x308), MEMORY_dGetByte(0x309), MEMORY_dGetByte(0x30a), MEMORY_dGetByte(0x30b),
+			MEMORY_dGetByte(0x30c), MEMORY_dGetByte(0x30d));
 #endif
 		switch (cmd) {
 		case 0x4e:				/* Read Status Block */
 			if (12 == length) {
-				result = ReadStatusBlock(unit, DataBuffer);
+				result = SIO_ReadStatusBlock(unit, DataBuffer);
 				if (result == 'C')
-					CopyToMem(DataBuffer, data, 12);
+					MEMORY_CopyToMem(DataBuffer, data, 12);
 			}
 			else
 				result = 'E';
 			break;
 		case 0x4f:				/* Write Status Block */
 			if (12 == length) {
-				CopyFromMem(data, DataBuffer, 12);
-				result = WriteStatusBlock(unit, DataBuffer);
+				MEMORY_CopyFromMem(data, DataBuffer, 12);
+				result = SIO_WriteStatusBlock(unit, DataBuffer);
 			}
 			else
 				result = 'E';
@@ -617,10 +732,10 @@ void SIO(void)
 		case 0x57:
 		case 0xD0:				/* xf551 hispeed */
 		case 0xD7:
-			SizeOfSector(unit, sector, &realsize, NULL);
+			SIO_SizeOfSector(unit, sector, &realsize, NULL);
 			if (realsize == length) {
-				CopyFromMem(data, DataBuffer, realsize);
-				result = WriteSector(unit, sector, DataBuffer);
+				MEMORY_CopyFromMem(data, DataBuffer, realsize);
+				result = SIO_WriteSector(unit, sector, DataBuffer);
 			}
 			else
 				result = 'E';
@@ -630,11 +745,11 @@ void SIO(void)
 #ifndef NO_SECTOR_DELAY
 			if (sector == 1) {
 				if (delay_counter > 0) {
-					if (last_ypos != ypos) {
-						last_ypos = ypos;
+					if (last_ypos != ANTIC_ypos) {
+						last_ypos = ANTIC_ypos;
 						delay_counter--;
 					}
-					regPC = 0xe459;	/* stay at SIO patch */
+					CPU_regPC = 0xe459;	/* stay at SIO patch */
 					return;
 				}
 				delay_counter = SECTOR_DELAY;
@@ -643,19 +758,19 @@ void SIO(void)
 				delay_counter = 0;
 			}
 #endif
-			SizeOfSector(unit, sector, &realsize, NULL);
+			SIO_SizeOfSector(unit, sector, &realsize, NULL);
 			if (realsize == length) {
-				result = ReadSector(unit, sector, DataBuffer);
+				result = SIO_ReadSector(unit, sector, DataBuffer);
 				if (result == 'C')
-					CopyToMem(DataBuffer, data, realsize);
+					MEMORY_CopyToMem(DataBuffer, data, realsize);
 			}
 			else
 				result = 'E';
 			break;
 		case 0x53:				/* Status */
 			if (4 == length) {
-				result = DriveStatus(unit, DataBuffer);
-				CopyToMem(DataBuffer, data, 4);
+				result = SIO_DriveStatus(unit, DataBuffer);
+				MEMORY_CopyToMem(DataBuffer, data, 4);
 			}
 			else
 				result = 'E';
@@ -663,15 +778,15 @@ void SIO(void)
 		/*case 0x66:*/			/* US Doubler Format - I think! */
 		case 0x21:				/* Format Disk */
 		case 0xA1:				/* xf551 hispeed */
-			realsize = format_sectorsize[unit];
+			realsize = SIO_format_sectorsize[unit];
 			if (realsize == length) {
-				result = FormatDisk(unit, DataBuffer, realsize, format_sectorcount[unit]);
+				result = SIO_FormatDisk(unit, DataBuffer, realsize, SIO_format_sectorcount[unit]);
 				if (result == 'C')
-					CopyToMem(DataBuffer, data, realsize);
+					MEMORY_CopyToMem(DataBuffer, data, realsize);
 			}
 			else {
-				/* there are programs which send the format-command but dont wait for the result (eg xf-tools) */
-				FormatDisk(unit, DataBuffer, realsize, format_sectorcount[unit]);
+				/* there are programs which send the format-command but don't wait for the result (eg xf-tools) */
+				SIO_FormatDisk(unit, DataBuffer, realsize, SIO_format_sectorcount[unit]);
 				result = 'E';
 			}
 			break;
@@ -679,12 +794,12 @@ void SIO(void)
 		case 0xA2:				/* xf551 hispeed */
 			realsize = 128;
 			if (realsize == length) {
-				result = FormatDisk(unit, DataBuffer, 128, 1040);
+				result = SIO_FormatDisk(unit, DataBuffer, 128, 1040);
 				if (result == 'C')
-					CopyToMem(DataBuffer, data, realsize);
+					MEMORY_CopyToMem(DataBuffer, data, realsize);
 			}
 			else {
-				FormatDisk(unit, DataBuffer, 128, 1040);
+				SIO_FormatDisk(unit, DataBuffer, 128, 1040);
 				result = 'E';
 			}
 			break;
@@ -693,13 +808,16 @@ void SIO(void)
 		}
 	}
 	/* cassette i/o */
-	else if (dGetByte(0x300) == 0x60) {
+	else if (MEMORY_dGetByte(0x300) == 0x60) {
 		int storagelength = 0;
-		UBYTE gaps = dGetByte(0x30b);
+		UBYTE gaps = MEMORY_dGetByte(0x30b);
 		switch (cmd){
 		case 0x52:	/* read */
 			/* set expected Gap */
 			CASSETTE_AddGap(gaps == 0 ? 2000 : 160);
+			SIO_last_op = SIO_LAST_READ;
+			SIO_last_drive = 0x61;
+			SIO_last_op_time = 0x10;
 			/* get record from storage medium */
 			storagelength = CASSETTE_Read();
 			if (storagelength - 1 != length)	/* includes -1 as error */
@@ -707,17 +825,20 @@ void SIO(void)
 			else
 				result = 'C';
 			/* check checksum */
-			if (cassette_buffer[length] != SIO_ChkSum(cassette_buffer, length))
+			if (CASSETTE_buffer[length] != SIO_ChkSum(CASSETTE_buffer, length))
 				result = 'E';
 			/* if all went ok, copy to Atari */
 			if (result == 'C')
-				CopyToMem(cassette_buffer, data, length);
+				MEMORY_CopyToMem(CASSETTE_buffer, data, length);
 			break;
 		case 0x57:	/* write */
+			SIO_last_op = SIO_LAST_WRITE;
+			SIO_last_drive = 0x61;
+			SIO_last_op_time = 0x10;
 			/* put record into buffer */
-			CopyFromMem(data, cassette_buffer, length);
+			MEMORY_CopyFromMem(data, CASSETTE_buffer, length);
 			/* eval checksum over buffer data */
-			cassette_buffer[length] = SIO_ChkSum(cassette_buffer, length);
+			CASSETTE_buffer[length] = SIO_ChkSum(CASSETTE_buffer, length);
 			/* add pregap length */
 			CASSETTE_AddGap(gaps == 0 ? 3000 : 260);
 			/* write full record to storage medium */
@@ -734,28 +855,28 @@ void SIO(void)
 
 	switch (result) {
 	case 0x00:					/* Device disabled, generate timeout */
-		regY = 138;
-		SetN;
+		CPU_regY = 138;
+		CPU_SetN;
 		break;
-	case 'A':					/* Device acknoledge */
+	case 'A':					/* Device acknowledge */
 	case 'C':					/* Operation complete */
-		regY = 1;
-		ClrN;
+		CPU_regY = 1;
+		CPU_ClrN;
 		break;
 	case 'N':					/* Device NAK */
-		regY = 144;
-		SetN;
+		CPU_regY = 144;
+		CPU_SetN;
 		break;
 	case 'E':					/* Device error */
 	default:
-		regY = 146;
-		SetN;
+		CPU_regY = 146;
+		CPU_SetN;
 		break;
 	}
-	regA = 0;	/* MMM */
-	dPutByte(0x0303, regY);
-	dPutByte(0x42,0);
-	SetC;
+	CPU_regA = 0;	/* MMM */
+	MEMORY_dPutByte(0x0303, CPU_regY);
+	MEMORY_dPutByte(0x42,0);
+	CPU_SetC;
 }
 
 UBYTE SIO_ChkSum(const UBYTE *buffer, int length)
@@ -789,9 +910,9 @@ static UBYTE Command_Frame(void)
 	sector = CommandFrame[2] | (((UWORD) CommandFrame[3]) << 8);
 	unit = CommandFrame[0] - '1';
 
-	if (unit < 0 || unit >= MAX_DRIVES) {
+	if (unit < 0 || unit >= SIO_MAX_DRIVES) {
 		/* Unknown device */
-		Aprint("Unknown command frame: %02x %02x %02x %02x %02x",
+		Log_print("Unknown command frame: %02x %02x %02x %02x %02x",
 			   CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			   CommandFrame[3], CommandFrame[4]);
 		TransferStatus = SIO_NoFrame;
@@ -800,20 +921,20 @@ static UBYTE Command_Frame(void)
 	switch (CommandFrame[1]) {
 	case 0x4e:				/* Read Status */
 #ifdef DEBUG
-		Aprint("Read-status frame: %02x %02x %02x %02x %02x",
+		Log_print("Read-status frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
-		DataBuffer[0] = ReadStatusBlock(unit, DataBuffer + 1);
+		DataBuffer[0] = SIO_ReadStatusBlock(unit, DataBuffer + 1);
 		DataBuffer[13] = SIO_ChkSum(DataBuffer + 1, 12);
 		DataIndex = 0;
 		ExpectedBytes = 14;
 		TransferStatus = SIO_ReadFrame;
-		DELAYED_SERIN_IRQ = SERIN_INTERVAL;
+		POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL;
 		return 'A';
 	case 0x4f:				/* Write status */
 #ifdef DEBUG
-		Aprint("Write-status frame: %02x %02x %02x %02x %02x",
+		Log_print("Write-status frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
@@ -826,94 +947,94 @@ static UBYTE Command_Frame(void)
 	case 0xD0:				/* xf551 hispeed */
 	case 0xD7:
 #ifdef DEBUG
-		Aprint("Write-sector frame: %02x %02x %02x %02x %02x",
+		Log_print("Write-sector frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
-		SizeOfSector((UBYTE) unit, sector, &realsize, NULL);
+		SIO_SizeOfSector((UBYTE) unit, sector, &realsize, NULL);
 		ExpectedBytes = realsize + 1;
 		DataIndex = 0;
 		TransferStatus = SIO_WriteFrame;
-		sio_last_op = SIO_LAST_WRITE;
-		sio_last_op_time = 10;
-		sio_last_drive = unit + 1;
+		SIO_last_op = SIO_LAST_WRITE;
+		SIO_last_op_time = 10;
+		SIO_last_drive = unit + 1;
 		return 'A';
 	case 0x52:				/* Read */
 	case 0xD2:				/* xf551 hispeed */
 #ifdef DEBUG
-		Aprint("Read-sector frame: %02x %02x %02x %02x %02x",
+		Log_print("Read-sector frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
-		SizeOfSector((UBYTE) unit, sector, &realsize, NULL);
-		DataBuffer[0] = ReadSector(unit, sector, DataBuffer + 1);
+		SIO_SizeOfSector((UBYTE) unit, sector, &realsize, NULL);
+		DataBuffer[0] = SIO_ReadSector(unit, sector, DataBuffer + 1);
 		DataBuffer[1 + realsize] = SIO_ChkSum(DataBuffer + 1, realsize);
 		DataIndex = 0;
 		ExpectedBytes = 2 + realsize;
 		TransferStatus = SIO_ReadFrame;
 		/* wait longer before confirmation because bytes could be lost */
 		/* before the buffer was set (see $E9FB & $EA37 in XL-OS) */
-		DELAYED_SERIN_IRQ = SERIN_INTERVAL << 2;
+		POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL << 2;
 #ifndef NO_SECTOR_DELAY
 		if (sector == 1) {
-			DELAYED_SERIN_IRQ += delay_counter;
+			POKEY_DELAYED_SERIN_IRQ += delay_counter;
 			delay_counter = SECTOR_DELAY;
 		}
 		else {
 			delay_counter = 0;
 		}
 #endif
-		sio_last_op = SIO_LAST_READ;
-		sio_last_op_time = 10;
-		sio_last_drive = unit + 1;
+		SIO_last_op = SIO_LAST_READ;
+		SIO_last_op_time = 10;
+		SIO_last_drive = unit + 1;
 		return 'A';
 	case 0x53:				/* Status */
 #ifdef DEBUG
-		Aprint("Status frame: %02x %02x %02x %02x %02x",
+		Log_print("Status frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
-		DataBuffer[0] = DriveStatus(unit, DataBuffer + 1);
+		DataBuffer[0] = SIO_DriveStatus(unit, DataBuffer + 1);
 		DataBuffer[1 + 4] = SIO_ChkSum(DataBuffer + 1, 4);
 		DataIndex = 0;
 		ExpectedBytes = 6;
 		TransferStatus = SIO_ReadFrame;
-		DELAYED_SERIN_IRQ = SERIN_INTERVAL;
+		POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL;
 		return 'A';
 	/*case 0x66:*/			/* US Doubler Format - I think! */
 	case 0x21:				/* Format Disk */
 	case 0xa1:				/* xf551 hispeed */
 #ifdef DEBUG
-		Aprint("Format-disk frame: %02x %02x %02x %02x %02x",
+		Log_print("Format-disk frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
-		realsize = format_sectorsize[unit];
-		DataBuffer[0] = FormatDisk(unit, DataBuffer + 1, realsize, format_sectorcount[unit]);
+		realsize = SIO_format_sectorsize[unit];
+		DataBuffer[0] = SIO_FormatDisk(unit, DataBuffer + 1, realsize, SIO_format_sectorcount[unit]);
 		DataBuffer[1 + realsize] = SIO_ChkSum(DataBuffer + 1, realsize);
 		DataIndex = 0;
 		ExpectedBytes = 2 + realsize;
 		TransferStatus = SIO_FormatFrame;
-		DELAYED_SERIN_IRQ = SERIN_INTERVAL;
+		POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL;
 		return 'A';
 	case 0x22:				/* Dual Density Format */
 	case 0xa2:				/* xf551 hispeed */
 #ifdef DEBUG
-		Aprint("Format-Medium frame: %02x %02x %02x %02x %02x",
+		Log_print("Format-Medium frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
-		DataBuffer[0] = FormatDisk(unit, DataBuffer + 1, 128, 1040);
+		DataBuffer[0] = SIO_FormatDisk(unit, DataBuffer + 1, 128, 1040);
 		DataBuffer[1 + 128] = SIO_ChkSum(DataBuffer + 1, 128);
 		DataIndex = 0;
 		ExpectedBytes = 2 + 128;
 		TransferStatus = SIO_FormatFrame;
-		DELAYED_SERIN_IRQ = SERIN_INTERVAL;
+		POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL;
 		return 'A';
 	default:
 		/* Unknown command for a disk drive */
 #ifdef DEBUG
-		Aprint("Command frame: %02x %02x %02x %02x %02x",
+		Log_print("Command frame: %02x %02x %02x %02x %02x",
 			CommandFrame[0], CommandFrame[1], CommandFrame[2],
 			CommandFrame[3], CommandFrame[4]);
 #endif
@@ -926,15 +1047,25 @@ static UBYTE Command_Frame(void)
 void SIO_TapeMotor(int onoff)
 {
 	/* if sio is patched, do not do anything */
-	if (enable_sio_patch)
+	if (ESC_enable_sio_patch)
 		return;
 	if (onoff) {
 		/* set frame to cassette frame, if not */
 		/* in a transfer with an intelligent peripheral */
-		if (TransferStatus == SIO_NoFrame) {
-			TransferStatus = SIO_CasRead;
-			CASSETTE_TapeMotor(onoff);
-			DELAYED_SERIN_IRQ = CASSETTE_GetInputIRQDelay();
+		if (TransferStatus == SIO_NoFrame || (TransferStatus & 0xfe) == SIO_CasRead) {
+			if (CASSETTE_IsSaveFile()) {
+				TransferStatus = SIO_CasWrite;
+				CASSETTE_TapeMotor(onoff);
+				SIO_last_op = SIO_LAST_WRITE;
+			}
+			else {
+				TransferStatus = SIO_CasRead;
+				CASSETTE_TapeMotor(onoff);
+				POKEY_DELAYED_SERIN_IRQ = CASSETTE_GetInputIRQDelay();
+				SIO_last_op = SIO_LAST_READ;
+			};
+			SIO_last_drive = 0x60;
+			SIO_last_op_time = 0x10;
 		}
 		else {
 			CASSETTE_TapeMotor(onoff);
@@ -942,24 +1073,29 @@ void SIO_TapeMotor(int onoff)
 	}
 	else {
 		/* set frame to none */
-		if (TransferStatus == SIO_CasRead) {
+		if (TransferStatus == SIO_CasWrite) {
 			TransferStatus = SIO_NoFrame;
 			CASSETTE_TapeMotor(onoff);
-			DELAYED_SERIN_IRQ = 0; /* off */
+		}
+		else if (TransferStatus == SIO_CasRead) {
+			TransferStatus = SIO_NoFrame;
+			CASSETTE_TapeMotor(onoff);
+			POKEY_DELAYED_SERIN_IRQ = 0; /* off */
 		}
 		else {
 			CASSETTE_TapeMotor(onoff);
-			DELAYED_SERIN_IRQ = 0; /* off */
+			POKEY_DELAYED_SERIN_IRQ = 0; /* off */
 		}
+		SIO_last_op_time = 0;
 	}
 }
 
 /* Enable/disable the command frame */
-void SwitchCommandFrame(int onoff)
+void SIO_SwitchCommandFrame(int onoff)
 {
 	if (onoff) {				/* Enabled */
 		if (TransferStatus != SIO_NoFrame)
-			Aprint("Unexpected command frame at state %x.", TransferStatus);
+			Log_print("Unexpected command frame at state %x.", TransferStatus);
 		CommandIndex = 0;
 		DataIndex = 0;
 		ExpectedBytes = 5;
@@ -969,7 +1105,7 @@ void SwitchCommandFrame(int onoff)
 		if (TransferStatus != SIO_StatusRead && TransferStatus != SIO_NoFrame &&
 			TransferStatus != SIO_ReadFrame) {
 			if (!(TransferStatus == SIO_CommandFrame && CommandIndex == 0))
-				Aprint("Command frame %02x unfinished.", TransferStatus);
+				Log_print("Command frame %02x unfinished.", TransferStatus);
 			TransferStatus = SIO_NoFrame;
 		}
 		CommandIndex = 0;
@@ -983,16 +1119,16 @@ static UBYTE WriteSectorBack(void)
 
 	sector = CommandFrame[2] + (CommandFrame[3] << 8);
 	unit = CommandFrame[0] - '1';
-	if (unit >= MAX_DRIVES)		/* UBYTE range ! */
+	if (unit >= SIO_MAX_DRIVES)		/* UBYTE range ! */
 		return 0;
 	switch (CommandFrame[1]) {
 	case 0x4f:				/* Write Status Block */
-		return WriteStatusBlock(unit, DataBuffer);
+		return SIO_WriteStatusBlock(unit, DataBuffer);
 	case 0x50:				/* Write */
 	case 0x57:
 	case 0xD0:				/* xf551 hispeed */
 	case 0xD7:
-		return WriteSector(unit, sector, DataBuffer);
+		return SIO_WriteSector(unit, sector, DataBuffer);
 	default:
 		return 'E';
 	}
@@ -1008,14 +1144,14 @@ void SIO_PutByte(int byte)
 			if (CommandIndex >= ExpectedBytes) {
 				if (CommandFrame[0] >= 0x31 && CommandFrame[0] <= 0x38) {
 					TransferStatus = SIO_StatusRead;
-					DELAYED_SERIN_IRQ = SERIN_INTERVAL + ACK_INTERVAL;
+					POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL + SIO_ACK_INTERVAL;
 				}
 				else
 					TransferStatus = SIO_NoFrame;
 			}
 		}
 		else {
-			Aprint("Invalid command frame!");
+			Log_print("Invalid command frame!");
 			TransferStatus = SIO_NoFrame;
 		}
 		break;
@@ -1031,7 +1167,7 @@ void SIO_PutByte(int byte)
 						DataBuffer[1] = result;
 						DataIndex = 0;
 						ExpectedBytes = 2;
-						DELAYED_SERIN_IRQ = SERIN_INTERVAL + ACK_INTERVAL;
+						POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL + SIO_ACK_INTERVAL;
 						TransferStatus = SIO_FinalStatus;
 					}
 					else
@@ -1041,17 +1177,20 @@ void SIO_PutByte(int byte)
 					DataBuffer[0] = 'E';
 					DataIndex = 0;
 					ExpectedBytes = 1;
-					DELAYED_SERIN_IRQ = SERIN_INTERVAL + ACK_INTERVAL;
+					POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL + SIO_ACK_INTERVAL;
 					TransferStatus = SIO_FinalStatus;
 				}
 			}
 		}
 		else {
-			Aprint("Invalid data frame!");
+			Log_print("Invalid data frame!");
 		}
 		break;
+	case SIO_CasWrite:
+		CASSETTE_PutByte(byte);
+		break;
 	}
-	DELAYED_SEROUT_IRQ = SEROUT_INTERVAL;
+	/* POKEY_DELAYED_SEROUT_IRQ = SIO_SEROUT_INTERVAL; */ /* already set in pokey.c */
 }
 
 /* Get a byte from the floppy to the pokey. */
@@ -1065,7 +1204,7 @@ int SIO_GetByte(void)
 		break;
 	case SIO_FormatFrame:
 		TransferStatus = SIO_ReadFrame;
-		DELAYED_SERIN_IRQ = SERIN_INTERVAL << 3;
+		POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL << 3;
 		/* FALL THROUGH */
 	case SIO_ReadFrame:
 		if (DataIndex < ExpectedBytes) {
@@ -1075,12 +1214,12 @@ int SIO_GetByte(void)
 			}
 			else {
 				/* set delay using the expected transfer speed */
-				DELAYED_SERIN_IRQ = (DataIndex == 1) ? SERIN_INTERVAL
-					: ((SERIN_INTERVAL * AUDF[CHAN3] - 1) / 0x28 + 1);
+				POKEY_DELAYED_SERIN_IRQ = (DataIndex == 1) ? SIO_SERIN_INTERVAL
+					: ((SIO_SERIN_INTERVAL * POKEY_AUDF[POKEY_CHAN3] - 1) / 0x28 + 1);
 			}
 		}
 		else {
-			Aprint("Invalid read frame!");
+			Log_print("Invalid read frame!");
 			TransferStatus = SIO_NoFrame;
 		}
 		break;
@@ -1092,19 +1231,19 @@ int SIO_GetByte(void)
 			}
 			else {
 				if (DataIndex == 0)
-					DELAYED_SERIN_IRQ = SERIN_INTERVAL + ACK_INTERVAL;
+					POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL + SIO_ACK_INTERVAL;
 				else
-					DELAYED_SERIN_IRQ = SERIN_INTERVAL;
+					POKEY_DELAYED_SERIN_IRQ = SIO_SERIN_INTERVAL;
 			}
 		}
 		else {
-			Aprint("Invalid read frame!");
+			Log_print("Invalid read frame!");
 			TransferStatus = SIO_NoFrame;
 		}
 		break;
 	case SIO_CasRead:
 		byte = CASSETTE_GetByte();
-		DELAYED_SERIN_IRQ = CASSETTE_GetInputIRQDelay();
+		POKEY_DELAYED_SERIN_IRQ = CASSETTE_GetInputIRQDelay();
 		break;
 	default:
 		break;
@@ -1113,25 +1252,25 @@ int SIO_GetByte(void)
 }
 
 #if !defined(BASIC) && !defined(__PLUS)
-int Rotate_Disks(void)
+int SIO_RotateDisks(void)
 {
-	char tmp_filenames[MAX_DRIVES][FILENAME_MAX];
+	char tmp_filenames[SIO_MAX_DRIVES][FILENAME_MAX];
 	int i;
 	int bSuccess = TRUE;
 
-	for (i = 0; i < MAX_DRIVES; i++) {
-		strcpy(tmp_filenames[i], sio_filename[i]);
+	for (i = 0; i < SIO_MAX_DRIVES; i++) {
+		strcpy(tmp_filenames[i], SIO_filename[i]);
 		SIO_Dismount(i + 1);
 	}
 
-	for (i = 1; i < MAX_DRIVES; i++) {
+	for (i = 1; i < SIO_MAX_DRIVES; i++) {
 		if (strcmp(tmp_filenames[i], "None") && strcmp(tmp_filenames[i], "Off") && strcmp(tmp_filenames[i], "Empty") ) {
 			if (!SIO_Mount(i, tmp_filenames[i], FALSE)) /* Note that this is NOT i-1 because SIO_Mount is 1 indexed */
 				bSuccess = FALSE;
 		}
 	}
 
-	i = MAX_DRIVES - 1;
+	i = SIO_MAX_DRIVES - 1;
 	while (i > -1 && (!strcmp(tmp_filenames[i], "None") || !strcmp(tmp_filenames[i], "Off") || !strcmp(tmp_filenames[i], "Empty")) ) {
 		i--;
 	}
@@ -1147,17 +1286,17 @@ int Rotate_Disks(void)
 
 #ifndef BASIC
 
-void SIOStateSave(void)
+void SIO_StateSave(void)
 {
 	int i;
 
 	for (i = 0; i < 8; i++) {
-		SaveINT((int *) &drive_status[i], 1);
-		SaveFNAME(sio_filename[i]);
+		StateSav_SaveINT((int *) &SIO_drive_status[i], 1);
+		StateSav_SaveFNAME(SIO_filename[i]);
 	}
 }
 
-void SIOStateRead(void)
+void SIO_StateRead(void)
 {
 	int i;
 
@@ -1165,20 +1304,20 @@ void SIOStateRead(void)
 		int saved_drive_status;
 		char filename[FILENAME_MAX];
 
-		ReadINT(&saved_drive_status, 1);
-		drive_status[i] = saved_drive_status;
+		StateSav_ReadINT(&saved_drive_status, 1);
+		SIO_drive_status[i] = (SIO_UnitStatus)saved_drive_status;
 
-		ReadFNAME(filename);
+		StateSav_ReadFNAME(filename);
 		if (filename[0] == 0)
 			continue;
 
 		/* If the disk drive wasn't empty or off when saved,
 		   mount the disk */
 		switch (saved_drive_status) {
-		case ReadOnly:
+		case SIO_READ_ONLY:
 			SIO_Mount(i + 1, filename, TRUE);
 			break;
-		case ReadWrite:
+		case SIO_READ_WRITE:
 			SIO_Mount(i + 1, filename, FALSE);
 			break;
 		default:

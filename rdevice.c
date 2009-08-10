@@ -2,7 +2,7 @@
  * rdevice.c - Atari850 emulation
  *
  * Copyright (c) ???? Tom Hunt, Chris Martin
- * Copyright (c) 2003 Atari800 development team (see DOC/CREDITS)
+ * Copyright (c) 2003-2005,2007-2008 Atari800 development team (see DOC/CREDITS)
  *
  * This file is part of the Atari800 emulator project which emulates
  * the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 /* Originally From Closer To Home (Tom Hunt)
@@ -61,7 +61,7 @@
  *       non-concurrent mode error reporting to 747
  *       error bits in location 746
  *       implement xio 32?
- *       error reporting to regY
+ *       error reporting to CPU_regY
  *       heavy ASCII translation
  *       controlling DTR, RTS, & XMT - xio 34
  *
@@ -80,77 +80,156 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
-
 #include <sys/stat.h>
 
+#ifdef DEBUG
+#define DBG_APRINT(x) Log_print(x)
+#else
+#define DBG_APRINT(x)
+#endif
+
+#if 0  /* debug stuff */
+#ifdef R_NETWORK
+#warning R_NETWORK defined
+#endif
+#ifdef R_SERIAL
+#warning R_SERIAL defined
+#endif
+#endif
+
+#ifdef WIN32
+#ifdef R_SERIAL
+#error The Windows version does not support the serial R: device
+#endif
+#ifndef R_NETWORK
+#error R_NETWORK must be defined to use the Windows R: device
+#endif
+#include <winsock2.h>
+   #define F_SETFL 0
+   #define O_NONBLOCK 0
+   #define WM_SOCKET (WM_USER+20)
+   #define inet_pton(fam,ip,addr) ((addr)->s_addr = inet_addr(ip), 0)
+static u_long ioctlsocket_non_block = 1; /* for ioctlsocket */
+#define perror(a) printf("%s:WSA error code:%d\n",a,WSAGetLastError())
+#define close(a) closesocket(a)
+typedef char *caddr_t;
+static void catch_disconnect(int sig);
+static int rdevice_win32_read(SOCKET s, char *buf, int len) {
+  int r;
+  r = recv(s, buf, len, 0);
+  if (r <= 0 ) {
+    switch (WSAGetLastError()) {
+      case WSAECONNRESET:
+      case WSAECONNABORTED:
+      case WSAESHUTDOWN:
+        catch_disconnect(0);
+        break;
+    }
+  }
+  return r;
+}
+
+static int rdevice_win32_write(SOCKET s, char *buf, int len) {
+  int r;
+  r = send(s, buf, len, 0);
+  if (r <= 0 ) {
+    switch (WSAGetLastError()) {
+      case WSAECONNRESET:
+      case WSAECONNABORTED:
+      case WSAESHUTDOWN:
+        catch_disconnect(0);
+        break;
+    }
+  }
+  return r;
+}
+
+#define read(a,b,c) rdevice_win32_read(a,b,c)
+#define write(a,b,c) rdevice_win32_write(a,b,c)
+
+#elif defined(DREAMCAST) /* above WIN32, below DREAMCAST */
+
+/* these functions reside in dc/atari_dc.c */
+extern void dc_init_serial(void);
+extern int dc_write_serial(unsigned char byte);
+extern int dc_read_serial(unsigned char *byte);
+extern void dc_set_baud(int baud);
+
+#else /* above DREAMCAST, below not WIN32 and not DREAMCAST */
+
+#if !defined(R_SERIAL) && !defined(R_NETWORK)
+#error R: device needs serial or network or both
+#endif
+#ifdef R_NETWORK
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#endif /* R_NETWORK */
 #include <sys/types.h>
 #include <fcntl.h>
+#endif /* not WIN32 and not DREAMCAST */
+
+#if defined(R_SERIAL) && !defined(DREAMCAST)
 #include <termios.h>
+#endif /* defined(R_SERIAL) && !defined(DREAMCAST) */
 
 #include "atari.h"
+#include "rdevice.h"
 #include "cpu.h"
 #include "devices.h"
 #include "log.h"
 #include "memory.h"
 #include "util.h"
 
-#define Peek(a)    dGetByte(a)
-#define DPeek(a)   dGetWord(a)
-#define Poke(x,y)  dPutByte(x, y)
+#define Peek(a)    MEMORY_dGetByte(a)
+#define DPeek(a)   MEMORY_dGetWord(a)
+#define Poke(x,y)  MEMORY_dPutByte(x, y)
 
-//---------------------------------------------------------------------------
-// Global Variables
-//---------------------------------------------------------------------------
+/*---------------------------------------------------------------------------
+  Global Variables
+---------------------------------------------------------------------------*/
 static int connected;
 static int do_once;
+static int rdev_fd;
 
-#if 0
-UBYTE r_dtr, r_rts, r_sd;
-UBYTE r_dsr, r_cts, r_cd;
-UBYTE r_parity, r_stop;
-UBYTE r_error, r_in;
-unsigned int r_stat;
-#endif
-//unsigned int svainit;
-
-struct sockaddr_in in;
-struct sockaddr_in peer_in;
-int sock;
-int rdev_fd;
-
-char MESSAGE[256];
-char command_buf[256];
-//fd_set fd;
-//struct timeval tv;
-int retval;
-unsigned char bufout[256];
-//unsigned char bufin[256];
-int concurrent;
+#ifdef R_NETWORK
+static struct sockaddr_in in;
+static struct sockaddr_in peer_in;
+static int sock;
+static int portnum = 9000;
 static char inetaddress[256];
+static char CONNECT_STRING[40] = "\r\n_CONNECT 2400\r\n";
+static int retval;
+#endif /* R_NETWORK */
 
-int command_end = 0;
-char CONNECT_STRING[40] = "\r\n_CONNECT 2400\r\n";
-int portnum = 9000;
-int translation = 1;
-int trans_cr = 0;
-int linefeeds = 1;
-int my_once = 1;
+static char MESSAGE[256];
+static char command_buf[256];
+static char bufout[256];
+static int concurrent;
 
-int r_serial = 0;
-int bufend = 0;
+static int command_end = 0;
+static int translation = 1;
+static int trans_cr = 0;
+static int linefeeds = 1;
+static int bufend = 0;
 
-//---------------------------------------------------------------------------
-// Host Support Function - If Disconnect signal is found, then close socket
-// and clean up.
-//---------------------------------------------------------------------------
-void catch_disconnect(int sig)
+#ifndef R_NETWORK
+int RDevice_serial_enabled = 1;
+#else
+int RDevice_serial_enabled = 0;  /* Default to network, if enabled. Use parameter to -rdevice command line switch to enable serial mode. */
+#endif
+char RDevice_serial_device[FILENAME_MAX];
+
+/*---------------------------------------------------------------------------
+   Host Support Function - If Disconnect signal is found, then close socket
+   and clean up.
+---------------------------------------------------------------------------*/
+#ifdef R_NETWORK
+static void catch_disconnect(int sig)
 {
-  Aprint("R*: Disconnected....");
+  DBG_APRINT("R*: Disconnected....");
   close(rdev_fd);
   connected = 0;
   do_once = 0;
@@ -162,68 +241,79 @@ void catch_disconnect(int sig)
   Poke(748,0);
 #endif
 }
+#endif /* R_NETWORK */
 
-//---------------------------------------------------------------------------
-// Host Support Function - XIO 34 - Called from Device_RSPEC
-// Controls handshake lines DTR, RTS, SD
-//---------------------------------------------------------------------------
-void xio_34(void)
+/*---------------------------------------------------------------------------
+   Host Support Function - XIO 34 - Called from RDevice_SPEC
+   Controls handshake lines DTR, RTS, SD
+---------------------------------------------------------------------------*/
+static void xio_34(void)
 {
+#ifndef DREAMCAST  /* Dreamcast port doesn't currently support handshake lines */
   int temp;
-  //int fid;
+  /*int fid;*/
+#ifdef R_SERIAL
   struct termios options;
-  //int status;
+#endif /* R_SERIAL */
+  /*int status;*/
 
-  //fid = dGetByte(0x2e) >> 4;
-  temp = dGetByte(ICAX1Z);
+  /*fid = MEMORY_dGetByte(0x2e) >> 4;*/
+  temp = MEMORY_dGetByte(Devices_ICAX1Z);
 
-  if(r_serial)
+#ifdef R_SERIAL
+  if(RDevice_serial_enabled)
   {
     tcgetattr(rdev_fd, &options);
-    //ioctl(rdev_fd, TIOCMGET, &status);
+    /*ioctl(rdev_fd, TIOCMGET, &status);*/
   }
+#endif /* R_SERIAL */
 
   if(temp & 0x80)
   {
     if(temp & 0x40)
     {
       /* turn DTR on */
-      if(r_serial)
+#ifdef R_SERIAL
+      if(RDevice_serial_enabled)
       {
-        //status |= TIOCM_DTR;
+        /*status |= TIOCM_DTR;*/
       }
+#endif /* R_SERIAL */
     }
     else
     {
-      //Drop DTR
-      if(r_serial)
+      /*Drop DTR*/
+#ifdef R_SERIAL
+      if(RDevice_serial_enabled)
       {
         cfsetispeed(&options, B0);
         cfsetospeed(&options, B0);
       }
+#endif /* R_SERIAL */
 
       if(connected != 0)
       {
         close ( rdev_fd );
         connected = 0;
         do_once = 0;
-        //bufend = 0;
+        /*bufend = 0;*/
       }
     }
   }
 
-  if(r_serial)
+#ifdef R_SERIAL
+  if(RDevice_serial_enabled)
   {
-    // RTS Set/Clear
+    /* RTS Set/Clear*/
     if(temp & 0x20)
     {
       if(temp & 0x10)
       {
-        //status |= TIOCM_RTS;
+        /*status |= TIOCM_RTS;*/
       }
       else
       {
-        //status &= ~TIOCM_RTS;
+        /*status &= ~TIOCM_RTS;*/
       }
     }
 
@@ -231,88 +321,96 @@ void xio_34(void)
     {
       if(temp & 0x01)
       {
-        //status |= TIOCM_RTS;
+        /*status |= TIOCM_RTS;*/
       }
       else
       {
-        //status &= ~TIOCM_RTS;
+        /*status &= ~TIOCM_RTS;*/
       }
     }
   }
+#endif /* R_SERIAL */
 
-  if(r_serial)
+#ifdef R_SERIAL
+  if(RDevice_serial_enabled)
   {
     tcsetattr(rdev_fd, TCSANOW, &options);
-    //ioctl(rdev_fd, TIOCMSET, &status);
+    /*ioctl(rdev_fd, TIOCMSET, &status);*/
   }
+#endif /* R_SERIAL */
+#endif /* not defined DREAMCAST */
 
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 
 }
 
-//---------------------------------------------------------------------------
-// Host Support Function - XIO 36 - Called from Device_RSPEC
-// Sets baud, stop bits, and ready monitoring.
-//---------------------------------------------------------------------------
-void xio_36(void)
+/*---------------------------------------------------------------------------
+   Host Support Function - XIO 36 - Called from RDevice_SPEC
+   Sets baud, stop bits, and ready monitoring.
+---------------------------------------------------------------------------*/
+static void xio_36(void)
 {
   int aux1, aux2;
+#if defined(R_SERIAL) && !defined(DREAMCAST)
   struct termios options;
+#endif /* defined(R_SERIAL) && !defined(DREAMCAST) */
 
-  aux1 = dGetByte(ICAX1Z);
-  aux2 = dGetByte(ICAX2Z);
+  aux1 = MEMORY_dGetByte(Devices_ICAX1Z);
+  aux2 = MEMORY_dGetByte(Devices_ICAX2Z);
 
-  if(r_serial)
+#ifdef R_SERIAL
+  if(RDevice_serial_enabled)
   {
+#ifndef DREAMCAST
     tcgetattr(rdev_fd, &options);
 
-    //Set Stop bits
+    /*Set Stop bits*/
     if(aux1 & 0x80)
-    { //2 Stop bits
+    { /*2 Stop bits*/
       options.c_cflag |= CSTOPB;
     }
     else
-    { //1 Stop bit
+    { /*1 Stop bit*/
       options.c_cflag &= ~CSTOPB;
     }
 
-    //Set word size
+    /*Set word size*/
     if((aux1 & 0x30) == 0)
-    { //8 bit word size
+    { /*8 bit word size*/
       options.c_cflag &= ~CSIZE;
       options.c_cflag |= CS8;
     }
     else if((aux1 & 0x30) == 0x10)
-    { //7 bit word size
+    { /*7 bit word size*/
       options.c_cflag &= ~CSIZE;
       options.c_cflag |= CS7;
     }
     else if((aux1 & 0x30) == 0x20)
-    { //6 bit word size
+    { /*6 bit word size*/
       options.c_cflag &= ~CSIZE;
       options.c_cflag |= CS6;
     }
     else if((aux1 & 0x30) == 0x30)
-    { //5 bit word size
+    { /*5 bit word size*/
       options.c_cflag &= ~CSIZE;
       options.c_cflag |= CS5;
     }
     else
-    { //8 bit word size
+    { /*8 bit word size*/
       options.c_cflag &= ~CSIZE;
       options.c_cflag |= CS8;
     }
 
-    //Set Baud Rate
+    /*Set Baud Rate*/
     if((aux1 & 0x0f) == 0)
-    { //300 Baud
+    { /*300 Baud*/
       cfsetispeed(&options, B300);
       cfsetospeed(&options, B300);
     }
     else if((aux1 & 0x0f) == 1)
-    { // 45.5 Baud (unsupported) - now 57600
+    { /* 45.5 Baud (unsupported) - now 57600 */
 #ifdef B57600
       cfsetispeed(&options, B57600);
       cfsetospeed(&options, B57600);
@@ -322,12 +420,12 @@ void xio_36(void)
 #endif
     }
     else if ((aux1 & 0x0f) == 2)
-    { // 50 Baud
+    { /* 50 Baud */
       cfsetispeed(&options, B50);
       cfsetospeed(&options, B50);
     }
     else if ((aux1 & 0x0f) == 3)
-    { // 56.875 Baud (unsupported) - now 115200
+    { /* 56.875 Baud (unsupported) - now 115200 */
 #ifdef B115200
       cfsetispeed(&options, B115200);
       cfsetospeed(&options, B115200);
@@ -337,57 +435,57 @@ void xio_36(void)
 #endif
     }
     else if((aux1 & 0x0f) == 4)
-    { // 75 Baud
+    { /* 75 Baud */
       cfsetispeed(&options, B75);
       cfsetospeed(&options, B75);
     }
     else if((aux1 & 0x0f) == 5)
-    { // 110 Baud
+    { /* 110 Baud */
       cfsetispeed(&options, B110);
       cfsetospeed(&options, B110);
     }
     else if((aux1 & 0x0f) == 6)
-    { // 134.5 Baud
+    { /* 134.5 Baud */
       cfsetispeed(&options, B134);
       cfsetospeed(&options, B134);
     }
     else if((aux1 & 0x0f) == 7)
-    { // 150 Baud
+    { /* 150 Baud */
       cfsetispeed(&options, B150);
       cfsetospeed(&options, B150);
     }
     else if((aux1 & 0x0f) == 8)
-    { // 300 Baud
+    { /* 300 Baud */
       cfsetispeed(&options, B300);
       cfsetospeed(&options, B300);
     }
     else if((aux1 & 0x0f) == 9)
-    { // 600 Baud
+    { /* 600 Baud */
       cfsetispeed(&options, B600);
       cfsetospeed(&options, B600);
     }
     else if((aux1 & 0x0f) == 10)
-    { // 1200 Baud
+    { /* 1200 Baud */
       cfsetispeed(&options, B1200);
       cfsetospeed(&options, B1200);
     }
     else if((aux1 & 0x0f) == 12)
-    { // 2400 Baud
+    { /* 2400 Baud */
       cfsetispeed(&options, B2400);
       cfsetospeed(&options, B2400);
     }
     else if((aux1 & 0x0f) == 13)
-    { // 4800 Baud
+    { /* 4800 Baud */
       cfsetispeed(&options, B4800);
       cfsetospeed(&options, B4800);
     }
     else if((aux1 & 0x0f) == 14)
-    { // 9600 Baud
+    { /* 9600 Baud */
       cfsetispeed(&options, B9600);
       cfsetospeed(&options, B9600);
     }
     else if((aux1 & 0x0f) == 15)
-    { // 19200 Baud
+    { /* 19200 Baud */
 #ifdef B19200
       cfsetispeed(&options, B19200);
       cfsetospeed(&options, B19200);
@@ -397,7 +495,7 @@ void xio_36(void)
 #endif
     }
     else
-    { // 115200 Baud (can add 38400, 76800 if wanted)
+    { /* 115200 Baud (can add 38400, 76800 if wanted) */
 #ifdef B115200
       cfsetispeed(&options, B115200);
       cfsetospeed(&options, B115200);
@@ -408,7 +506,7 @@ void xio_36(void)
     }
 
     if(aux1 & 0x40)
-    { // 230400 Baud
+    { /* 230400 Baud */
 #ifdef B230400
       cfsetispeed(&options, B230400);
       cfsetospeed(&options, B230400);
@@ -416,40 +514,146 @@ void xio_36(void)
     }
 
     tcsetattr(rdev_fd, TCSANOW, &options);
-  }
+#else /* below DREAMCAST, above not; both R_SERIAL */
+    /* Set Stop bits */
+    if(aux1 & 0x80)
+    { /* 2 Stop bits */
+      /* currently not supported on DC */
+    }
+    else
+    { /* 1 Stop bit */
+      /* currently not supported on DC */
+    }
 
-  regA = 1;
-  regY = 1;
-  ClrN;
+    /* Set word size */
+    if((aux1 & 0x30) == 0)
+    { /* 8 bit word size */
+      /* currently not supported on DC */
+    }
+    else if((aux1 & 0x30) == 0x10)
+    { /* 7 bit word size */
+      /* currently not supported on DC */
+    }
+    else if((aux1 & 0x30) == 0x20)
+    { /* 6 bit word size */
+      /* currently not supported on DC */
+    }
+    else if((aux1 & 0x30) == 0x30)
+    { /* 5 bit word size */
+      /* currently not supported on DC */
+    }
+    else
+    { /* 8 bit word size */
+      /* currently not supported on DC */
+    }
+
+    /* Set Baud Rate */
+    if((aux1 & 0x0f) == 0)
+    { /* 300 Baud */
+      dc_set_baud(300);
+    }
+    else if((aux1 & 0x0f) == 1)
+    { /* 45.5 Baud (unsupported) - now 57600 */
+      dc_set_baud(57600);
+    }
+    else if ((aux1 & 0x0f) == 2)
+    { /* 50 Baud */
+      dc_set_baud(50);
+    }
+    else if ((aux1 & 0x0f) == 3)
+    { /* 56.875 Baud (unsupported) - now 115200 */
+      dc_set_baud(115200);
+    }
+    else if((aux1 & 0x0f) == 4)
+    { /* 75 Baud */
+      dc_set_baud(75);
+    }
+    else if((aux1 & 0x0f) == 5)
+    { /* 110 Baud */
+      dc_set_baud(110);
+    }
+    else if((aux1 & 0x0f) == 6)
+    { /* 134.5 Baud */
+      dc_set_baud(134);
+    }
+    else if((aux1 & 0x0f) == 7)
+    { /* 150 Baud */
+      dc_set_baud(150);
+    }
+    else if((aux1 & 0x0f) == 8)
+    { /* 300 Baud */
+      dc_set_baud(300);
+    }
+    else if((aux1 & 0x0f) == 9)
+    { /* 600 Baud */
+      dc_set_baud(600);
+    }
+    else if((aux1 & 0x0f) == 10)
+    { /* 1200 Baud */
+      dc_set_baud(1200);
+    }
+    else if((aux1 & 0x0f) == 12)
+    { /* 2400 Baud */
+      dc_set_baud(2400);
+    }
+    else if((aux1 & 0x0f) == 13)
+    { /* 4800 Baud */
+      dc_set_baud(4800);
+    }
+    else if((aux1 & 0x0f) == 14)
+    { /* 9600 Baud */
+      dc_set_baud(9600);
+    }
+    else if((aux1 & 0x0f) == 15)
+    { /* 19200 Baud */
+      dc_set_baud(19200);
+    }
+    else
+    { /* 115200 Baud (can add 38400, 76800 if wanted) */
+      dc_set_baud(115200);
+    }
+
+    if(aux1 & 0x40)
+    { /*  230400 Baud */
+      dc_set_baud(230400);
+    }
+#endif /* DREAMCAST */
+  }
+#endif /* R_SERIAL */
+
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 }
 
-
-
-//---------------------------------------------------------------------------
-// Host Support Function - XIO 38 - Called from Device_RSPEC
-// Sets Translation and parity
-//---------------------------------------------------------------------------
-void xio_38(void)
+/*---------------------------------------------------------------------------
+   Host Support Function - XIO 38 - Called from RDevice_SPEC
+   Sets Translation and parity
+---------------------------------------------------------------------------*/
+static void xio_38(void)
 {
   int aux1;
+#if defined(R_SERIAL) && !defined(DREAMCAST)
   struct termios options;
+#endif /* defined(R_SERIAL) && !defined(DREAMCAST) */
 
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 
-  aux1 = Peek(ICAX1Z);
-  if(r_serial)
+  aux1 = Peek(Devices_ICAX1Z);
+#if defined(R_SERIAL) && !defined(DREAMCAST)
+  if(RDevice_serial_enabled)
   {
     if(aux1 & 0x04)
-    { //Odd Parity
+    { /*Odd Parity*/
       tcgetattr(rdev_fd, &options);
       options.c_cflag |= PARENB;
       options.c_cflag |= PARODD;
       tcsetattr(rdev_fd, TCSANOW, &options);
     }
     else if(aux1 & 0x08)
-    { //Even Parity
+    { /*Even Parity*/
       tcgetattr(rdev_fd, &options);
       options.c_cflag |= PARENB;
       options.c_cflag &= ~PARODD;
@@ -457,16 +661,17 @@ void xio_38(void)
 
     }
     else
-    { //No Parity
+    { /*No Parity*/
       tcgetattr(rdev_fd, &options);
       options.c_cflag &= ~PARENB;
       tcsetattr(rdev_fd, TCSANOW, &options);
     }
   }
+#endif /* defined(R_SERIAL) && !defined(DREAMCAST) */
 
   if(aux1 & 0x20)
-  { // No Translation
-    Aprint("R*: No ATASCII/ASCII TRANSLATION");
+  { /* No Translation */
+    DBG_APRINT("R*: No ATASCII/ASCII TRANSLATION");
     translation = 0;
   }
   else
@@ -475,8 +680,8 @@ void xio_38(void)
   }
 
   if(aux1 & 0x40)
-  { // Append line feed
-    Aprint("R*: Append Line Feeds");
+  { /* Append line feed */
+    DBG_APRINT("R*: Append Line Feeds");
     linefeeds = 1;
   }
   else
@@ -486,11 +691,11 @@ void xio_38(void)
 
 }
 
-//---------------------------------------------------------------------------
-// Host Support Function - XIO 40 - Called from Device_RSPEC
-// Sets concurrent mode.  Also checks for dropped carrier.
-//---------------------------------------------------------------------------
-void xio_40(void)
+/*---------------------------------------------------------------------------
+   Host Support Function - XIO 40 - Called from RDevice_SPEC
+   Sets concurrent mode.  Also checks for dropped carrier.
+---------------------------------------------------------------------------*/
+static void xio_40(void)
 {
 
   int aux1;
@@ -498,32 +703,46 @@ void xio_40(void)
     if(connected == 0)
       Poke(747,0);
 */
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 
-  aux1 = Peek(ICAX1Z);
+  aux1 = Peek(Devices_ICAX1Z);
 
   if(aux1 >= 12)
   {
     concurrent = 1;
-    Aprint("R*: Entering concurrent IO mode...");
+    DBG_APRINT("R*: Entering concurrent IO mode...");
   }
   else
   {
     concurrent = 0;
     sprintf(MESSAGE, "R*: XIO 40, %d", aux1);
-    Aprint(MESSAGE);
+    DBG_APRINT(MESSAGE);
   }
 
 }
 
-//---------------------------------------------------------------------------
-// Host Support Function - Internet Socket Open Connection
-//---------------------------------------------------------------------------
-void open_connection(char * address, int port)
+/*---------------------------------------------------------------------------
+   Host Support Function - Internet Socket Open Connection
+---------------------------------------------------------------------------*/
+#ifdef R_NETWORK
+static void open_connection(char * address, int port)
 {
   struct hostent *host;
+#ifdef WIN32
+  static int winsock_started;
+  WSADATA wdata;
+  WORD ver = MAKEWORD(1,1);
+  int ret;
+  if (!winsock_started) {
+    ret = WSAStartup(ver, &wdata);
+    if (ret) {
+      printf("Error in WSAStartup,return code:%d\n", ret);
+    }
+    winsock_started = 1;
+  }
+#endif /* WIN32 */
   if((address != NULL) && (strlen(address) > 0))
   {
     close(rdev_fd);
@@ -531,18 +750,23 @@ void open_connection(char * address, int port)
     do_once = 1;
     connected = 1;
     memset ( &peer_in, 0, sizeof ( struct sockaddr_in ) );
-    //rdev_fd = socket ( AF_INET, SOCK_STREAM, IPPROTO_TCP );
-    rdev_fd = socket ( AF_INET, SOCK_STREAM, 0 );
-    fcntl( rdev_fd, F_SETFL, O_NONBLOCK);
+    /*rdev_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);*/
+    rdev_fd = socket(AF_INET, SOCK_STREAM, 0);
+#ifdef WIN32
+    ioctlsocket(rdev_fd, FIONBIO, &ioctlsocket_non_block);
+#else
+    fcntl(rdev_fd, F_SETFL, O_NONBLOCK);
+#endif
     peer_in.sin_family = AF_INET;
     if(inet_pton(AF_INET, address, &peer_in.sin_addr) == 0)
-    { // invalid address if zero
+    { /* invalid address if zero */
       if((peer_in.sin_addr.s_addr == -1) || (peer_in.sin_addr.s_addr == 0))
       {
         host = gethostbyname(address);
         if(host != NULL)
         {
-          printf("Host = %s.\n",  host->h_addr_list[0]);
+          sprintf(MESSAGE, "R*: Host = '%s'.",  host->h_name);
+          DBG_APRINT(MESSAGE);
           memcpy((caddr_t)&peer_in.sin_addr, host->h_addr_list[0], host->h_length);
         }
         else
@@ -560,52 +784,76 @@ void open_connection(char * address, int port)
     {  /* telnet port */
       peer_in.sin_port = htons (23);
     }
-    if(connect(rdev_fd, (struct sockaddr *)&peer_in, sizeof ( peer_in )) < 0)
+    if(connect(rdev_fd, (struct sockaddr *)&peer_in, sizeof(peer_in)) < 0)
     {
-      perror("connect");
+#ifdef DEBUG
+      sprintf(MESSAGE, "R*: connect: '%s'", strerror(errno));
+      DBG_APRINT(MESSAGE);
+#endif
     }
-    signal(SIGPIPE, catch_disconnect); //Need to see if the other end disconnects...
-    signal(SIGHUP, catch_disconnect); //Need to see if the other end disconnects...
+#ifndef WIN32
+    signal(SIGPIPE, catch_disconnect); /*Need to see if the other end disconnects...*/
+    signal(SIGHUP, catch_disconnect); /*Need to see if the other end disconnects...*/
+#endif /* WIN32 */
     sprintf(MESSAGE, "R*: Connecting to %s", address);
-    Aprint(MESSAGE);
+    DBG_APRINT(MESSAGE);
+#ifdef WIN32
+    ioctlsocket(rdev_fd, FIONBIO, &ioctlsocket_non_block);
+#else
     fcntl(rdev_fd, F_SETFL, O_NONBLOCK);
+#endif /* WIN32 */
 
     /* Telnet negotiation */
     sprintf(MESSAGE, "%c%c%c%c%c%c%c%c%c", 0xff, 0xfb, 0x01, 0xff, 0xfb, 0x03, 0xff, 0xfd, 0x0f3);
     write(rdev_fd, MESSAGE, 9);
-    Aprint("R*: Negotiating Terminal Options...");
+    DBG_APRINT("R*: Negotiating Terminal Options...");
   }
-
 }
+#endif /* R_NETWORK */
 
 
+#if defined(R_SERIAL) && !defined(DREAMCAST)
 #ifdef __linux__
 #define TTY_DEV_NAME "/dev/ttyS0"   /* Linux */
 #elif defined (__NetBSD__) && defined(__i386__)
 #define TTY_DEV_NAME "/dev/tty00"   /* NetBSD/x86 */
+#elif defined (__FreeBSD__) && defined(__i386__)
+#define TTY_DEV_NAME "/dev/ttyd1"   /* FreeBSD/x86 */
 #elif defined (__sun__)
 #define TTY_DEV_NAME "/dev/ttya"    /* Solaris */
 #else
 #error tty name unknown!
 #endif
+#endif /* defined(R_SERIAL) && !defined(DREAMCAST) */
 
-//---------------------------------------------------------------------------
-// Host Support Function - Serial Open Connection
-//---------------------------------------------------------------------------
-void open_connection_serial(int port)
+/*---------------------------------------------------------------------------
+   Host Support Function - Serial Open Connection
+---------------------------------------------------------------------------*/
+#ifdef R_SERIAL
+static void open_connection_serial(int port)
 {
-  char dev_name[12] = TTY_DEV_NAME; /* reinitialize each time */
+#ifdef DREAMCAST
+  dc_init_serial();
+  connected = 1;
+#else /* above DREAMCAST, below not */
+  char dev_name[FILENAME_MAX] = TTY_DEV_NAME; /* reinitialize each time */
   struct termios options;
 
   if(connected)
     close(rdev_fd);
   do_once = 1;
 
+  if (*RDevice_serial_device)  /* got a device name from command line */
+  {
+    strcpy(dev_name, RDevice_serial_device);
+  }
+
   dev_name[strlen(dev_name) - 1] += port - 1;
 
+  sprintf(MESSAGE, "R*: using serial device %s", dev_name);
+  DBG_APRINT(MESSAGE);
+
   rdev_fd = open(dev_name, O_RDWR | O_NOCTTY | O_NDELAY);
-  //rdev_fd = open("/dev/ttyS0", O_RDONLY | O_NOCTTY | O_NDELAY);
-  //rdev_fd = open("/dev/ttyS0", O_WRONLY | O_NOCTTY | O_NDELAY);
   if(rdev_fd == -1)
   {
     connected = 0;
@@ -617,8 +865,8 @@ void open_connection_serial(int port)
 #if 0
     fcntl(rdev_fd, F_SETFL, O_NONBLOCK);
 #endif
-    //Set 8N1 by default on open
-    //Set Baud to 115200 by default;
+    /*Set 8N1 by default on open*/
+    /*Set Baud to 115200 by default;*/
     tcgetattr(rdev_fd, &options);
     options.c_lflag = 0;
     options.c_iflag = 0;
@@ -644,17 +892,19 @@ void open_connection_serial(int port)
     cfsetospeed(&options, B115200);
     tcsetattr(rdev_fd, TCSANOW, &options);
   }
-
+#endif /* not DREAMCAST */
 }
+#endif /* R_SERIAL */
 
-//---------------------------------------------------------------------------
-// Host Support Function - Retrieve address from open command:
-// From Basic: OPEN #1,8,23,"R:JYBOLAC.HOMELINUX.COM"
-// Returns:    "jybolac.homelinux.com"
-//---------------------------------------------------------------------------
-static void Device_GetInetAddress(void)
+/*---------------------------------------------------------------------------
+   Host Support Function - Retrieve address from open command:
+   From Basic: OPEN #1,8,23,"R:JYBOLAC.HOMELINUX.COM"
+   Returns:    "jybolac.homelinux.com"
+---------------------------------------------------------------------------*/
+#ifdef R_NETWORK
+static void RDevice_GetInetAddress(void)
 {
-  UWORD bufadr = Device_SkipDeviceName();
+  UWORD bufadr = Devices_SkipDeviceName();
   char *p;
 
   if (bufadr == 0) {
@@ -665,7 +915,7 @@ static void Device_GetInetAddress(void)
 
   p = inetaddress;
   while (p < inetaddress + sizeof(inetaddress) - 1) {
-    char c = (char) dGetByte(bufadr);
+    char c = (char) MEMORY_dGetByte(bufadr);
     if (c < '!' || c > '\x7e')
       break;
     if (c >= 'A' && c <= 'Z')
@@ -675,45 +925,52 @@ static void Device_GetInetAddress(void)
   }
   *p = '\0';
 }
+#endif /* R_NETWORK */
 
 
-//---------------------------------------------------------------------------
-// R Device OPEN vector - called from Atari OS Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_ROPEN(void)
+/*---------------------------------------------------------------------------
+   R Device OPEN vector - called from Atari OS Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_OPEN(void)
 {
   int  port;
   int  direction;
   int  devnum;
 
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 
   bufend = 0;
 
-  port = Peek(ICAX2Z);
-  direction = Peek(ICAX1Z);
-  devnum = dGetByte(ICDNOZ);
+  port = Peek(Devices_ICAX2Z);
+  direction = Peek(Devices_ICAX1Z);
+  devnum = MEMORY_dGetByte(Devices_ICDNOZ);
   if(direction & 0x04)
   {
-    Aprint("R*: Open for Reading...");
+    DBG_APRINT("R*: Open for Reading...");
   }
 
   if(direction & 0x08)
   {
-    Aprint("R*: Open for Writing...");
-    if(r_serial)
+    DBG_APRINT("R*: Open for Writing...");
+#ifdef R_SERIAL
+    if(RDevice_serial_enabled)
     {
-      Aprint("R*: serial mode.");
+      DBG_APRINT("R*: serial mode.");
       open_connection_serial(devnum);
     }
+#endif /* R_SERIAL */
+#if defined(R_SERIAL) && defined(R_NETWORK)
     else
+#endif
+#ifdef R_NETWORK
     {
-      Aprint("R*: Socket mode.");
-      Device_GetInetAddress();
+      DBG_APRINT("R*: Socket mode.");
+      RDevice_GetInetAddress();
       open_connection(inetaddress, port);
     }
+#endif /* R_NETWORK */
   }
   if(direction & 0x01)
   {
@@ -722,41 +979,41 @@ void Device_ROPEN(void)
 
 }
 
-//---------------------------------------------------------------------------
-// R Device CLOSE vector - called from Atari OS Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_RCLOS(void)
+/*---------------------------------------------------------------------------
+   R Device CLOSE vector - called from Atari OS Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_CLOS(void)
 {
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
   concurrent = 0;
   bufend = 0;
   close(rdev_fd);
 }
 
-//---------------------------------------------------------------------------
-// R Device READ vector - called from Atari OS Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_RREAD(void)
+/*---------------------------------------------------------------------------
+   R Device READ vector - called from Atari OS Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_READ(void)
 {
   int j;
 
-  //bufend = Peek(747);
-  //printf("Bufend = %d.\n", bufend);
+  /*bufend = Peek(747);*/
+  /*printf("Bufend = %d.\n", bufend);*/
 
-//  if(bufend >= 0)
-//  {
+/*  if(bufend >= 0) */
+/*  { */
     if(translation)
     {
       if(bufout[0] == 0x0d)
       {
-        regA = 0x9b;
+        CPU_regA = 0x9b;
       }
     }
     else
     {
-      regA = bufout[0];
+      CPU_regA = bufout[0];
     }
 
     bufend--;
@@ -766,7 +1023,7 @@ void Device_RREAD(void)
       bufout[j] = bufout[j+1];
     }
 
-    //Cycle the buffer again to skip over linefeed....
+    /*Cycle the buffer again to skip over linefeed....*/
     if(translation && linefeeds && (bufout[0] == 0x0a))
     {
       for(j = 0; j <= bufend; j++)
@@ -775,36 +1032,38 @@ void Device_RREAD(void)
       }
     }
     /*return; ???*/
-//  }
+/*  } */
 
-  regY = 1;
-  ClrN;
+  CPU_regY = 1;
+  CPU_ClrN;
 }
 
 
 
-//---------------------------------------------------------------------------
-// R Device WRITE vector - called from Atari OS Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_RWRIT(void)
+/*---------------------------------------------------------------------------
+   R Device WRITE vector - called from Atari OS Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_WRIT(void)
 {
-  int port;
   unsigned char out_char;
+#ifdef R_NETWORK
+  int port;
+#endif
 
-  regY = 1;
-  ClrN;
+  CPU_regY = 1;
+  CPU_ClrN;
 
-  //bufend = Peek(747);
+  /*bufend = Peek(747);*/
 
   /* Translation mode */
   if(translation)
   {
-    if(regA == 0x9b)
+    if(CPU_regA == 0x9b)
     {
       out_char = 0x0d;
       if(linefeeds)
       {
-        if((r_serial == 0) && (connected == 0))
+        if((RDevice_serial_enabled == 0) && (connected == 0))
         { /* local echo */
           bufend++;
           bufout[bufend-1] = out_char;
@@ -818,15 +1077,19 @@ void Device_RWRIT(void)
         }
         else
         {
-          write(rdev_fd, &out_char, 1); // Write return
+#ifndef DREAMCAST
+          write(rdev_fd, (char *)&out_char, 1); /* Write return */
+#else
+          dc_write_serial(out_char);
+#endif
         }
-        out_char = 0x0a;  //set char for line feed to be output later....
+        out_char = 0x0a;  /*set char for line feed to be output later....*/
       }
     }
   }
   else
   {
-    out_char = regA;
+    out_char = CPU_regA;
   }
 
   /* Translate the CR to a LF for telnet, ftp, etc */
@@ -835,45 +1098,46 @@ void Device_RWRIT(void)
     out_char = 0x0a;
   }
 
-  //if((r_serial == 0) && (out_char == 255))
-  //{
-  //  Aprint("R: Writing IAC...");
-  //  retval = write(rdev_fd, &out_char, 1); /* IAC escape sequence */
-  //}
-  //if(retval == -1)
+  /*if((RDevice_serial_enabled == 0) && (out_char == 255))*/
+  /*{*/
+  /*  DBG_APRINT("R: Writing IAC..."); */
+  /*  retval = write(rdev_fd, &out_char, 1);*/ /* IAC escape sequence */ 
+  /*}*/
+  /*if(retval == -1)*/
 
-  if((r_serial == 0) && (connected == 0))
+#ifdef R_NETWORK
+  if((RDevice_serial_enabled == 0) && (connected == 0))
   { /* Local echo - only do if in socket mode */
     bufend++;
     bufout[bufend-1] = out_char;
     bufout[bufend] = 0;
 
-    // Grab Command
+    /* Grab Command */
     if((out_char == 0x9b) || (out_char == 0x0d))
-    { //process command with a return/enter
+    { /*process command with a return/enter*/
       command_end = 0;
 
-      //Make out going connection command 'ATDI'
+      /*Make out going connection command 'ATDI'*/
       if((command_buf[0] == 'A') && (command_buf[1] == 'T') && (command_buf[2] == 'D') && (command_buf[3] == 'I'))
       {
-        //Aprint(command_buf);
+        /*DBG_APRINT(command_buf);*/
         if(strchr(command_buf, ' ') != NULL)
         {
           if(strrchr(command_buf, ' ') != strchr(command_buf, ' '))
           {
             port = atoi((char *)(strrchr(command_buf, ' ')+1));
-            * strrchr(command_buf, ' ') = '\0'; //zero last space in line
+            * strrchr(command_buf, ' ') = '\0'; /*zero last space in line*/
           }
           else
           {
             port = 23;
           }
-          open_connection((char *)(strchr(command_buf, ' ')+1), port); //send string after first space in line
+          open_connection((char *)(strchr(command_buf, ' ')+1), port); /*send string after first space in line*/
         }
         command_buf[command_end] = 0;
         strcat(bufout, "OK\r\n");
         bufend += 4;
-      //Change translation command 'ATDL'
+      /*Change translation command 'ATDL'*/
       }
       else if((command_buf[0] == 'A') && (command_buf[1] == 'T') && (command_buf[2] == 'D') && (command_buf[3] == 'L'))
       {
@@ -899,49 +1163,69 @@ void Device_RWRIT(void)
       }
     }
   }
-  else if((connected) && (write(rdev_fd, &out_char, 1) < 1))
-  { /* returns -1 if disconnected or 0 if could not send */
-    perror("write");
-    Aprint("R*: ERROR on write.");
-    SetN;
-    regY = 135;
-    //bufend = 13; /* To catch NO CARRIER message */
+  else
+#endif /* R_NETWORK */
+#ifndef DREAMCAST
+    if((connected) && (write(rdev_fd, (char *)&out_char, 1) < 1))
+    { /* returns -1 if disconnected or 0 if could not send */
+      perror("write");
+      DBG_APRINT("R*: ERROR on write.");
+      CPU_SetN;
+      CPU_regY = 135;
+      /*bufend = 13;*/ /* To catch NO CARRIER message */
+    }
+#else
+  if (connected)
+  {
+    if (dc_write_serial(out_char) != 1)
+    {
+      Log_print("R*: ERROR on write.");
+      CPU_SetN;
+      CPU_regY = 135;
+    }
   }
+#endif
 
-
-  regA = 1;
+  CPU_regA = 1;
 }
 
-//---------------------------------------------------------------------------
-// R Device GET STATUS vector - called from Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_RSTAT(void)
+/*---------------------------------------------------------------------------
+   R Device GET STATUS vector - called from Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_STAT(void)
 {
+#ifdef WIN32
   int len;
+#else
+#ifdef R_NETWORK
+  unsigned int len;
+#endif
+#endif
   int bytesread;
   unsigned char one;
   int devnum;
   int on;
   unsigned char telnet_command[2];
-  //static char IACctr = 0;
+  /*static char IACctr = 0;*/
   on = 1;
 
   if(Peek(764) == 1)
   { /* Hack for Ice-T Terminal program to work! */
     Poke(764, 255);
   }
-  devnum = dGetByte(ICDNOZ);
+  devnum = MEMORY_dGetByte(Devices_ICDNOZ);
 
+#ifdef R_NETWORK
   if(connected == 0)
   {
-    if(r_serial == 0)
+    if(RDevice_serial_enabled == 0)
     {
       if(do_once == 0)
       {
 
-        //strcpy(PORT,"23\n");
-        //strcpy(PORT,"8000\n");
-        //sprintf(PORT, "%d", 8000 + devnum);
+        /*strcpy(PORT,"23\n");*/
+        /*strcpy(PORT,"8000\n");*/
+        /*sprintf(PORT, "%d", 8000 + devnum);*/
         portnum = portnum + devnum - 1;
 
         /* Set up the listening port. */
@@ -950,17 +1234,21 @@ void Device_RSTAT(void)
         sock = socket ( AF_INET, SOCK_STREAM, 0 );
         in.sin_family = AF_INET;
         in.sin_addr.s_addr = INADDR_ANY;
-        //in.sin_port = htons ( atoi ( PORT ) );
+        /*in.sin_port = htons ( atoi ( PORT ) );*/
         in.sin_port = htons (portnum);
-        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on) ); // cmartin
+        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on) ); /* cmartin */
         if(bind ( sock, (struct sockaddr *)&in, sizeof ( struct sockaddr_in ) ) < 0) perror("bind");
         listen ( sock, 5 );
         /* sethostent(1); */
+#ifdef WIN32
+        retval = ioctlsocket(sock, FIONBIO, &ioctlsocket_non_block);
+#else
         retval = fcntl( sock, F_SETFL, O_NONBLOCK);
+#endif /* WIN32 */
         len = sizeof ( struct sockaddr_in );
-        //bufend = 0;
+        /*bufend = 0;*/
         sprintf(MESSAGE, "R%d: Listening on port %d...", devnum, portnum);
-        Aprint(MESSAGE);
+        DBG_APRINT(MESSAGE);
       }
 
       rdev_fd = accept ( sock, (struct sockaddr *)&peer_in, &len );
@@ -976,21 +1264,27 @@ void Device_RSTAT(void)
           sprintf(MESSAGE, "R%d: Serving Connection from %s...", devnum, inet_ntoa(peer_in.sin_addr));
           if ((host = gethostbyaddr((char *) &peer_in.sin_addr, sizeof peer_in.sin_addr, AF_INET)) == NULL)
           {
-            //perror("gethostbyaddr");
-            //Aprint("Connected.");
+            /*perror("gethostbyaddr");*/
+            /*DBG_APRINT("Connected.");*/
           } else {
             sprintf(MESSAGE, "R%d: Serving Connection from %s.", devnum, host->h_name);
           }
         }
-        Aprint(MESSAGE);
-        signal(SIGPIPE, catch_disconnect); //Need to see if the other end disconnects...
-        signal(SIGHUP, catch_disconnect); //Need to see if the other end disconnects...
+        DBG_APRINT(MESSAGE);
+#ifndef WIN32
+        signal(SIGPIPE, catch_disconnect); /*Need to see if the other end disconnects...*/
+        signal(SIGHUP, catch_disconnect); /*Need to see if the other end disconnects...*/
+#endif /* WIN32 */
+#ifdef WIN32
+        retval = ioctlsocket(rdev_fd, FIONBIO, &ioctlsocket_non_block);
+#else
         retval = fcntl( rdev_fd, F_SETFL, O_NONBLOCK);
+#endif /* WIN32 */
 
         /* Telnet negotiation */
         sprintf(MESSAGE, "%c%c%c%c%c%c%c%c%c", 0xff, 0xfb, 0x01, 0xff, 0xfb, 0x03, 0xff, 0xfd, 0x0f3);
         write(rdev_fd, MESSAGE, 9);
-        Aprint("R*: Negotiating Terminal Options...");
+        DBG_APRINT("R*: Negotiating Terminal Options...");
 
         connected = 1;
   /*
@@ -999,8 +1293,6 @@ void Device_RSTAT(void)
         retval = write(rdev_fd, &IACdontLinemode, 3);
         retval = write(rdev_fd, &IACwontLinemode, 3);
   */
-
-
         bufout[0] = 0;
         strcat(bufout, CONNECT_STRING);
         bufend = strlen(CONNECT_STRING);
@@ -1009,58 +1301,63 @@ void Device_RSTAT(void)
     }
   }
   else
+#endif /* R_NETWORK */
   {
     /* Actually reading and setting the Atari input buffer here */
     if(concurrent)
     {
-      bytesread = read(rdev_fd, &one, 1);
+#ifndef DREAMCAST
+      bytesread = read(rdev_fd, (char *)&one, 1);
+#else
+      bytesread = dc_read_serial(&one);
+#endif
       if(bytesread > 0)
       {
-        if((r_serial == 0) && (one == 0xff))
+        if((RDevice_serial_enabled == 0) && (one == 0xff))
         {
           /* Start Telnet escape seq processing... */
-          while(read(rdev_fd, telnet_command,2) != 2) {};
+          while(read(rdev_fd, (char *)telnet_command,2) != 2) {};
 
-          //sprintf(MESSAGE, "Telnet Command = 0x%x 0x%x", telnet_command[0], telnet_command[1]);
-          //Aprint(MESSAGE);
+          /*sprintf(MESSAGE, "Telnet Command = 0x%x 0x%x", telnet_command[0], telnet_command[1]);*/
+          /*DBG_APRINT(MESSAGE);*/
           if(telnet_command[0] ==  0xfd)
-          { //DO
+          { /*DO*/
             if((telnet_command[1] == 0x01) || (telnet_command[1] == 0x03))
             { /* WILL ECHO and GO AHEAD (char mode) */
-              telnet_command[0] = 0xfb; // WILL
+              telnet_command[0] = 0xfb; /* WILL */
             }
             else
             {
-              telnet_command[0] = 0xfc; // WONT
+              telnet_command[0] = 0xfc; /* WONT */
             }
           }
           else if(telnet_command[0] == 0xfb)
-          { //WILL
-            //telnet_command[0] = 0xfd; //DO
-            telnet_command[0] = 0xfe; //DONT
+          { /*WILL*/
+            /*telnet_command[0] = 0xfd;*/ /*DO*/
+            telnet_command[0] = 0xfe; /*DONT*/
           }
           else if(telnet_command[0] == 0xfe)
-          { //DONT
+          { /*DONT*/
             telnet_command[0] = 0xfc;
           }
           else if(telnet_command[0] == 0xfc)
-          { //WONT
+          { /*WONT*/
             telnet_command[0] = 0xfe;
           }
 
           if(telnet_command[0] == 0xfa)
           { /* subnegotiation */
-            while(read(rdev_fd, &one, 1) != 1) {};
+            while(read(rdev_fd, (char *)&one, 1) != 1) {};
 
             while(one != 0xf0)
             { /* wait for end of sub negotiation */
-              while(read(rdev_fd, &one, 1) != 1) {};
+              while(read(rdev_fd, (char *)&one, 1) != 1) {};
             }
           }
           else
           {
-            write(rdev_fd, &one, 1);
-            write(rdev_fd, telnet_command, 2);
+            write(rdev_fd, (char *)&one, 1);
+            write(rdev_fd, (char *)telnet_command, 2);
           }
         }
         else
@@ -1068,21 +1365,19 @@ void Device_RSTAT(void)
           bufend++;
           bufout[bufend-1] = one;
           bufout[bufend] = 0;
-          //return;
+          /*return;*/
         }
       }
-
     }
   }
 
-
-  // Set all values at all memory locations we modify on exit
+  /* Set all values at all memory locations we modify on exit */
   Poke(746,0);
   Poke(748,0);
   Poke(749,0);
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 
   if(concurrent)
   {
@@ -1090,33 +1385,32 @@ void Device_RSTAT(void)
   }
   else
   {
-    Aprint("R*: Not in concurrent mode....");
-    //Poke(747,8);
-    Poke(747,(12+48+192)); // Write 0xfc to address 747
-
+    DBG_APRINT("R*: Not in concurrent mode....");
+    /*Poke(747,8);*/
+    Poke(747,(12+48+192)); /* Write 0xfc to address 747 */
   }
 }
 
-//---------------------------------------------------------------------------
-// R Device SPECIAL vector - called from Atari OS Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_RSPEC(void)
+/*---------------------------------------------------------------------------
+   R Device SPECIAL vector - called from Atari OS Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_SPEC(void)
 {
   int iccom;
 
-  iccom = Peek(ICCOMZ);
+  iccom = Peek(Devices_ICCOMZ);
   sprintf(MESSAGE, "R*: XIO %d", iccom);
-  Aprint(MESSAGE);
+  DBG_APRINT(MESSAGE);
 
 /*
-  Aprint("ICCOMZ =");
-  Aprint("%d",iccom);
-  Aprint("^^ in ICCOMZ");
+  DBG_APRINT("Devices_ICCOMZ =");
+  DBG_APRINT("%d",iccom);
+  DBG_APRINT("^^ in Devices_ICCOMZ");
 */
 
   switch (iccom)
   {
-    case 32: //Force Short Block
+    case 32: /*Force Short Block*/
       break;
     case 34:
       xio_34();
@@ -1131,26 +1425,31 @@ void Device_RSPEC(void)
       xio_40();
       break;
     default:
-      Aprint("R*: Unsupported XIO #.");
+      DBG_APRINT("R*: Unsupported XIO #.");
       break;
   }
 /*
-  regA = 1;
-  regY = 1;
-  ClrN;
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 */
 
 }
 
-//---------------------------------------------------------------------------
-// R Device INIT vector - called from Atari OS Device Handler Address Table
-//---------------------------------------------------------------------------
-void Device_RINIT(void)
+/*---------------------------------------------------------------------------
+   R Device INIT vector - called from Atari OS Device Handler Address Table
+---------------------------------------------------------------------------*/
+void RDevice_INIT(void)
 {
-  Aprint("R*: INIT");
-  regA = 1;
-  regY = 1;
-  ClrN;
+  DBG_APRINT("R*: INIT");
+  CPU_regA = 1;
+  CPU_regY = 1;
+  CPU_ClrN;
 }
 
-
+void RDevice_Exit(void)
+{
+#ifdef WIN32
+  WSACleanup();
+#endif /* WIN32 */
+}

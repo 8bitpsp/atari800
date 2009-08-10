@@ -2,11 +2,22 @@ CC = gcc
 RC = windres
 
 DEFS = -DHAVE_CONFIG_H
-LIBS = -lcurses -lm -lz 
-TARGET = atari800
+LIBS = -lreadline -ltermcap -lm 
+TARGET_BASE_NAME = atari800
+TARGET = $(TARGET_BASE_NAME)
+CONFIGURE_TARGET = basic
+ifeq (,.mips)
+	FINALTARGET = $(TARGET_BASE_NAME).jar
+	JAVAFLAGS = 
+	JAVA = java
+	JAVACFLAGS = 
+	JAVAC = javac
+else
+	FINALTARGET = $(TARGET)
+endif
 
 CFLAGS = -O2 -Wall
-LDFLAGS = -s
+LDFLAGS = 
 
 INSTALL = /usr/bin/install -c
 INSTALL_PROGRAM = ${INSTALL} -s
@@ -19,14 +30,17 @@ DOC_DIR = /usr/local/share/doc/atari800
 DESTDIR =
 
 OBJS = \
+	afile.o \
 	antic.o \
 	atari.o \
 	binload.o \
 	cartridge.o \
 	cassette.o \
 	compfile.o \
+	cfg.o \
 	cpu.o \
 	devices.o \
+	esc.o \
 	gtia.o \
 	log.o \
 	memory.o \
@@ -37,11 +51,20 @@ OBJS = \
 	rtime.o \
 	sio.o \
 	util.o \
-	atari_curses.o input.o statesav.o ui_basic.o ui.o pokeysnd.o mzpokeysnd.o remez.o sndsave.o sound_oss.o
+	atari_basic.o pbi_mio.o pbi_bb.o pbi_scsi.o pokeysnd.o mzpokeysnd.o remez.o sndsave.o sound_oss.o pbi_xld.o votrax.o
 
 
 
-all: $(TARGET)
+all: $(FINALTARGET)
+
+# A special rule for SDL_win32_main.c to suppress warnings since this file is
+# from SDL and should not have to be modified
+SDL_win32_main.o: SDL_win32_main.c
+	$(CC) -c -o $@ $(DEFS) -I. $(CFLAGS) -Wno-missing-declarations -Wno-missing-prototypes $<
+
+# A special rule for win32 to not compile with -ansi -pedantic
+win32/%.o: win32/%.c
+	$(CC) -c -o $@ $(DEFS) -I. $($(CFLAGS:-ansi= ):-pedantic= ) $<
 
 %.o: %.c
 	$(CC) -c -o $@ $(DEFS) -I. $(CFLAGS) $<
@@ -52,9 +75,27 @@ all: $(TARGET)
 %.o: %.cpp
 	$(CC) -c -o $@ $(DEFS) -I. $(CFLAGS) $<
 
-%.o: %.asm
-	cd $(<D); xgen -L1 $(@F) $(<F)
-	cd $(<D); gst2gcc gcc $(@F)
+%.o: %.S
+	$(CC) -c -o $@ $(DEFS) -I. $(CFLAGS) $<
+
+ifeq ($(CONFIGURE_TARGET),javanvm)
+$(TARGET_BASE_NAME).class: javanvm/$(TARGET_BASE_NAME).java | $(TARGET_BASE_NAME)_runtime.class
+	$(JAVAC) -d . $(JAVACFLAGS) javanvm/$(TARGET_BASE_NAME).java
+RUNTIME = _runtime
+else
+RUNTIME =
+endif
+
+$(TARGET_BASE_NAME)$(RUNTIME).class: $(TARGET)
+#To compile using java bytecode directly:
+#	$(JAVA) $(JAVAFLAGS) org.ibex.nestedvm.Compiler -o UnixRuntime -outfile $@ $(TARGET_BASE_NAME)$(RUNTIME) $(TARGET)
+	$(JAVA) $(JAVAFLAGS) org.ibex.nestedvm.Compiler -o UnixRuntime -outformat javasource -outfile $(TARGET_BASE_NAME)$(RUNTIME).java $(TARGET_BASE_NAME)$(RUNTIME) $(TARGET)
+	$(JAVAC) -d . $(JAVACFLAGS) -J-Xmx128m $(TARGET_BASE_NAME)$(RUNTIME).java
+##Also, -o UnixRuntime fixes directory browsing but requires /c:/-style paths
+
+$(TARGET_BASE_NAME).jar: $(TARGET_BASE_NAME).class $(TARGET_BASE_NAME)$(RUNTIME).class
+	echo -e "Manifest-Version: 1.0\nMain-Class: $(TARGET_BASE_NAME)\nClass-Path: unix_runtime.jar\n" > .manifest
+	jar cfm $(TARGET_BASE_NAME).jar .manifest *.class
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(LIBS)
@@ -64,7 +105,7 @@ dep:
 	then echo warning: makedepend failed; fi
 
 clean:
-	rm -f *.o dos/*.o falcon/*.o win32/*.o win32/*.ro $(TARGET) core *.bak *~
+	rm -f *.o dos/*.o falcon/*.o win32/*.o win32/*.ro javanvm/*.o *.class .manifest $(TARGET) $(TARGET_BASE_NAME).jar $(TARGET_BASE_NAME)_runtime.java core *.bak *~
 
 distclean: clean
 	-rm -f Makefile configure config.log config.status config.h
@@ -80,10 +121,6 @@ install: $(TARGET) installdirs
 	$(INSTALL_DATA) ../DOC/INSTALL ${DESTDIR}${DOC_DIR}/INSTALL
 	$(INSTALL_DATA) ../DOC/USAGE   ${DESTDIR}${DOC_DIR}/USAGE
 	$(INSTALL_DATA) ../DOC/NEWS    ${DESTDIR}${DOC_DIR}/NEWS
-
-install-svgalib: install
-	chown root.root ${DESTDIR}${BIN_DIR}/$(TARGET)
-	chmod 4755 ${DESTDIR}${BIN_DIR}/$(TARGET)
 
 readme.html: $(TARGET)
 	./$(TARGET) -help </dev/null | ../util/usage2html.pl \

@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 /*
@@ -27,7 +27,7 @@
 	=====================
 
 	Define CPU65C02 if you don't want 6502 JMP() bug emulation.
-	Define CYCLES_PER_OPCODE to update xpos in each opcode's emulation.
+	Define CYCLES_PER_OPCODE to update ANTIC_xpos in each opcode's emulation.
 	Define MONITOR_BREAK if you want code breakpoints and execution history.
 	Define MONITOR_BREAKPOINTS if you want user-defined breakpoints.
 	Define MONITOR_PROFILE if you want 6502 opcode profiling.
@@ -65,6 +65,7 @@
 #else
 #include "antic.h"
 #include "atari.h"
+#include "esc.h"
 #include "memory.h"
 #include "monitor.h"
 #ifndef BASIC
@@ -77,7 +78,7 @@
 
 #ifdef FALCON_CPUASM
 
-extern UBYTE IRQ;
+extern UBYTE CPU_IRQ;
 
 #ifdef PAGED_MEM
 #error cpu_m68k.asm cannot work with paged memory
@@ -90,12 +91,12 @@ void CPU_Initialise(void)
 
 void CPU_GetStatus(void)
 {
-	CPUGET();
+	CPU_GET();
 }
 
 void CPU_PutStatus(void)
 {
-	CPUPUT();
+	CPU_PUT();
 }
 
 #else /* FALCON_CPUASM */
@@ -121,15 +122,15 @@ void CPU_PutStatus(void)
 
 
 /* 6502 stack handling */
-#define PL                  dGetByte(0x0100 + ++S)
-#define PH(x)               dPutByte(0x0100 + S--, x)
+#define PL                  MEMORY_dGetByte(0x0100 + ++S)
+#define PH(x)               MEMORY_dPutByte(0x0100 + S--, x)
 #define PHW(x)              PH((x) >> 8); PH((x) & 0xff)
 
 /* 6502 code fetching */
 #ifdef PC_PTR
-#define GET_PC()            (PC - memory)
-#define SET_PC(newpc)       (PC = memory + (newpc))
-#define PHPC                { UWORD tmp = PC - memory; PHW(tmp); }
+#define GET_PC()            (PC - MEMORY_mem)
+#define SET_PC(newpc)       (PC = MEMORY_mem + (newpc))
+#define PHPC                { UWORD tmp = PC - MEMORY_mem; PHW(tmp); }
 #define GET_CODE_BYTE()     (*PC++)
 #define PEEK_CODE_BYTE()    (*PC)
 #if !defined(WORDS_BIGENDIAN) && defined(WORDS_UNALIGNED_OK)
@@ -141,9 +142,9 @@ void CPU_PutStatus(void)
 #define GET_PC()            PC
 #define SET_PC(newpc)       (PC = (newpc))
 #define PHPC                PHW(PC)
-#define GET_CODE_BYTE()     dGetByte(PC++)
-#define PEEK_CODE_BYTE()    dGetByte(PC)
-#define PEEK_CODE_WORD()    dGetWord(PC)
+#define GET_CODE_BYTE()     MEMORY_dGetByte(PC++)
+#define PEEK_CODE_BYTE()    MEMORY_dGetByte(PC)
+#define PEEK_CODE_WORD()    MEMORY_dGetWord(PC)
 #endif /* PC_PTR */
 
 /* Cycle-exact Read-Modify-Write instructions.
@@ -156,41 +157,41 @@ void CPU_PutStatus(void)
 #ifdef NEW_CYCLE_EXACT
 #ifndef PAGED_ATTRIB
 #define RMW_GetByte(x, addr) \
-	if (attrib[addr] == HARDWARE) { \
-		x = Atari800_GetByte(addr); \
+	if (MEMORY_attrib[addr] == MEMORY_HARDWARE) { \
+		x = MEMORY_HwGetByte(addr); \
 		if ((addr & 0xef00) == 0xc000) { \
-			xpos--; \
-			Atari800_PutByte(addr, x); \
-			xpos++; \
+			ANTIC_xpos--; \
+			MEMORY_HwPutByte(addr, x); \
+			ANTIC_xpos++; \
 		} \
 	} else \
-		x = dGetByte(addr);
+		x = MEMORY_dGetByte(addr);
 #else /* PAGED_ATTRIB */
 #define RMW_GetByte(x, addr) \
-	x = GetByte(addr); \
+	x = MEMORY_GetByte(addr); \
 	if ((addr & 0xef00) == 0xc000) { \
-		xpos--; \
-		PutByte(addr, x); \
-		xpos++; \
+		ANTIC_xpos--; \
+		MEMORY_PutByte(addr, x); \
+		ANTIC_xpos++; \
 	}
 #endif /* PAGED_ATTRIB */
 #else /* NEW_CYCLE_EXACT */
 /* Don't emulate the first write */
-#define RMW_GetByte(x, addr) x = GetByte(addr);
+#define RMW_GetByte(x, addr) x = MEMORY_GetByte(addr);
 #endif /* NEW_CYCLE_EXACT */
 
 /* 6502 registers. */
-UWORD regPC;
-UBYTE regA;
-UBYTE regX;
-UBYTE regY;
-UBYTE regP;						/* Processor Status Byte (Partial) */
-UBYTE regS;
-UBYTE IRQ;
+UWORD CPU_regPC;
+UBYTE CPU_regA;
+UBYTE CPU_regX;
+UBYTE CPU_regY;
+UBYTE CPU_regP;						/* Processor Status Byte (Partial) */
+UBYTE CPU_regS;
+UBYTE CPU_IRQ;
 
-/* Transfer 6502 registers between global variables and local variables inside GO() */
-#define UPDATE_GLOBAL_REGS  regPC = GET_PC(); regS = S; regA = A; regX = X; regY = Y
-#define UPDATE_LOCAL_REGS   SET_PC(regPC); S = regS; A = regA; X = regX; Y = regY
+/* Transfer 6502 registers between global variables and local variables inside CPU_GO() */
+#define UPDATE_GLOBAL_REGS  CPU_regPC = GET_PC(); CPU_regS = S; CPU_regA = A; CPU_regX = X; CPU_regY = Y
+#define UPDATE_LOCAL_REGS   SET_PC(CPU_regPC); S = CPU_regS; A = CPU_regA; X = CPU_regX; Y = CPU_regY
 
 /* 6502 flags local to this module */
 static UBYTE N;					/* bit7 set => N flag set */
@@ -199,54 +200,54 @@ static UBYTE V;                 /* non-zero => V flag set */
 #endif
 static UBYTE Z;					/* zero     => Z flag set */
 static UBYTE C;					/* must be 0 or 1 */
-/* B, D, I are always in regP */
+/* B, D, I are always in CPU_regP */
 
 void CPU_GetStatus(void)
 {
 #ifndef NO_V_FLAG_VARIABLE
-	regP = (N & 0x80) + (V ? 0x40 : 0) + (regP & 0x3c) + ((Z == 0) ? 0x02 : 0) + C;
+	CPU_regP = (N & 0x80) + (V ? 0x40 : 0) + (CPU_regP & 0x3c) + ((Z == 0) ? 0x02 : 0) + C;
 #else
-	regP = (N & 0x80) + (regP & 0x7c) + ((Z == 0) ? 0x02 : 0) + C;
+	CPU_regP = (N & 0x80) + (CPU_regP & 0x7c) + ((Z == 0) ? 0x02 : 0) + C;
 #endif
 }
 
 void CPU_PutStatus(void)
 {
-	N = regP;
+	N = CPU_regP;
 #ifndef NO_V_FLAG_VARIABLE
-	V = (regP & 0x40);
+	V = (CPU_regP & 0x40);
 #endif
-	Z = (regP & 0x02) ^ 0x02;
-	C = (regP & 0x01);
+	Z = (CPU_regP & 0x02) ^ 0x02;
+	C = (CPU_regP & 0x01);
 }
 
 /* For Atari Basic loader */
-void (*rts_handler)(void) = NULL;
+void (*CPU_rts_handler)(void) = NULL;
 
 /* 6502 instruction profiling */
 #ifdef MONITOR_PROFILE
-int instruction_count[256];
+int CPU_instruction_count[256];
 #endif
 
-UBYTE cim_encountered = FALSE;
+UBYTE CPU_cim_encountered = FALSE;
 
 /* Execution history */
 #ifdef MONITOR_BREAK
-UWORD remember_PC[REMEMBER_PC_STEPS];
-unsigned int remember_PC_curpos = 0;
-int remember_xpos[REMEMBER_PC_STEPS];
-UWORD remember_JMP[REMEMBER_JMP_STEPS];
-unsigned int remember_jmp_curpos = 0;
-#define INC_RET_NESTING ret_nesting++
+UWORD CPU_remember_PC[CPU_REMEMBER_PC_STEPS];
+unsigned int CPU_remember_PC_curpos = 0;
+int CPU_remember_xpos[CPU_REMEMBER_PC_STEPS];
+UWORD CPU_remember_JMP[CPU_REMEMBER_JMP_STEPS];
+unsigned int CPU_remember_jmp_curpos = 0;
+#define INC_RET_NESTING MONITOR_ret_nesting++
 #else /* MONITOR_BREAK */
 #define INC_RET_NESTING
 #endif /* MONITOR_BREAK */
 
 /* Addressing modes */
 #ifdef WRAP_ZPAGE
-#define zGetWord(x) (dGetByte(x) + (dGetByte((UBYTE) ((x) + 1)) << 8))
+#define zGetWord(x) (MEMORY_dGetByte(x) + (MEMORY_dGetByte((UBYTE) ((x) + 1)) << 8))
 #else
-#define zGetWord(x) dGetWord(x)
+#define zGetWord(x) MEMORY_dGetWord(x)
 #endif
 #ifdef PREFETCH_CODE
 #if defined(WORDS_BIGENDIAN) || !defined(WORDS_UNALIGNED_OK)
@@ -288,15 +289,15 @@ unsigned int remember_jmp_curpos = 0;
 #define LDY(t_data) Z = N = Y = t_data
 #define ORA(t_data) Z = N = A |= t_data
 #ifndef NO_V_FLAG_VARIABLE
-#define PHP(x)      data = (N & 0x80) + (V ? 0x40 : 0) + (regP & (x)) + ((Z == 0) ? 0x02 : 0) + C; PH(data)
+#define PHP(x)      data = (N & 0x80) + (V ? 0x40 : 0) + (CPU_regP & (x)) + ((Z == 0) ? 0x02 : 0) + C; PH(data)
 #define PHPB0       PHP(0x2c)  /* push flags with B flag clear (NMI, IRQ) */
 #define PHPB1       PHP(0x3c)  /* push flags with B flag set (PHP, BRK) */
-#define PLP         data = PL; N = data; V = (data & 0x40); Z = (data & 0x02) ^ 0x02; C = (data & 0x01); regP = (data & 0x0c) + 0x30
+#define PLP         data = PL; N = data; V = (data & 0x40); Z = (data & 0x02) ^ 0x02; C = (data & 0x01); CPU_regP = (data & 0x0c) + 0x30
 #else /* NO_V_FLAG_VARIABLE */
-#define PHP(x)      data = (N & 0x80) + (regP & (x)) + ((Z == 0) ? 0x02 : 0) + C; PH(data)
+#define PHP(x)      data = (N & 0x80) + (CPU_regP & (x)) + ((Z == 0) ? 0x02 : 0) + C; PH(data)
 #define PHPB0       PHP(0x6c)  /* push flags with B flag clear (NMI, IRQ) */
 #define PHPB1       PHP(0x7c)  /* push flags with B flag set (PHP, BRK) */
-#define PLP         data = PL; N = data; Z = (data & 0x02) ^ 0x02; C = (data & 0x01); regP = (data & 0x4c) + 0x30
+#define PLP         data = PL; N = data; Z = (data & 0x02) ^ 0x02; C = (data & 0x01); CPU_regP = (data & 0x4c) + 0x30
 #endif /* NO_V_FLAG_VARIABLE */
 /* 1 or 2 extra cycles for conditional jumps */
 #if 0
@@ -305,8 +306,8 @@ unsigned int remember_jmp_curpos = 0;
 	if (cond) { \
 		SWORD sdata = (SBYTE) GET_CODE_BYTE(); \
 		if ((sdata + (UBYTE) GET_PC()) & 0xff00) \
-			xpos++; \
-		xpos++; \
+			ANTIC_xpos++; \
+		ANTIC_xpos++; \
 		PC += sdata; \
 		DONE \
 	} \
@@ -318,8 +319,8 @@ unsigned int remember_jmp_curpos = 0;
 		addr = (UWORD) (SBYTE) IMMEDIATE; \
 		addr += GET_PC(); \
 		if ((addr ^ GET_PC()) & 0xff00) \
-			xpos++; \
-		xpos++; \
+			ANTIC_xpos++; \
+		ANTIC_xpos++; \
 		SET_PC(addr); \
 		DONE \
 	} \
@@ -328,32 +329,32 @@ unsigned int remember_jmp_curpos = 0;
 #endif
 
 /* 1 extra cycle for X (or Y) index overflow */
-#define NCYCLES_X   if ((UBYTE) addr < X) xpos++
-#define NCYCLES_Y   if ((UBYTE) addr < Y) xpos++
+#define NCYCLES_X   if ((UBYTE) addr < X) ANTIC_xpos++
+#define NCYCLES_Y   if ((UBYTE) addr < Y) ANTIC_xpos++
 
 /* Triggers a Non-Maskable Interrupt */
-void NMI(void)
+void CPU_NMI(void)
 {
-	UBYTE S = regS;
+	UBYTE S = CPU_regS;
 	UBYTE data;
 
-	PHW(regPC);
+	PHW(CPU_regPC);
 	PHPB0;
-	SetI;
-	regPC = dGetWordAligned(0xfffa);
-	regS = S;
-	xpos += 7; /* handling an interrupt by 6502 takes 7 cycles */
+	CPU_SetI;
+	CPU_regPC = MEMORY_dGetWordAligned(0xfffa);
+	CPU_regS = S;
+	ANTIC_xpos += 7; /* handling an interrupt by 6502 takes 7 cycles */
 	INC_RET_NESTING;
 }
 
 /* Check pending IRQ, helps in (not only) Lucasfilm games */
 #define CPUCHECKIRQ \
-	if (IRQ && !(regP & I_FLAG) && xpos < xpos_limit) { \
+	if (CPU_IRQ && !(CPU_regP & CPU_I_FLAG) && ANTIC_xpos < ANTIC_xpos_limit) { \
 		PHPC; \
 		PHPB0; \
-		SetI; \
-		SET_PC(dGetWordAligned(0xfffe)); \
-		xpos += 7; \
+		CPU_SetI; \
+		SET_PC(MEMORY_dGetWordAligned(0xfffe)); \
+		ANTIC_xpos += 7; \
 		INC_RET_NESTING; \
 	}
 
@@ -396,7 +397,10 @@ static const int cycles[256] =
 };
 
 /* 6502 emulation routine */
-void GO(int limit)
+#ifndef NO_GOTO
+__extension__ /* suppress -ansi -pedantic warnings */
+#endif
+void CPU_GO(int limit)
 {
 #ifdef NO_GOTO
 #define OPCODE_ALIAS(code)	case 0x##code:
@@ -489,7 +493,7 @@ void GO(int limit)
 #endif	/* NO_GOTO */
 
 #ifdef CYCLES_PER_OPCODE
-#define OPCODE(code) OPCODE_ALIAS(code) xpos += cycles[0x##code];
+#define OPCODE(code) OPCODE_ALIAS(code) ANTIC_xpos += cycles[0x##code];
 #else
 #define OPCODE(code) OPCODE_ALIAS(code)
 #endif
@@ -518,45 +522,45 @@ void GO(int limit)
 
    2. The timing of the IRQs are not that critical. */
 
-	if (wsync_halt) {
+	if (ANTIC_wsync_halt) {
 
 #ifdef NEW_CYCLE_EXACT
-		if (DRAWING_SCREEN) {
-/* if WSYNC_C is a stolen cycle, antic2cpu_ptr will convert that to the nearest
+		if (ANTIC_DRAWING_SCREEN) {
+/* if ANTIC_WSYNC_C is a stolen cycle, ANTIC_antic2cpu_ptr will convert that to the nearest
    cpu cycle before that cycle.  The CPU will see this cycle, if WSYNC is not
    delayed. (Actually this cycle is the first cycle of the instruction after
    STA WSYNC, which was really executed one cycle after STA WSYNC because
-   of an internal antic delay ).   delayed_wsync is added to this cycle to form
+   of an internal antic delay ).   ANTIC_delayed_wsync is added to this cycle to form
    the limit in the case that WSYNC is not early (does not allow this extra cycle) */
 
-			if (limit < antic2cpu_ptr[WSYNC_C] + delayed_wsync)
+			if (limit < ANTIC_antic2cpu_ptr[ANTIC_WSYNC_C] + ANTIC_delayed_wsync)
 				return;
-			xpos = antic2cpu_ptr[WSYNC_C] + delayed_wsync;
+			ANTIC_xpos = ANTIC_antic2cpu_ptr[ANTIC_WSYNC_C] + ANTIC_delayed_wsync;
 		}
 		else {
-			if (limit < (WSYNC_C + delayed_wsync))
+			if (limit < (ANTIC_WSYNC_C + ANTIC_delayed_wsync))
 				return;
-			xpos = WSYNC_C;
+			ANTIC_xpos = ANTIC_WSYNC_C;
 		}
-		delayed_wsync = 0;
+		ANTIC_delayed_wsync = 0;
 
 #else /* NEW_CYCLE_EXACT */
 
-		if (limit < WSYNC_C)
+		if (limit < ANTIC_WSYNC_C)
 			return;
-		xpos = WSYNC_C;
+		ANTIC_xpos = ANTIC_WSYNC_C;
 
 #endif /* NEW_CYCLE_EXACT */
 
-		wsync_halt = 0;
+		ANTIC_wsync_halt = 0;
 	}
-	xpos_limit = limit;			/* needed for WSYNC store inside ANTIC */
+	ANTIC_xpos_limit = limit;			/* needed for WSYNC store inside ANTIC */
 
 	UPDATE_LOCAL_REGS;
 
 	CPUCHECKIRQ;
 
-	while (xpos < xpos_limit) {
+	while (ANTIC_xpos < ANTIC_xpos_limit) {
 
 #ifdef MONITOR_BREAKPOINTS
 	breakpoint_return:
@@ -564,29 +568,29 @@ void GO(int limit)
 
 #ifdef PC_PTR
 		/* must handle 64k wrapping */
-		if (PC >= memory + 0xfffe) {
-			if (PC >= memory + 0x10000)
+		if (PC >= MEMORY_mem + 0xfffe) {
+			if (PC >= MEMORY_mem + 0x10000)
 				PC -= 0x10000;
 			else {
 				/* the opcode is before 0x10000, but the operand is past */
 #ifdef WORDS_UNALIGNED_OK
-				*(UWORD *) (memory + 0x10000) = *(UWORD *) memory;
+				*(UWORD *) (MEMORY_mem + 0x10000) = *(UWORD *) MEMORY_mem;
 #else
-				memory[0x10000] = memory[0];
-				memory[0x10001] = memory[1];
+				MEMORY_mem[0x10000] = MEMORY_mem[0];
+				MEMORY_mem[0x10001] = MEMORY_mem[1];
 #endif /* WORDS_UNALIGNED_OK */
 			}
 		}
 #endif /* PC_PTR */
 
 #ifdef MONITOR_TRACE
-		if (trace_file != NULL) {
-			show_state(trace_file, GET_PC(), A, X, Y, S,
+		if (MONITOR_trace_file != NULL) {
+			MONITOR_ShowState(MONITOR_trace_file, GET_PC(), A, X, Y, S,
 				(N & 0x80) ? 'N' : '-',
 #ifndef NO_V_FLAG_VARIABLE
 				V ? 'V' : '-',
 #else
-				(regP & V_FLAG) ? 'V' : '-',
+				(CPU_regP & CPU_V_FLAG) ? 'V' : '-',
 #endif
 				(Z == 0) ? 'Z' : '-',
 				(C != 0) ? 'C' : '-');
@@ -594,29 +598,29 @@ void GO(int limit)
 #endif
 
 #ifdef MONITOR_BREAK
-		remember_PC[remember_PC_curpos] = GET_PC();
+		CPU_remember_PC[CPU_remember_PC_curpos] = GET_PC();
 #ifdef NEW_CYCLE_EXACT
-		if (DRAWING_SCREEN)
-			remember_xpos[remember_PC_curpos] = cpu2antic_ptr[xpos] + (ypos << 8);
+		if (ANTIC_DRAWING_SCREEN)
+			CPU_remember_xpos[CPU_remember_PC_curpos] = ANTIC_cpu2antic_ptr[ANTIC_xpos] + (ANTIC_ypos << 8);
 		else
 #endif
-			remember_xpos[remember_PC_curpos] = xpos + (ypos << 8);
-		remember_PC_curpos = (remember_PC_curpos + 1) % REMEMBER_PC_STEPS;
+			CPU_remember_xpos[CPU_remember_PC_curpos] = ANTIC_xpos + (ANTIC_ypos << 8);
+		CPU_remember_PC_curpos = (CPU_remember_PC_curpos + 1) % CPU_REMEMBER_PC_STEPS;
 
-		if (break_addr == GET_PC() || break_ypos == ypos) {
+		if (MONITOR_break_addr == GET_PC() || ANTIC_break_ypos == ANTIC_ypos) {
 			DO_BREAK;
 		}
 #endif /* MONITOR_BREAK */
 
 #if defined(WRAP_64K) && !defined(PC_PTR)
-		memory[0x10000] = memory[0];
+		MEMORY_mem[0x10000] = MEMORY_mem[0];
 #endif
 
 		insn = GET_CODE_BYTE();
 
 #ifdef MONITOR_BREAKPOINTS
-		if (breakpoint_table_size > 0 && breakpoints_enabled) {
-			UBYTE optype = optype6502[insn];
+		if (MONITOR_breakpoint_table_size > 0 && MONITOR_breakpoints_enabled) {
+			UBYTE optype = MONITOR_optype6502[insn];
 			int i;
 			switch (optype >> 4) {
 			case 1:
@@ -650,63 +654,63 @@ void GO(int limit)
 				addr = 0;
 				break;
 			}
-			for (i = 0; i < breakpoint_table_size; i++) {
+			for (i = 0; i < MONITOR_breakpoint_table_size; i++) {
 				int cond;
 				int value;
-				if (!breakpoint_table[i].enabled)
+				if (!MONITOR_breakpoint_table[i].enabled)
 					continue; /* skip */
-				cond = breakpoint_table[i].condition;
-				if (cond == BREAKPOINT_OR)
+				cond = MONITOR_breakpoint_table[i].condition;
+				if (cond == MONITOR_BREAKPOINT_OR)
 					break; /* fire */
-				value = breakpoint_table[i].value;
-				if (cond == BREAKPOINT_FLAG_CLEAR) {
+				value = MONITOR_breakpoint_table[i].value;
+				if (cond == MONITOR_BREAKPOINT_FLAG_CLEAR) {
 					switch (value) {
-					case N_FLAG:
+					case CPU_N_FLAG:
 						if ((N & 0x80) == 0)
 							continue;
 						break;
 #ifndef NO_V_FLAG_VARIABLE
-					case V_FLAG:
+					case CPU_V_FLAG:
 						if (V == 0)
 							continue;
 						break;
 #endif
-					case Z_FLAG:
+					case CPU_Z_FLAG:
 						if (Z != 0)
 							continue;
 						break;
-					case C_FLAG:
+					case CPU_C_FLAG:
 						if (C == 0)
 							continue;
 						break;
 					default:
-						if ((regP & value) == 0)
+						if ((CPU_regP & value) == 0)
 							continue;
 						break;
 					}
 				}
-				else if (cond == BREAKPOINT_FLAG_SET) {
+				else if (cond == MONITOR_BREAKPOINT_FLAG_SET) {
 					switch (value) {
-					case N_FLAG:
+					case CPU_N_FLAG:
 						if ((N & 0x80) != 0)
 							continue;
 						break;
 #ifndef NO_V_FLAG_VARIABLE
-					case V_FLAG:
+					case CPU_V_FLAG:
 						if (V != 0)
 							continue;
 						break;
 #endif
-					case Z_FLAG:
+					case CPU_Z_FLAG:
 						if (Z == 0)
 							continue;
 						break;
-					case C_FLAG:
+					case CPU_C_FLAG:
 						if (C != 0)
 							continue;
 						break;
 					default:
-						if ((regP & value) != 0)
+						if ((CPU_regP & value) != 0)
 							continue;
 						break;
 					}
@@ -714,32 +718,32 @@ void GO(int limit)
 				else {
 					int val;
 					switch (cond >> 3) {
-					case BREAKPOINT_PC >> 3:
+					case MONITOR_BREAKPOINT_PC >> 3:
 						val = GET_PC() - 1;
 						break;
-					case BREAKPOINT_A >> 3:
+					case MONITOR_BREAKPOINT_A >> 3:
 						val = A;
 						break;
-					case BREAKPOINT_X >> 3:
+					case MONITOR_BREAKPOINT_X >> 3:
 						val = X;
 						break;
-					case BREAKPOINT_Y >> 3:
+					case MONITOR_BREAKPOINT_Y >> 3:
 						val = Y;
 						break;
-					case BREAKPOINT_S >> 3:
+					case MONITOR_BREAKPOINT_S >> 3:
 						val = S;
 						break;
-					case BREAKPOINT_READ >> 3:
+					case MONITOR_BREAKPOINT_READ >> 3:
 						if ((optype & 4) == 0)
 							goto cond_failed;
 						val = addr;
 						break;
-					case BREAKPOINT_WRITE >> 3:
+					case MONITOR_BREAKPOINT_WRITE >> 3:
 						if ((optype & 8) == 0)
 							goto cond_failed;
 						val = addr;
 						break;
-					case BREAKPOINT_ACCESS >> 3:
+					case MONITOR_BREAKPOINT_ACCESS >> 3:
 						if ((optype & 12) == 0)
 							goto cond_failed;
 						val = addr;
@@ -748,11 +752,11 @@ void GO(int limit)
 						/* shouldn't happen */
 						continue;
 					}
-					if ((cond & BREAKPOINT_LESS) != 0 && val < value)
+					if ((cond & MONITOR_BREAKPOINT_LESS) != 0 && val < value)
 						continue;
-					if ((cond & BREAKPOINT_EQUAL) != 0 && val == value)
+					if ((cond & MONITOR_BREAKPOINT_EQUAL) != 0 && val == value)
 						continue;
-					if ((cond & BREAKPOINT_GREATER) != 0 && val > value)
+					if ((cond & MONITOR_BREAKPOINT_GREATER) != 0 && val > value)
 						continue;
 				cond_failed:
 					;
@@ -760,9 +764,9 @@ void GO(int limit)
 				/* a condition failed */
 				/* quickly skip AND-connected conditions */
 				do {
-					if (++i >= breakpoint_table_size)
+					if (++i >= MONITOR_breakpoint_table_size)
 						goto no_breakpoint;
-				} while (breakpoint_table[i].condition != BREAKPOINT_OR || !breakpoint_table[i].enabled);
+				} while (MONITOR_breakpoint_table[i].condition != MONITOR_BREAKPOINT_OR || !MONITOR_breakpoint_table[i].enabled);
 			}
 			/* fire breakpoint */
 			PC--;
@@ -774,11 +778,11 @@ void GO(int limit)
 #endif /* MONITOR_BREAKPOINTS */
 
 #ifndef CYCLES_PER_OPCODE
-		xpos += cycles[insn];
+		ANTIC_xpos += cycles[insn];
 #endif
 
 #ifdef MONITOR_PROFILE
-		instruction_count[insn]++;
+		CPU_instruction_count[insn]++;
 #endif
 
 #ifdef PREFETCH_CODE
@@ -793,7 +797,7 @@ void GO(int limit)
 
 	OPCODE(00)				/* BRK */
 #ifdef MONITOR_BREAK
-		if (break_brk) {
+		if (MONITOR_break_brk) {
 			DO_BREAK;
 		}
 		else
@@ -802,15 +806,15 @@ void GO(int limit)
 			PC++;
 			PHPC;
 			PHPB1;
-			SetI;
-			SET_PC(dGetWordAligned(0xfffe));
+			CPU_SetI;
+			SET_PC(MEMORY_dGetWordAligned(0xfffe));
 			INC_RET_NESTING;
 		}
 		DONE
 
 	OPCODE(01)				/* ORA (ab,x) */
 		INDIRECT_X;
-		ORA(GetByte(addr));
+		ORA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(03)				/* ASO (ab,x) [unofficial - ASL then ORA with Acc] */
@@ -820,7 +824,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		C = (data & 0x80) ? 1 : 0;
 		data <<= 1;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		Z = N = A |= data;
 		DONE
 
@@ -849,25 +853,25 @@ void GO(int limit)
 
 	OPCODE(05)				/* ORA ab */
 		ZPAGE;
-		ORA(dGetByte(addr));
+		ORA(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(06)				/* ASL ab */
 		ZPAGE;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		C = (data & 0x80) ? 1 : 0;
 		Z = N = data << 1;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(07)				/* ASO ab [unofficial - ASL then ORA with Acc] */
 		ZPAGE;
 
 	aso_zpage:
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		C = (data & 0x80) ? 1 : 0;
 		data <<= 1;
-		dPutByte(addr, data);
+		MEMORY_dPutByte(addr, data);
 		Z = N = A |= data;
 		DONE
 
@@ -896,7 +900,7 @@ void GO(int limit)
 
 	OPCODE(0d)				/* ORA abcd */
 		ABSOLUTE;
-		ORA(GetByte(addr));
+		ORA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(0e)				/* ASL abcd */
@@ -904,7 +908,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		C = (data & 0x80) ? 1 : 0;
 		Z = N = data << 1;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(0f)				/* ASO abcd [unofficial - ASL then ORA with Acc] */
@@ -917,7 +921,7 @@ void GO(int limit)
 	OPCODE(11)				/* ORA (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		ORA(GetByte(addr));
+		ORA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(13)				/* ASO (ab),y [unofficial - ASL then ORA with Acc] */
@@ -926,15 +930,15 @@ void GO(int limit)
 
 	OPCODE(15)				/* ORA ab,x */
 		ZPAGE_X;
-		ORA(dGetByte(addr));
+		ORA(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(16)				/* ASL ab,x */
 		ZPAGE_X;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		C = (data & 0x80) ? 1 : 0;
 		Z = N = data << 1;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(17)				/* ASO ab,x [unofficial - ASL then ORA with Acc] */
@@ -948,7 +952,7 @@ void GO(int limit)
 	OPCODE(19)				/* ORA abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		ORA(GetByte(addr));
+		ORA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(1b)				/* ASO abcd,y [unofficial - ASL then ORA with Acc] */
@@ -962,14 +966,14 @@ void GO(int limit)
 	OPCODE_ALIAS(dc)
 	OPCODE(fc)
 		if (OP_BYTE + X >= 0x100)
-			xpos++;
+			ANTIC_xpos++;
 		PC += 2;
 		DONE
 
 	OPCODE(1d)				/* ORA abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		ORA(GetByte(addr));
+		ORA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(1e)				/* ASL abcd,x */
@@ -977,7 +981,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		C = (data & 0x80) ? 1 : 0;
 		Z = N = data << 1;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(1f)				/* ASO abcd,x [unofficial - ASL then ORA with Acc] */
@@ -988,9 +992,9 @@ void GO(int limit)
 		{
 			UWORD retaddr = GET_PC() + 1;
 #ifdef MONITOR_BREAK
-			remember_JMP[remember_jmp_curpos] = GET_PC() - 1;
-			remember_jmp_curpos = (remember_jmp_curpos + 1) % REMEMBER_JMP_STEPS;
-			ret_nesting++;
+			CPU_remember_JMP[CPU_remember_jmp_curpos] = GET_PC() - 1;
+			CPU_remember_jmp_curpos = (CPU_remember_jmp_curpos + 1) % CPU_REMEMBER_JMP_STEPS;
+			MONITOR_ret_nesting++;
 #endif
 			PHW(retaddr);
 		}
@@ -999,7 +1003,7 @@ void GO(int limit)
 
 	OPCODE(21)				/* AND (ab,x) */
 		INDIRECT_X;
-		AND(GetByte(addr));
+		AND(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(23)				/* RLA (ab,x) [unofficial - ROL Mem, then AND with A] */
@@ -1015,39 +1019,39 @@ void GO(int limit)
 			C = (data & 0x80) ? 1 : 0;
 			data = (data << 1);
 		}
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		Z = N = A &= data;
 		DONE
 
 	OPCODE(24)				/* BIT ab */
 		ZPAGE;
-		N = dGetByte(addr);
+		N = MEMORY_dGetByte(addr);
 #ifndef NO_V_FLAG_VARIABLE
 		V = N & 0x40;
 #else
-		regP = (regP & 0xbf) + (N & 0x40);
+		CPU_regP = (CPU_regP & 0xbf) + (N & 0x40);
 #endif
 		Z = (A & N);
 		DONE
 
 	OPCODE(25)				/* AND ab */
 		ZPAGE;
-		AND(dGetByte(addr));
+		AND(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(26)				/* ROL ab */
 		ZPAGE;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		Z = N = (data << 1) + C;
 		C = (data & 0x80) ? 1 : 0;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(27)				/* RLA ab [unofficial - ROL Mem, then AND with A] */
 		ZPAGE;
 
 	rla_zpage:
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		if (C) {
 			C = (data & 0x80) ? 1 : 0;
 			data = (data << 1) + 1;
@@ -1056,7 +1060,7 @@ void GO(int limit)
 			C = (data & 0x80) ? 1 : 0;
 			data = (data << 1);
 		}
-		dPutByte(addr, data);
+		MEMORY_dPutByte(addr, data);
 		Z = N = A &= data;
 		DONE
 
@@ -1077,18 +1081,18 @@ void GO(int limit)
 
 	OPCODE(2c)				/* BIT abcd */
 		ABSOLUTE;
-		N = GetByte(addr);
+		N = MEMORY_GetByte(addr);
 #ifndef NO_V_FLAG_VARIABLE
 		V = N & 0x40;
 #else
-		regP = (regP & 0xbf) + (N & 0x40);
+		CPU_regP = (CPU_regP & 0xbf) + (N & 0x40);
 #endif
 		Z = (A & N);
 		DONE
 
 	OPCODE(2d)				/* AND abcd */
 		ABSOLUTE;
-		AND(GetByte(addr));
+		AND(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(2e)				/* ROL abcd */
@@ -1096,7 +1100,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		Z = N = (data << 1) + C;
 		C = (data & 0x80) ? 1 : 0;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(2f)				/* RLA abcd [unofficial - ROL Mem, then AND with A] */
@@ -1109,7 +1113,7 @@ void GO(int limit)
 	OPCODE(31)				/* AND (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		AND(GetByte(addr));
+		AND(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(33)				/* RLA (ab),y [unofficial - ROL Mem, then AND with A] */
@@ -1118,15 +1122,15 @@ void GO(int limit)
 
 	OPCODE(35)				/* AND ab,x */
 		ZPAGE_X;
-		AND(dGetByte(addr));
+		AND(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(36)				/* ROL ab,x */
 		ZPAGE_X;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		Z = N = (data << 1) + C;
 		C = (data & 0x80) ? 1 : 0;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(37)				/* RLA ab,x [unofficial - ROL Mem, then AND with A] */
@@ -1140,7 +1144,7 @@ void GO(int limit)
 	OPCODE(39)				/* AND abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		AND(GetByte(addr));
+		AND(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(3b)				/* RLA abcd,y [unofficial - ROL Mem, then AND with A] */
@@ -1150,7 +1154,7 @@ void GO(int limit)
 	OPCODE(3d)				/* AND abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		AND(GetByte(addr));
+		AND(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(3e)				/* ROL abcd,x */
@@ -1158,7 +1162,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		Z = N = (data << 1) + C;
 		C = (data & 0x80) ? 1 : 0;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(3f)				/* RLA abcd,x [unofficial - ROL Mem, then AND with A] */
@@ -1171,14 +1175,14 @@ void GO(int limit)
 		SET_PC((PL << 8) + data);
 		CPUCHECKIRQ;
 #ifdef MONITOR_BREAK
-		if (break_ret && --ret_nesting <= 0)
-			break_step = TRUE;
+		if (MONITOR_break_ret && --MONITOR_ret_nesting <= 0)
+			MONITOR_break_step = TRUE;
 #endif
 		DONE
 
 	OPCODE(41)				/* EOR (ab,x) */
 		INDIRECT_X;
-		EOR(GetByte(addr));
+		EOR(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(43)				/* LSE (ab,x) [unofficial - LSR then EOR result with A] */
@@ -1188,32 +1192,32 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		C = data & 1;
 		data >>= 1;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		Z = N = A ^= data;
 		DONE
 
 	OPCODE(45)				/* EOR ab */
 		ZPAGE;
-		EOR(dGetByte(addr));
+		EOR(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(46)				/* LSR ab */
 		ZPAGE;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		C = data & 1;
 		Z = data >> 1;
 		N = 0;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(47)				/* LSE ab [unofficial - LSR then EOR result with A] */
 		ZPAGE;
 
 	lse_zpage:
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		C = data & 1;
 		data >>= 1;
-		dPutByte(addr, data);
+		MEMORY_dPutByte(addr, data);
 		Z = N = A ^= data;
 		DONE
 
@@ -1238,15 +1242,15 @@ void GO(int limit)
 
 	OPCODE(4c)				/* JMP abcd */
 #ifdef MONITOR_BREAK
-		remember_JMP[remember_jmp_curpos] = GET_PC() - 1;
-		remember_jmp_curpos = (remember_jmp_curpos + 1) % REMEMBER_JMP_STEPS;
+		CPU_remember_JMP[CPU_remember_jmp_curpos] = GET_PC() - 1;
+		CPU_remember_jmp_curpos = (CPU_remember_jmp_curpos + 1) % CPU_REMEMBER_JMP_STEPS;
 #endif
 		SET_PC(OP_WORD);
 		DONE
 
 	OPCODE(4d)				/* EOR abcd */
 		ABSOLUTE;
-		EOR(GetByte(addr));
+		EOR(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(4e)				/* LSR abcd */
@@ -1255,7 +1259,7 @@ void GO(int limit)
 		C = data & 1;
 		Z = data >> 1;
 		N = 0;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(4f)				/* LSE abcd [unofficial - LSR then EOR result with A] */
@@ -1266,13 +1270,13 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 		BRANCH(!V)
 #else
-		BRANCH(!(regP & 0x40))
+		BRANCH(!(CPU_regP & 0x40))
 #endif
 
 	OPCODE(51)				/* EOR (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		EOR(GetByte(addr));
+		EOR(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(53)				/* LSE (ab),y [unofficial - LSR then EOR result with A] */
@@ -1281,16 +1285,16 @@ void GO(int limit)
 
 	OPCODE(55)				/* EOR ab,x */
 		ZPAGE_X;
-		EOR(dGetByte(addr));
+		EOR(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(56)				/* LSR ab,x */
 		ZPAGE_X;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		C = data & 1;
 		Z = data >> 1;
 		N = 0;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(57)				/* LSE ab,x [unofficial - LSR then EOR result with A] */
@@ -1298,14 +1302,14 @@ void GO(int limit)
 		goto lse_zpage;
 
 	OPCODE(58)				/* CLI */
-		ClrI;
+		CPU_ClrI;
 		CPUCHECKIRQ;
 		DONE
 
 	OPCODE(59)				/* EOR abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		EOR(GetByte(addr));
+		EOR(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(5b)				/* LSE abcd,y [unofficial - LSR then EOR result with A] */
@@ -1315,7 +1319,7 @@ void GO(int limit)
 	OPCODE(5d)				/* EOR abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		EOR(GetByte(addr));
+		EOR(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(5e)				/* LSR abcd,x */
@@ -1324,7 +1328,7 @@ void GO(int limit)
 		C = data & 1;
 		Z = data >> 1;
 		N = 0;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(5f)				/* LSE abcd,x [unofficial - LSR then EOR result with A] */
@@ -1335,18 +1339,18 @@ void GO(int limit)
 		data = PL;
 		SET_PC((PL << 8) + data + 1);
 #ifdef MONITOR_BREAK
-		if (break_ret && --ret_nesting <= 0)
-			break_step = TRUE;
+		if (MONITOR_break_ret && --MONITOR_ret_nesting <= 0)
+			MONITOR_break_step = TRUE;
 #endif
-		if (rts_handler != NULL) {
-			rts_handler();
-			rts_handler = NULL;
+		if (CPU_rts_handler != NULL) {
+			CPU_rts_handler();
+			CPU_rts_handler = NULL;
 		}
 		DONE
 
 	OPCODE(61)				/* ADC (ab,x) */
 		INDIRECT_X;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto adc;
 
 	OPCODE(63)				/* RRA (ab,x) [unofficial - ROR Mem, then ADC to Acc] */
@@ -1362,27 +1366,27 @@ void GO(int limit)
 			C = data & 1;
 			data >>= 1;
 		}
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		goto adc;
 
 	OPCODE(65)				/* ADC ab */
 		ZPAGE;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		goto adc;
 
 	OPCODE(66)				/* ROR ab */
 		ZPAGE;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		Z = N = (C << 7) + (data >> 1);
 		C = data & 1;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(67)				/* RRA ab [unofficial - ROR Mem, then ADC to Acc] */
 		ZPAGE;
 
 	rra_zpage:
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		if (C) {
 			C = data & 1;
 			data = (data >> 1) + 0x80;
@@ -1391,7 +1395,7 @@ void GO(int limit)
 			C = data & 1;
 			data >>= 1;
 		}
-		dPutByte(addr, data);
+		MEMORY_dPutByte(addr, data);
 		goto adc;
 
 	OPCODE(68)				/* PLA */
@@ -1412,13 +1416,13 @@ void GO(int limit)
 		/* It does some 'BCD fixup' if D flag is set */
 		/* MPC 05/24/00 */
 		data = A & IMMEDIATE;
-		if (regP & D_FLAG) {
+		if (CPU_regP & CPU_D_FLAG) {
 			UBYTE temp = (data >> 1) + (C << 7);
 			Z = N = temp;
 #ifndef NO_V_FLAG_VARIABLE
 			V = ((temp ^ data) & 0x40);
 #else
-			regP = (regP & 0xbf) + ((temp ^ data) & 0x40);
+			CPU_regP = (CPU_regP & 0xbf) + ((temp ^ data) & 0x40);
 #endif
 			if ((data & 0x0F) + (data & 0x01) > 5)
 				temp = (temp & 0xF0) + ((temp + 0x6) & 0x0F);
@@ -1436,32 +1440,32 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 			V = C ^ ((A >> 5) & 1);
 #else
-			regP = (regP & 0xbf) + ((A ^ data) & 0x40);
+			CPU_regP = (CPU_regP & 0xbf) + ((A ^ data) & 0x40);
 #endif
 		}
 		DONE
 
 	OPCODE(6c)				/* JMP (abcd) */
 #ifdef MONITOR_BREAK
-		remember_JMP[remember_jmp_curpos] = GET_PC() - 1;
-		remember_jmp_curpos = (remember_jmp_curpos + 1) % REMEMBER_JMP_STEPS;
+		CPU_remember_JMP[CPU_remember_jmp_curpos] = GET_PC() - 1;
+		CPU_remember_jmp_curpos = (CPU_remember_jmp_curpos + 1) % CPU_REMEMBER_JMP_STEPS;
 #endif
 		ABSOLUTE;
 #ifdef CPU65C02
-		/* XXX: if ((UBYTE) addr == 0xff) xpos++; */
-		SET_PC(dGetWord(addr));
+		/* XXX: if ((UBYTE) addr == 0xff) ANTIC_xpos++; */
+		SET_PC(MEMORY_dGetWord(addr));
 #else
 		/* original 6502 had a bug in JMP (addr) when addr crossed page boundary */
 		if ((UBYTE) addr == 0xff)
-			SET_PC((dGetByte(addr - 0xff) << 8) + dGetByte(addr));
+			SET_PC((MEMORY_dGetByte(addr - 0xff) << 8) + MEMORY_dGetByte(addr));
 		else
-			SET_PC(dGetWord(addr));
+			SET_PC(MEMORY_dGetWord(addr));
 #endif
 		DONE
 
 	OPCODE(6d)				/* ADC abcd */
 		ABSOLUTE;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto adc;
 
 	OPCODE(6e)				/* ROR abcd */
@@ -1469,7 +1473,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		Z = N = (C << 7) + (data >> 1);
 		C = data & 1;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(6f)				/* RRA abcd [unofficial - ROR Mem, then ADC to Acc] */
@@ -1480,13 +1484,13 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 		BRANCH(V)
 #else
-		BRANCH(regP & 0x40)
+		BRANCH(CPU_regP & 0x40)
 #endif
 
 	OPCODE(71)				/* ADC (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto adc;
 
 	OPCODE(73)				/* RRA (ab),y [unofficial - ROR Mem, then ADC to Acc] */
@@ -1495,15 +1499,15 @@ void GO(int limit)
 
 	OPCODE(75)				/* ADC ab,x */
 		ZPAGE_X;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		goto adc;
 
 	OPCODE(76)				/* ROR ab,x */
 		ZPAGE_X;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		Z = N = (C << 7) + (data >> 1);
 		C = data & 1;
-		dPutByte(addr, Z);
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(77)				/* RRA ab,x [unofficial - ROR Mem, then ADC to Acc] */
@@ -1511,13 +1515,13 @@ void GO(int limit)
 		goto rra_zpage;
 
 	OPCODE(78)				/* SEI */
-		SetI;
+		CPU_SetI;
 		DONE
 
 	OPCODE(79)				/* ADC abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto adc;
 
 	OPCODE(7b)				/* RRA abcd,y [unofficial - ROR Mem, then ADC to Acc] */
@@ -1527,7 +1531,7 @@ void GO(int limit)
 	OPCODE(7d)				/* ADC abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto adc;
 
 	OPCODE(7e)				/* ROR abcd,x */
@@ -1535,7 +1539,7 @@ void GO(int limit)
 		RMW_GetByte(data, addr);
 		Z = N = (C << 7) + (data >> 1);
 		C = data & 1;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(7f)				/* RRA abcd,x [unofficial - ROR Mem, then ADC to Acc] */
@@ -1544,35 +1548,35 @@ void GO(int limit)
 
 	OPCODE(81)				/* STA (ab,x) */
 		INDIRECT_X;
-		PutByte(addr, A);
+		MEMORY_PutByte(addr, A);
 		DONE
 
 	/* AXS doesn't change flags and SAX is better name for it (Fox) */
 	OPCODE(83)				/* SAX (ab,x) [unofficial - Store result A AND X */
 		INDIRECT_X;
 		data = A & X;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(84)				/* STY ab */
 		ZPAGE;
-		dPutByte(addr, Y);
+		MEMORY_dPutByte(addr, Y);
 		DONE
 
 	OPCODE(85)				/* STA ab */
 		ZPAGE;
-		dPutByte(addr, A);
+		MEMORY_dPutByte(addr, A);
 		DONE
 
 	OPCODE(86)				/* STX ab */
 		ZPAGE;
-		dPutByte(addr, X);
+		MEMORY_dPutByte(addr, X);
 		DONE
 
 	OPCODE(87)				/* SAX ab [unofficial - Store result A AND X] */
 		ZPAGE;
 		data = A & X;
-		dPutByte(addr, data);
+		MEMORY_dPutByte(addr, data);
 		DONE
 
 	OPCODE(88)				/* DEY */
@@ -1591,23 +1595,23 @@ void GO(int limit)
 
 	OPCODE(8c)				/* STY abcd */
 		ABSOLUTE;
-		PutByte(addr, Y);
+		MEMORY_PutByte(addr, Y);
 		DONE
 
 	OPCODE(8d)				/* STA abcd */
 		ABSOLUTE;
-		PutByte(addr, A);
+		MEMORY_PutByte(addr, A);
 		DONE
 
 	OPCODE(8e)				/* STX abcd */
 		ABSOLUTE;
-		PutByte(addr, X);
+		MEMORY_PutByte(addr, X);
 		DONE
 
 	OPCODE(8f)				/* SAX abcd [unofficial - Store result A AND X] */
 		ABSOLUTE;
 		data = A & X;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(90)				/* BCC */
@@ -1615,37 +1619,37 @@ void GO(int limit)
 
 	OPCODE(91)				/* STA (ab),y */
 		INDIRECT_Y;
-		PutByte(addr, A);
+		MEMORY_PutByte(addr, A);
 		DONE
 
 	OPCODE(93)				/* SHA (ab),y [unofficial, UNSTABLE - Store A AND X AND (H+1) ?] (Fox) */
 		/* It seems previous memory value is important - also in 9f */
 		ZPAGE;
-		data = dGetByte((UBYTE) (addr + 1));	/* Get high byte from zpage */
+		data = MEMORY_dGetByte((UBYTE) (addr + 1));	/* Get high byte from zpage */
 		data = A & X & (data + 1);
-		addr = dGetWord(addr) + Y;
-		PutByte(addr, data);
+		addr = MEMORY_dGetWord(addr) + Y;
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(94)				/* STY ab,x */
 		ZPAGE_X;
-		dPutByte(addr, Y);
+		MEMORY_dPutByte(addr, Y);
 		DONE
 
 	OPCODE(95)				/* STA ab,x */
 		ZPAGE_X;
-		dPutByte(addr, A);
+		MEMORY_dPutByte(addr, A);
 		DONE
 
 	OPCODE(96)				/* STX ab,y */
 		ZPAGE_Y;
-		PutByte(addr, X);
+		MEMORY_PutByte(addr, X);
 		DONE
 
 	OPCODE(97)				/* SAX ab,y [unofficial - Store result A AND X] */
 		ZPAGE_Y;
 		data = A & X;
-		dPutByte(addr, data);
+		MEMORY_dPutByte(addr, data);
 		DONE
 
 	OPCODE(98)				/* TYA */
@@ -1654,7 +1658,7 @@ void GO(int limit)
 
 	OPCODE(99)				/* STA abcd,y */
 		ABSOLUTE_Y;
-		PutByte(addr, A);
+		MEMORY_PutByte(addr, A);
 		DONE
 
 	OPCODE(9a)				/* TXS */
@@ -1668,7 +1672,7 @@ void GO(int limit)
 		S = A & X;
 		data = S & ((addr >> 8) + 1);
 		addr += Y;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(9c)				/* SHY abcd,x [unofficial - Store Y and (H+1)] (Fox) */
@@ -1677,12 +1681,12 @@ void GO(int limit)
 		/* MPC 05/24/00 */
 		data = Y & ((UBYTE) ((addr >> 8) + 1));
 		addr += X;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(9d)				/* STA abcd,x */
 		ABSOLUTE_X;
-		PutByte(addr, A);
+		MEMORY_PutByte(addr, A);
 		DONE
 
 	OPCODE(9e)				/* SHX abcd,y [unofficial - Store X and (H+1)] (Fox) */
@@ -1691,14 +1695,14 @@ void GO(int limit)
 		/* MPC 05/24/00 */
 		data = X & ((UBYTE) ((addr >> 8) + 1));
 		addr += Y;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(9f)				/* SHA abcd,y [unofficial, UNSTABLE - Store A AND X AND (H+1) ?] (Fox) */
 		ABSOLUTE;
 		data = A & X & ((addr >> 8) + 1);
 		addr += Y;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		DONE
 
 	OPCODE(a0)				/* LDY #ab */
@@ -1707,7 +1711,7 @@ void GO(int limit)
 
 	OPCODE(a1)				/* LDA (ab,x) */
 		INDIRECT_X;
-		LDA(GetByte(addr));
+		LDA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(a2)				/* LDX #ab */
@@ -1716,27 +1720,27 @@ void GO(int limit)
 
 	OPCODE(a3)				/* LAX (ab,x) [unofficial] */
 		INDIRECT_X;
-		Z = N = X = A = GetByte(addr);
+		Z = N = X = A = MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(a4)				/* LDY ab */
 		ZPAGE;
-		LDY(dGetByte(addr));
+		LDY(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(a5)				/* LDA ab */
 		ZPAGE;
-		LDA(dGetByte(addr));
+		LDA(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(a6)				/* LDX ab */
 		ZPAGE;
-		LDX(dGetByte(addr));
+		LDX(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(a7)				/* LAX ab [unofficial] */
 		ZPAGE;
-		Z = N = X = A = GetByte(addr);
+		Z = N = X = A = MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(a8)				/* TAY */
@@ -1757,22 +1761,22 @@ void GO(int limit)
 
 	OPCODE(ac)				/* LDY abcd */
 		ABSOLUTE;
-		LDY(GetByte(addr));
+		LDY(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(ad)				/* LDA abcd */
 		ABSOLUTE;
-		LDA(GetByte(addr));
+		LDA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(ae)				/* LDX abcd */
 		ABSOLUTE;
-		LDX(GetByte(addr));
+		LDX(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(af)				/* LAX abcd [unofficial] */
 		ABSOLUTE;
-		Z = N = X = A = GetByte(addr);
+		Z = N = X = A = MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(b0)				/* BCS */
@@ -1781,47 +1785,47 @@ void GO(int limit)
 	OPCODE(b1)				/* LDA (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		LDA(GetByte(addr));
+		LDA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(b3)				/* LAX (ab),y [unofficial] */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		Z = N = X = A = GetByte(addr);
+		Z = N = X = A = MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(b4)				/* LDY ab,x */
 		ZPAGE_X;
-		LDY(dGetByte(addr));
+		LDY(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(b5)				/* LDA ab,x */
 		ZPAGE_X;
-		LDA(dGetByte(addr));
+		LDA(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(b6)				/* LDX ab,y */
 		ZPAGE_Y;
-		LDX(GetByte(addr));
+		LDX(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(b7)				/* LAX ab,y [unofficial] */
 		ZPAGE_Y;
-		Z = N = X = A = GetByte(addr);
+		Z = N = X = A = MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(b8)				/* CLV */
 #ifndef NO_V_FLAG_VARIABLE
 		V = 0;
 #else
-		ClrV;
+		CPU_ClrV;
 #endif
 		DONE
 
 	OPCODE(b9)				/* LDA abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		LDA(GetByte(addr));
+		LDA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(ba)				/* TSX */
@@ -1839,31 +1843,31 @@ void GO(int limit)
 	OPCODE(bb)				/* LAS abcd,y [unofficial - AND S with Mem, transfer to A and X (Fox) */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		Z = N = A = X = S &= GetByte(addr);
+		Z = N = A = X = S &= MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(bc)				/* LDY abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		LDY(GetByte(addr));
+		LDY(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(bd)				/* LDA abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		LDA(GetByte(addr));
+		LDA(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(be)				/* LDX abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		LDX(GetByte(addr));
+		LDX(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(bf)				/* LAX abcd,y [unofficial] */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		Z = N = X = A = GetByte(addr);
+		Z = N = X = A = MEMORY_GetByte(addr);
 		DONE
 
 	OPCODE(c0)				/* CPY #ab */
@@ -1872,7 +1876,7 @@ void GO(int limit)
 
 	OPCODE(c1)				/* CMP (ab,x) */
 		INDIRECT_X;
-		CMP(GetByte(addr));
+		CMP(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(c3)				/* DCM (ab,x) [unofficial - DEC Mem then CMP with Acc] */
@@ -1881,32 +1885,32 @@ void GO(int limit)
 	dcm:
 		RMW_GetByte(data, addr);
 		data--;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		CMP(data);
 		DONE
 
 	OPCODE(c4)				/* CPY ab */
 		ZPAGE;
-		CPY(dGetByte(addr));
+		CPY(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(c5)				/* CMP ab */
 		ZPAGE;
-		CMP(dGetByte(addr));
+		CMP(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(c6)				/* DEC ab */
 		ZPAGE;
-		Z = N = dGetByte(addr) - 1;
-		dPutByte(addr, Z);
+		Z = N = MEMORY_dGetByte(addr) - 1;
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(c7)				/* DCM ab [unofficial - DEC Mem then CMP with Acc] */
 		ZPAGE;
 
 	dcm_zpage:
-		data = dGetByte(addr) - 1;
-		dPutByte(addr, data);
+		data = MEMORY_dGetByte(addr) - 1;
+		MEMORY_dPutByte(addr, data);
 		CMP(data);
 		DONE
 
@@ -1932,19 +1936,19 @@ void GO(int limit)
 
 	OPCODE(cc)				/* CPY abcd */
 		ABSOLUTE;
-		CPY(GetByte(addr));
+		CPY(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(cd)				/* CMP abcd */
 		ABSOLUTE;
-		CMP(GetByte(addr));
+		CMP(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(ce)				/* DEC abcd */
 		ABSOLUTE;
 		RMW_GetByte(Z, addr);
 		N = --Z;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(cf)				/* DCM abcd [unofficial - DEC Mem then CMP with Acc] */
@@ -1957,7 +1961,7 @@ void GO(int limit)
 	OPCODE(d1)				/* CMP (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		CMP(GetByte(addr));
+		CMP(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(d3)				/* DCM (ab),y [unofficial - DEC Mem then CMP with Acc] */
@@ -1966,15 +1970,15 @@ void GO(int limit)
 
 	OPCODE(d5)				/* CMP ab,x */
 		ZPAGE_X;
-		CMP(dGetByte(addr));
+		CMP(MEMORY_dGetByte(addr));
 		Z = N = A - data;
 		C = (A >= data);
 		DONE
 
 	OPCODE(d6)				/* DEC ab,x */
 		ZPAGE_X;
-		Z = N = dGetByte(addr) - 1;
-		dPutByte(addr, Z);
+		Z = N = MEMORY_dGetByte(addr) - 1;
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(d7)				/* DCM ab,x [unofficial - DEC Mem then CMP with Acc] */
@@ -1982,13 +1986,13 @@ void GO(int limit)
 		goto dcm_zpage;
 
 	OPCODE(d8)				/* CLD */
-		ClrD;
+		CPU_ClrD;
 		DONE
 
 	OPCODE(d9)				/* CMP abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		CMP(GetByte(addr));
+		CMP(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(db)				/* DCM abcd,y [unofficial - DEC Mem then CMP with Acc] */
@@ -1998,14 +2002,14 @@ void GO(int limit)
 	OPCODE(dd)				/* CMP abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		CMP(GetByte(addr));
+		CMP(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(de)				/* DEC abcd,x */
 		ABSOLUTE_X;
 		RMW_GetByte(Z, addr);
 		N = --Z;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(df)				/* DCM abcd,x [unofficial - DEC Mem then CMP with Acc] */
@@ -2018,7 +2022,7 @@ void GO(int limit)
 
 	OPCODE(e1)				/* SBC (ab,x) */
 		INDIRECT_X;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto sbc;
 
 	OPCODE(e3)				/* INS (ab,x) [unofficial - INC Mem then SBC with Acc] */
@@ -2027,31 +2031,31 @@ void GO(int limit)
 	ins:
 		RMW_GetByte(data, addr);
 		++data;
-		PutByte(addr, data);
+		MEMORY_PutByte(addr, data);
 		goto sbc;
 
 	OPCODE(e4)				/* CPX ab */
 		ZPAGE;
-		CPX(dGetByte(addr));
+		CPX(MEMORY_dGetByte(addr));
 		DONE
 
 	OPCODE(e5)				/* SBC ab */
 		ZPAGE;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		goto sbc;
 
 	OPCODE(e6)				/* INC ab */
 		ZPAGE;
-		Z = N = dGetByte(addr) + 1;
-		dPutByte(addr, Z);
+		Z = N = MEMORY_dGetByte(addr) + 1;
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(e7)				/* INS ab [unofficial - INC Mem then SBC with Acc] */
 		ZPAGE;
 
 	ins_zpage:
-		data = dGetByte(addr) + 1;
-		dPutByte(addr, data);
+		data = MEMORY_dGetByte(addr) + 1;
+		MEMORY_dPutByte(addr, data);
 		goto sbc;
 
 	OPCODE(e8)				/* INX */
@@ -2074,19 +2078,19 @@ void GO(int limit)
 
 	OPCODE(ec)				/* CPX abcd */
 		ABSOLUTE;
-		CPX(GetByte(addr));
+		CPX(MEMORY_GetByte(addr));
 		DONE
 
 	OPCODE(ed)				/* SBC abcd */
 		ABSOLUTE;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto sbc;
 
 	OPCODE(ee)				/* INC abcd */
 		ABSOLUTE;
 		RMW_GetByte(Z, addr);
 		N = ++Z;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(ef)				/* INS abcd [unofficial - INC Mem then SBC with Acc] */
@@ -2099,7 +2103,7 @@ void GO(int limit)
 	OPCODE(f1)				/* SBC (ab),y */
 		INDIRECT_Y;
 		NCYCLES_Y;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto sbc;
 
 	OPCODE(f3)				/* INS (ab),y [unofficial - INC Mem then SBC with Acc] */
@@ -2108,13 +2112,13 @@ void GO(int limit)
 
 	OPCODE(f5)				/* SBC ab,x */
 		ZPAGE_X;
-		data = dGetByte(addr);
+		data = MEMORY_dGetByte(addr);
 		goto sbc;
 
 	OPCODE(f6)				/* INC ab,x */
 		ZPAGE_X;
-		Z = N = dGetByte(addr) + 1;
-		dPutByte(addr, Z);
+		Z = N = MEMORY_dGetByte(addr) + 1;
+		MEMORY_dPutByte(addr, Z);
 		DONE
 
 	OPCODE(f7)				/* INS ab,x [unofficial - INC Mem then SBC with Acc] */
@@ -2122,13 +2126,13 @@ void GO(int limit)
 		goto ins_zpage;
 
 	OPCODE(f8)				/* SED */
-		SetD;
+		CPU_SetD;
 		DONE
 
 	OPCODE(f9)				/* SBC abcd,y */
 		ABSOLUTE_Y;
 		NCYCLES_Y;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto sbc;
 
 	OPCODE(fb)				/* INS abcd,y [unofficial - INC Mem then SBC with Acc] */
@@ -2138,14 +2142,14 @@ void GO(int limit)
 	OPCODE(fd)				/* SBC abcd,x */
 		ABSOLUTE_X;
 		NCYCLES_X;
-		data = GetByte(addr);
+		data = MEMORY_GetByte(addr);
 		goto sbc;
 
 	OPCODE(fe)				/* INC abcd,x */
 		ABSOLUTE_X;
 		RMW_GetByte(Z, addr);
 		N = ++Z;
-		PutByte(addr, Z);
+		MEMORY_PutByte(addr, Z);
 		DONE
 
 	OPCODE(ff)				/* INS abcd,x [unofficial - INC Mem then SBC with Acc] */
@@ -2163,14 +2167,14 @@ void GO(int limit)
 		data = IMMEDIATE;
 		UPDATE_GLOBAL_REGS;
 		CPU_GetStatus();
-		Atari800_RunEsc(data);
+		ESC_Run(data);
 		CPU_PutStatus();
 		UPDATE_LOCAL_REGS;
 		data = PL;
 		SET_PC((PL << 8) + data + 1);
 #ifdef MONITOR_BREAK
-		if (break_ret && --ret_nesting <= 0)
-			break_step = TRUE;
+		if (MONITOR_break_ret && --MONITOR_ret_nesting <= 0)
+			MONITOR_break_step = TRUE;
 #endif
 		DONE
 
@@ -2179,7 +2183,7 @@ void GO(int limit)
 		data = IMMEDIATE;
 		UPDATE_GLOBAL_REGS;
 		CPU_GetStatus();
-		Atari800_RunEsc(data);
+		ESC_Run(data);
 		CPU_PutStatus();
 		UPDATE_LOCAL_REGS;
 		DONE
@@ -2211,12 +2215,12 @@ void GO(int limit)
 		CPU_GetStatus();
 
 #ifdef CRASH_MENU
-		crash_address = GET_PC();
-		crash_afterCIM = GET_PC() + 1;
-		crash_code = insn;
-		ui();
+		UI_crash_address = GET_PC();
+		UI_crash_afterCIM = GET_PC() + 1;
+		UI_crash_code = insn;
+		UI_Run();
 #else
-		cim_encountered = TRUE;
+		CPU_cim_encountered = TRUE;
 		ENTER_MONITOR;
 #endif /* CRASH_MENU */
 
@@ -2230,7 +2234,7 @@ void GO(int limit)
 /* ADC and SBC routines */
 
 	adc:
-		if (!(regP & D_FLAG)) {
+		if (!(CPU_regP & CPU_D_FLAG)) {
 			/* Binary mode */
 			unsigned int tmp;
 			tmp = A + data + C;
@@ -2239,9 +2243,9 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 			V = !((A ^ data) & 0x80) && ((data ^ tmp) & 0x80);
 #else
-			ClrV;
+			CPU_ClrV;
 			if (!((A ^ data) & 0x80) && ((data ^ tmp) & 0x80))
-				SetV;
+				CPU_SetV;
 #endif
 			Z = N = A = (UBYTE) tmp;
 	    }
@@ -2258,9 +2262,9 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 			V = !((A ^ data) & 0x80) && ((data ^ tmp) & 0x80);
 #else
-			ClrV;
+			CPU_ClrV;
 			if (!((A ^ data) & 0x80) && ((data ^ tmp) & 0x80))
-				SetV;
+				CPU_SetV;
 #endif
 
 			if (tmp > 0x9f)
@@ -2271,7 +2275,7 @@ void GO(int limit)
 		DONE
 
 	sbc:
-		if (!(regP & D_FLAG)) {
+		if (!(CPU_regP & CPU_D_FLAG)) {
 			/* Binary mode */
 			unsigned int tmp;
 			/* tmp = A - data - !C; */
@@ -2280,9 +2284,9 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 			V = ((A ^ tmp) & 0x80) && ((A ^ data) & 0x80);
 #else
-			ClrV;
+			CPU_ClrV;
 			if (((A ^ tmp) & 0x80) && ((A ^ data) & 0x80))
-				SetV;
+				CPU_SetV;
 #endif
 			Z = N = A = (UBYTE) tmp;
 		}
@@ -2305,9 +2309,9 @@ void GO(int limit)
 #ifndef NO_V_FLAG_VARIABLE
 			V = ((A ^ tmp) & 0x80) && ((A ^ data) & 0x80);
 #else
-			ClrV;
+			CPU_ClrV;
 			if (((A ^ tmp) & 0x80) && ((A ^ data) & 0x80))
-				SetV;
+				CPU_SetV;
 #endif
 			Z = N = (UBYTE) tmp;
 
@@ -2322,7 +2326,7 @@ void GO(int limit)
 #endif
 
 #ifdef MONITOR_BREAK
-		if (break_step) {
+		if (MONITOR_break_step) {
 			DO_BREAK;
 		}
 #endif
@@ -2344,51 +2348,51 @@ void CPU_Initialise(void)
 void CPU_Reset(void)
 {
 #ifdef MONITOR_PROFILE
-	memset(instruction_count, 0, sizeof(instruction_count));
+	memset(CPU_instruction_count, 0, sizeof(CPU_instruction_count));
 #endif
 
-	IRQ = 0;
+	CPU_IRQ = 0;
 
-	regP = 0x34;				/* The unused bit is always 1, I flag set! */
+	CPU_regP = 0x34;				/* The unused bit is always 1, I flag set! */
 	CPU_PutStatus();	/* Make sure flags are all updated */
-	regS = 0xff;
-	regPC = dGetWordAligned(0xfffc);
+	CPU_regS = 0xff;
+	CPU_regPC = MEMORY_dGetWordAligned(0xfffc);
 }
 
 #if !defined(BASIC) && !defined(ASAP)
 
-void CpuStateSave(UBYTE SaveVerbose)
+void CPU_StateSave(UBYTE SaveVerbose)
 {
-	SaveUBYTE(&regA, 1);
+	StateSav_SaveUBYTE(&CPU_regA, 1);
 
 	CPU_GetStatus();	/* Make sure flags are all updated */
-	SaveUBYTE(&regP, 1);
+	StateSav_SaveUBYTE(&CPU_regP, 1);
 
-	SaveUBYTE(&regS, 1);
-	SaveUBYTE(&regX, 1);
-	SaveUBYTE(&regY, 1);
-	SaveUBYTE(&IRQ, 1);
+	StateSav_SaveUBYTE(&CPU_regS, 1);
+	StateSav_SaveUBYTE(&CPU_regX, 1);
+	StateSav_SaveUBYTE(&CPU_regY, 1);
+	StateSav_SaveUBYTE(&CPU_IRQ, 1);
 
-	MemStateSave(SaveVerbose);
+	MEMORY_StateSave(SaveVerbose);
 
-	SaveUWORD(&regPC, 1);
+	StateSav_SaveUWORD(&CPU_regPC, 1);
 }
 
-void CpuStateRead(UBYTE SaveVerbose)
+void CPU_StateRead(UBYTE SaveVerbose, UBYTE StateVersion)
 {
-	ReadUBYTE(&regA, 1);
+	StateSav_ReadUBYTE(&CPU_regA, 1);
 
-	ReadUBYTE(&regP, 1);
+	StateSav_ReadUBYTE(&CPU_regP, 1);
 	CPU_PutStatus();	/* Make sure flags are all updated */
 
-	ReadUBYTE(&regS, 1);
-	ReadUBYTE(&regX, 1);
-	ReadUBYTE(&regY, 1);
-	ReadUBYTE(&IRQ, 1);
+	StateSav_ReadUBYTE(&CPU_regS, 1);
+	StateSav_ReadUBYTE(&CPU_regX, 1);
+	StateSav_ReadUBYTE(&CPU_regY, 1);
+	StateSav_ReadUBYTE(&CPU_IRQ, 1);
 
-	MemStateRead( SaveVerbose );
+	MEMORY_StateRead(SaveVerbose, StateVersion);
 
-	ReadUWORD(&regPC, 1);
+	StateSav_ReadUWORD(&CPU_regPC, 1);
 }
 
 #endif

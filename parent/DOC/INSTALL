@@ -40,16 +40,17 @@ The emulator can be compiled for the following systems (and probably
 many others with a little work):-
 
 1. X Window Version (including SUN OpenWindows) on a Unix Platform
-2. SVGALIB Version on Linux
-3. CURSES version
-4. Graphical Version for the Amiga
-5. Graphical version for the Atari TT/Falcon and compatible computers
-6. BASIC version (No Graphics). Should be straightforward to configure
+   (prefer the SDL version)
+2. CURSES version
+3. Graphical Version for the Amiga (not maintained)
+4. Graphical version for the Atari TT/Falcon and compatible computers
+5. BASIC version (No Graphics). Should be straightforward to configure
    for any 32-bit environment supporting ANSI C.
-7. VGA Version for DOS
-8. DirectX Version for Microsoft Windows
-9. SDL (Linux/Unix, Windows, BeOS)
-10. WinCE
+6. VGA Version for DOS
+7. DirectX Version for Microsoft Windows (also try the SDL version)
+8. SDL (Linux/Unix, Windows, BeOS)
+9. WinCE
+10. Java (various platforms)
 
 Installed zlib (compression library) enables building the emulator with
 compressed statesave images support. Additionally installed libpng
@@ -99,9 +100,13 @@ Building the Emulator for Windows using Cygwin
 Atari800 for Windows can be built using Cygwin environment:
 http://cygwin.com/
 
-1. Type "./configure --target=windx".
-2. Type "make".
-3. Copy atari800.exe to destination directory.
+1. Get and install at least one of SDL or DirectX for MinGW.
+2. For SDL, get the file SDL_win32_main.c from the SDL source that matches
+   your version and copy it into the Atari800 src directory.
+3. Type "./configure --target=sdl" for SDL and --target=windx for DirectX
+5. Type "make".
+5. Copy atari800.exe to destination directory.
+6. Copy the needed DLLs: /bin/mgwz.dll and (for SDL) sdl.dll
 
 Building the Emulator for Windows using Microsoft 32-bit C/C++ Compiler
 -----------------------------------------------------------------------
@@ -148,8 +153,44 @@ file names (either minix-fs of MiNT, or VFAT of MagiC).
 Building the Emulator for SDL
 -----------------------------
 
-0. Please install (and configure) SDL library (http://www.libsdl.org).
-1. Type "./configure --target=sdl".
-2. Type "make".
-3. Type "make install".
-4. You can run atari800 anytime you want.
+1. Please install (and configure) SDL library (http://www.libsdl.org).
+2. If you are using MinGW or Cygwin, get the file SDL_win32_main.c from the SDL 
+   source (in src/main/win32) and copy it to the atari800 src directory.
+3. Type "./configure --target=sdl".
+4. Type "make".
+5. Type "make install".
+6. You can run atari800 anytime you want.
+
+Building the Emulator for Java using NestedVM
+---------------------------------------------
+1. Get and build NestedVM (nestedvm.ibex.org). make env.sh and unix_runtime.jar
+2. source env.sh in the NestedVM directory.
+3. In the atari800 directory:
+   ./autogen.sh (only if you don't have configure, such as a CVS build)
+   ./configure --host=mips-unknown-elf --target=javanvm
+   You might want to add --enable-veryslow --disable-monitorbreak to the above.
+   For the basic version, use --target=javanvm-basic
+4. Type "make".
+5. atari800.jar requires unix_runtime.jar in the same directory. Copy it from
+   the NestedVM directory where you made it using "make unix_runtime.jar" as 
+   stated above.
+6. To run use: java -jar atari800.jar
+Add -o UnixRuntime to the NestedVM compiler options to enable directory
+browsing.
+This requires changing Windows paths to the form: /c:/file in all configuration
+files and on the command line.  It will look for .atari800.cfg in your
+Windows home directory.
+Applet version:
+You must compile with -o UnixRuntime
+Apply UnixRuntime.patch to NestedVM.
+To use:
+<APPLET CODE="atari800.class" WIDTH=672 HEIGHT=480 ARCHIVE="atari800.jar, unix_runtime.jar">
+<PARAM name=args value="-config /resource/http://atari800_applet.cfg -xlxe_rom /resource/http://ospp.rom -basic_rom none -nobasic -nopatchall /resource/http://disk.atr">
+</APPLET>
+All files should have /resource/http:// in front of their names.
+Edit atari800_applet.cfg and add /resource/http:// to all rom files, even those
+you are not providing.
+Legal distribution of Atari800 as an applet cannot include the OS and BASIC
+ROM Files.  You can run without BASIC by using -basic_rom none and Thomas
+Richter's Os++.
+

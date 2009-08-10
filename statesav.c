@@ -2,7 +2,7 @@
  * statesav.c - saving the emulator's state to a file
  *
  * Copyright (C) 1995-1998 David Firth
- * Copyright (C) 1998-2006 Atari800 development team (see DOC/CREDITS)
+ * Copyright (C) 1998-2008 Atari800 development team (see DOC/CREDITS)
  *
  * This file is part of the Atari800 emulator project which emulates
  * the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
@@ -43,32 +43,35 @@
 #define MEMCOMPR     /* compress in memory before writing */
 #include "vmu.h"
 #include "icon.h"
+#include "version.h"
 #endif
 
-
 #include "atari.h"
+#include "statesav.h"
+#include "antic.h"
+#include "cartridge.h"
+#include "cpu.h"
+#include "gtia.h"
 #include "log.h"
+#include "pbi.h"
+#include "pia.h"
+#include "pokey.h"
+#include "sio.h"
 #include "util.h"
+#ifdef PBI_MIO
+#include "pbi_mio.h"
+#endif
+#ifdef PBI_BB
+#include "pbi_bb.h"
+#endif
+#ifdef PBI_XLD
+#include "pbi_xld.h"
+#endif
+#ifdef XEP80_EMULATION
+#include "xep80.h"
+#endif
 
-#define SAVE_VERSION_NUMBER 4
-
-void AnticStateSave(void);
-void MainStateSave(void);
-void CpuStateSave(UBYTE SaveVerbose);
-void GTIAStateSave(void);
-void PIAStateSave(void);
-void POKEYStateSave(void);
-void CARTStateSave(void);
-void SIOStateSave(void);
-
-void AnticStateRead(void);
-void MainStateRead(void);
-void CpuStateRead(UBYTE SaveVerbose);
-void GTIAStateRead(void);
-void PIAStateRead(void);
-void POKEYStateRead(void);
-void CARTStateRead(void);
-void SIOStateRead(void);
+#define SAVE_VERSION_NUMBER 6
 
 #if defined(MEMCOMPR)
 static gzFile *mem_open(const char *name, const char *mode);
@@ -92,11 +95,11 @@ static size_t mem_write(const void *buf, size_t len, gzFile *stream);
 #define GZREAD(X, Y, Z)  fread(Y, Z, 1, X)
 #define GZWRITE(X, Y, Z) fwrite(Y, Z, 1, X)
 #undef GZERROR
-#define gzFile  FILE
+#define gzFile  FILE *
 #define Z_OK    0
 #endif
 
-static gzFile *StateFile = NULL;
+static gzFile StateFile = NULL;
 static int nFileError = Z_OK;
 
 static void GetGZErrorText(void)
@@ -105,20 +108,20 @@ static void GetGZErrorText(void)
 	const char *error = GZERROR(StateFile, &nFileError);
 	if (nFileError == Z_ERRNO) {
 #ifdef HAVE_STRERROR
-		Aprint("The following general file I/O error occurred:");
-		Aprint(strerror(errno));
+		Log_print("The following general file I/O error occurred:");
+		Log_print(strerror(errno));
 #else
-		Aprint("A file I/O error occurred");
+		Log_print("A file I/O error occurred");
 #endif
 		return;
 	}
-	Aprint("ZLIB returned the following error: %s", error);
+	Log_print("ZLIB returned the following error: %s", error);
 #endif /* GZERROR */
-	Aprint("State file I/O failed.");
+	Log_print("State file I/O failed.");
 }
 
 /* Value is memory location of data, num is number of type to save */
-void SaveUBYTE(const UBYTE *data, int num)
+void StateSav_SaveUBYTE(const UBYTE *data, int num)
 {
 	if (!StateFile || nFileError != Z_OK)
 		return;
@@ -132,7 +135,7 @@ void SaveUBYTE(const UBYTE *data, int num)
 }
 
 /* Value is memory location of data, num is number of type to save */
-void ReadUBYTE(UBYTE *data, int num)
+void StateSav_ReadUBYTE(UBYTE *data, int num)
 {
 	if (!StateFile || nFileError != Z_OK)
 		return;
@@ -142,7 +145,7 @@ void ReadUBYTE(UBYTE *data, int num)
 }
 
 /* Value is memory location of data, num is number of type to save */
-void SaveUWORD(const UWORD *data, int num)
+void StateSav_SaveUWORD(const UWORD *data, int num)
 {
 	if (!StateFile || nFileError != Z_OK)
 		return;
@@ -173,7 +176,7 @@ void SaveUWORD(const UWORD *data, int num)
 }
 
 /* Value is memory location of data, num is number of type to save */
-void ReadUWORD(UWORD *data, int num)
+void StateSav_ReadUWORD(UWORD *data, int num)
 {
 	if (!StateFile || nFileError != Z_OK)
 		return;
@@ -196,7 +199,7 @@ void ReadUWORD(UWORD *data, int num)
 	}
 }
 
-void SaveINT(const int *data, int num)
+void StateSav_SaveINT(const int *data, int num)
 {
 	if (!StateFile || nFileError != Z_OK)
 		return;
@@ -249,7 +252,7 @@ void SaveINT(const int *data, int num)
 	}
 }
 
-void ReadINT(int *data, int num)
+void StateSav_ReadINT(int *data, int num)
 {
 	if (!StateFile || nFileError != Z_OK)
 		return;
@@ -291,7 +294,7 @@ void ReadINT(int *data, int num)
 	}
 }
 
-void SaveFNAME(const char *filename)
+void StateSav_SaveFNAME(const char *filename)
 {
 	UWORD namelen;
 #ifdef HAVE_GETCWD
@@ -307,24 +310,24 @@ void SaveFNAME(const char *filename)
 
 	namelen = strlen(filename);
 	/* Save the length of the filename, followed by the filename */
-	SaveUWORD(&namelen, 1);
-	SaveUBYTE((const UBYTE *) filename, namelen);
+	StateSav_SaveUWORD(&namelen, 1);
+	StateSav_SaveUBYTE((const UBYTE *) filename, namelen);
 }
 
-void ReadFNAME(char *filename)
+void StateSav_ReadFNAME(char *filename)
 {
 	UWORD namelen = 0;
 
-	ReadUWORD(&namelen, 1);
+	StateSav_ReadUWORD(&namelen, 1);
 	if (namelen >= FILENAME_MAX) {
-		Aprint("Filenames of %d characters not supported on this platform", (int) namelen);
+		Log_print("Filenames of %d characters not supported on this platform", (int) namelen);
 		return;
 	}
-	ReadUBYTE((UBYTE *) filename, namelen);
+	StateSav_ReadUBYTE((UBYTE *) filename, namelen);
 	filename[namelen] = 0;
 }
 
-int SaveAtariState(const char *filename, const char *mode, UBYTE SaveVerbose)
+int StateSav_SaveAtariState(const char *filename, const char *mode, UBYTE SaveVerbose)
 {
 	UBYTE StateVersion = SAVE_VERSION_NUMBER;
 
@@ -336,7 +339,7 @@ int SaveAtariState(const char *filename, const char *mode, UBYTE SaveVerbose)
 
 	StateFile = GZOPEN(filename, mode);
 	if (StateFile == NULL) {
-		Aprint("Could not open %s for state save.", filename);
+		Log_print("Could not open %s for state save.", filename);
 		GetGZErrorText();
 		return FALSE;
 	}
@@ -347,18 +350,51 @@ int SaveAtariState(const char *filename, const char *mode, UBYTE SaveVerbose)
 		return FALSE;
 	}
 
-	SaveUBYTE(&StateVersion, 1);
-	SaveUBYTE(&SaveVerbose, 1);
-	/* The order here is important. Main must be first because it saves the machine type, and
+	StateSav_SaveUBYTE(&StateVersion, 1);
+	StateSav_SaveUBYTE(&SaveVerbose, 1);
+	/* The order here is important. Atari800_StateSave must be first because it saves the machine type, and
 	   decisions on what to save/not save are made based off that later in the process */
-	MainStateSave();
-	CARTStateSave();
-	SIOStateSave();
-	AnticStateSave();
-	CpuStateSave(SaveVerbose);
-	GTIAStateSave();
-	PIAStateSave();
-	POKEYStateSave();
+	Atari800_StateSave();
+	CARTRIDGE_StateSave();
+	SIO_StateSave();
+	ANTIC_StateSave();
+	CPU_StateSave(SaveVerbose);
+	GTIA_StateSave();
+	PIA_StateSave();
+	POKEY_StateSave();
+#ifdef XEP80_EMULATION
+	XEP80_StateSave();
+#else
+	{
+		int local_xep80_enabled = FALSE;
+		StateSav_SaveINT(&local_xep80_enabled, 1);
+	}
+#endif /* XEP80_EMULATION */
+	PBI_StateSave();
+#ifdef PBI_MIO
+	PBI_MIO_StateSave();
+#else
+	{
+		int local_mio_enabled = FALSE;
+		StateSav_SaveINT(&local_mio_enabled, 1);
+	}
+#endif /* PBI_MIO */
+#ifdef PBI_BB
+	PBI_BB_StateSave();
+#else
+	{
+		int local_bb_enabled = FALSE;
+		StateSav_SaveINT(&local_bb_enabled, 1);
+	}
+#endif /* PBI_BB */
+#ifdef PBI_XLD
+	PBI_XLD_StateSave();
+#else
+	{
+		int local_xld_enabled = FALSE;
+		StateSav_SaveINT(&local_xld_enabled, 1);
+	}
+#endif /* PBI_XLD */
 #ifdef DREAMCAST
 	DCStateSave();
 #endif
@@ -375,7 +411,7 @@ int SaveAtariState(const char *filename, const char *mode, UBYTE SaveVerbose)
 	return TRUE;
 }
 
-int ReadAtariState(const char *filename, const char *mode)
+int StateSav_ReadAtariState(const char *filename, const char *mode)
 {
 	char header_string[8];
 	UBYTE StateVersion = 0;  /* The version of the save file */
@@ -389,7 +425,7 @@ int ReadAtariState(const char *filename, const char *mode)
 
 	StateFile = GZOPEN(filename, mode);
 	if (StateFile == NULL) {
-		Aprint("Could not open %s for state read.", filename);
+		Log_print("Could not open %s for state read.", filename);
 		GetGZErrorText();
 		return FALSE;
 	}
@@ -401,7 +437,7 @@ int ReadAtariState(const char *filename, const char *mode)
 		return FALSE;
 	}
 	if (memcmp(header_string, "ATARI800", 8) != 0) {
-		Aprint("This is not an Atari800 state save file.");
+		Log_print("This is not an Atari800 state save file.");
 		GZCLOSE(StateFile);
 		StateFile = NULL;
 		return FALSE;
@@ -409,30 +445,87 @@ int ReadAtariState(const char *filename, const char *mode)
 
 	if (GZREAD(StateFile, &StateVersion, 1) == 0
 	 || GZREAD(StateFile, &SaveVerbose, 1) == 0) {
-		Aprint("Failed read from Atari state file.");
+		Log_print("Failed read from Atari state file.");
 		GetGZErrorText();
 		GZCLOSE(StateFile);
 		StateFile = NULL;
 		return FALSE;
 	}
 
-	if (StateVersion != SAVE_VERSION_NUMBER && StateVersion != 3) {
-		Aprint("Cannot read this state file because it is an incompatible version.");
+	if (StateVersion != SAVE_VERSION_NUMBER && StateVersion < 3) {
+		Log_print("Cannot read this state file because it is an incompatible version.");
 		GZCLOSE(StateFile);
 		StateFile = NULL;
 		return FALSE;
 	}
 
-	MainStateRead();
-	if (StateVersion != 3) {
-		CARTStateRead();
-		SIOStateRead();
+	Atari800_StateRead();
+	if (StateVersion >= 4) {
+		CARTRIDGE_StateRead();
+		SIO_StateRead();
 	}
-	AnticStateRead();
-	CpuStateRead(SaveVerbose);
-	GTIAStateRead();
-	PIAStateRead();
-	POKEYStateRead();
+	ANTIC_StateRead();
+	CPU_StateRead(SaveVerbose, StateVersion);
+	GTIA_StateRead();
+	PIA_StateRead();
+	POKEY_StateRead();
+	if (StateVersion >= 6) {
+#ifdef XEP80_EMULATION
+		XEP80_StateRead();
+#else
+		int local_xep80_enabled;
+		StateSav_ReadINT(&local_xep80_enabled,1);
+		if (local_xep80_enabled) {
+			Log_print("Cannot read this state file because this version does not support XEP80.");
+			GZCLOSE(StateFile);
+			StateFile = NULL;
+			return FALSE;
+		}
+#endif /* XEP80_EMULATION */
+		PBI_StateRead();
+#ifdef PBI_MIO
+		PBI_MIO_StateRead();
+#else
+		{
+			int local_mio_enabled;
+			StateSav_ReadINT(&local_mio_enabled,1);
+			if (local_mio_enabled) {
+				Log_print("Cannot read this state file because this version does not support MIO.");
+				GZCLOSE(StateFile);
+				StateFile = NULL;
+				return FALSE;
+			}
+		}
+#endif /* PBI_MIO */
+#ifdef PBI_BB
+		PBI_BB_StateRead();
+#else
+		{
+			int local_bb_enabled;
+			StateSav_ReadINT(&local_bb_enabled,1);
+			if (local_bb_enabled) {
+				Log_print("Cannot read this state file because this version does not support the Black Box.");
+				GZCLOSE(StateFile);
+				StateFile = NULL;
+				return FALSE;
+			}
+		}
+#endif /* PBI_BB */
+#ifdef PBI_XLD
+		PBI_XLD_StateRead();
+#else
+		{
+			int local_xld_enabled;
+			StateSav_ReadINT(&local_xld_enabled,1);
+			if (local_xld_enabled) {
+				Log_print("Cannot read this state file because this version does not support the 1400XL/1450XLD.");
+				GZCLOSE(StateFile);
+				StateFile = NULL;
+				return FALSE;
+			}
+		}
+#endif /* PBI_XLD */
+	}
 #ifdef DREAMCAST
 	DCStateRead();
 #endif
@@ -531,7 +624,8 @@ static int mem_close(gzFile *stream)
 			memcpy(icon, palette, 32);
 			memcpy(icon + 32, bitmap, 512);
 			ndc_vmu_create_vmu_header(comprmembuf, "Atari800DC",
-			                          "Atari800DC saved state", comprlen, icon);
+						  "Atari800DC " A800DCVERASC " saved state",
+						  comprlen, icon);
 			comprlen = (comprlen + HDR_LEN + 511) & ~511;
 			ndc_vmu_do_crc(comprmembuf, comprlen);
 			status = (fwrite(comprmembuf, 1, comprlen, f) == comprlen) ? 0 : -1;

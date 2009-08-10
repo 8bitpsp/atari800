@@ -19,11 +19,18 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
+/* suppress -ansi -pedantic warning for fdopen: */
+#ifdef __STRICT_ANSI__
+#undef __STRICT_ANSI__
 #include <stdio.h>
+#define __STRICT_ANSI__ 1
+#else
+#include <stdio.h>
+#endif /* __STRICT_ANSI__ */
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_SYS_STAT_H
@@ -48,6 +55,34 @@ int Util_chrieq(char c1, char c2)
 	}
 }
 
+#ifdef __STRICT_ANSI__
+/*
+**  STRICMP.C - Comapres strings, case-insensitive.
+**
+**  public domain by Bob Stout
+**
+*/
+
+/* from http://c.snippets.org/code/stricmp.c */
+int Util_stricmp(const char *str1, const char *str2)
+{
+      int retval = 0;
+
+      while (1)
+      {
+            retval = tolower(*str1++) - tolower(*str2++);
+
+            if (retval)
+                  break;
+
+            if (*str1 && *str2)
+                  continue;
+            else  break;
+      }
+      return retval;
+}
+#endif
+
 char *Util_stpcpy(char *dest, const char *src)
 {
 	size_t len = strlen(src);
@@ -55,9 +90,31 @@ char *Util_stpcpy(char *dest, const char *src)
 	return dest + len;
 }
 
+#ifndef HAVE_STRNCPY
+char *Util_strncpy(char *dest, const char *src, size_t size) {
+	while (size-- > 0) {
+		if ((*dest++ = *src++) == '\0')
+			break;
+	}
+	while (size-- > 0)
+		*dest++ = '\0';
+	return dest;
+}
+#endif
+
+char *safe_strncpy(char *buffer, const char *source, int bufsize)
+{
+	if (buffer == NULL) return NULL;
+	if (bufsize > 0) {
+		strncpy(buffer, source != NULL ? source : "", bufsize);
+		buffer[bufsize-1] = '\0';
+	}
+	return buffer;
+}
+
 char *Util_strlcpy(char *dest, const char *src, size_t size)
 {
-	strncpy(dest, src, size);
+	Util_strncpy(dest, src, size);
 	dest[size - 1] = '\0';
 	return dest;
 }
@@ -203,10 +260,10 @@ char *Util_strdup(const char *s)
 void Util_splitpath(const char *path, char *dir_part, char *file_part)
 {
 	const char *p;
-	/* find the last DIR_SEP_CHAR except the last character */
+	/* find the last Util_DIR_SEP_CHAR except the last character */
 	for (p = path + strlen(path) - 2; p >= path; p--) {
-		if (*p == DIR_SEP_CHAR
-#ifdef BACK_SLASH
+		if (*p == Util_DIR_SEP_CHAR
+#ifdef DIR_SEP_BACKSLASH
 /* on DOSish systems slash can be also used as a directory separator */
 		 || *p == '/'
 #endif
@@ -214,7 +271,7 @@ void Util_splitpath(const char *path, char *dir_part, char *file_part)
 			if (dir_part != NULL) {
 				int len = p - path;
 				if (p == path || (p == path + 2 && path[1] == ':'))
-					/* root dir: include DIR_SEP_CHAR in dir_part */
+					/* root dir: include Util_DIR_SEP_CHAR in dir_part */
 					len++;
 				memcpy(dir_part, path, len);
 				dir_part[len] = '\0';
@@ -224,7 +281,7 @@ void Util_splitpath(const char *path, char *dir_part, char *file_part)
 			return;
 		}
 	}
-	/* no DIR_SEP_CHAR: current dir */
+	/* no Util_DIR_SEP_CHAR: current dir */
 	if (dir_part != NULL)
 		dir_part[0] = '\0';
 	if (file_part != NULL)
@@ -238,11 +295,11 @@ void Util_catpath(char *result, const char *path1, const char *path2)
 #else
 	sprintf(result,
 #endif
-		path1[0] == '\0' || path2[0] == DIR_SEP_CHAR || path1[strlen(path1) - 1] == DIR_SEP_CHAR
-#ifdef BACK_SLASH
+		path1[0] == '\0' || path2[0] == Util_DIR_SEP_CHAR || path1[strlen(path1) - 1] == Util_DIR_SEP_CHAR
+#ifdef DIR_SEP_BACKSLASH
 		 || path2[0] == '/' || path1[strlen(path1) - 1] == '/'
 #endif
-			? "%s%s" : "%s" DIR_SEP_STR "%s", path1, path2);
+			? "%s%s" : "%s" Util_DIR_SEP_STR "%s", path1, path2);
 }
 
 int Util_fileexists(const char *filename)
@@ -353,5 +410,10 @@ int Util_unlink(const char *filename)
 	if (MultiByteToWideChar(CP_ACP, 0, filename, -1, wfilename, FILENAME_MAX) <= 0)
 		return -1;
 	return (DeleteFile(wfilename) != 0) ? 0 : -1;
+}
+#elif defined(WIN32) && !defined(UNICODE)
+int Util_unlink(const char *filename)
+{
+	return (DeleteFile(filename) != 0) ? 0 : -1;
 }
 #endif /* defined(WIN32) && defined(UNICODE) */

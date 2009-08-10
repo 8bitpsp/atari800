@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
@@ -62,7 +62,7 @@ void Sound_Initialise(int *argc, char *argv[])
 		else {
 			if (strcmp(argv[i], "-help") == 0) {
 				help_only = TRUE;
-				Aprint("\t-sound           Enable sound\n"
+				Log_print("\t-sound           Enable sound\n"
 				       "\t-nosound         Disable sound\n"
 				       "\t-dsprate <rate>  Set sample rate in Hz"
 				      );
@@ -83,7 +83,7 @@ void Sound_Initialise(int *argc, char *argv[])
 	}
 	i = AFMT_U8;
 	if (ioctl(dsp_fd, SNDCTL_DSP_SETFMT, &i)) {
-		Aprint("%s: cannot set 8-bit unsigned samples", dspname);
+		Log_print("%s: cannot set 8-bit unsigned samples", dspname);
 		close(dsp_fd);
 		sound_enabled = FALSE;
 		return;
@@ -100,20 +100,20 @@ void Sound_Initialise(int *argc, char *argv[])
 	output_channels = 1;
 #endif
 	if (ioctl(dsp_fd, SNDCTL_DSP_CHANNELS, &output_channels)) {
-		Aprint("%s: SNDCTL_DSP_CHANNELS(%1) failed", dspname, output_channels);
+		Log_print("%s: SNDCTL_DSP_CHANNELS(%1) failed", dspname, output_channels);
 		close(dsp_fd);
 		sound_enabled = FALSE;
 		return;
 	}
 
 	if (ioctl(dsp_fd, SNDCTL_DSP_SPEED, &dsprate)) {
-		Aprint("%s: cannot set %d sample rate", dspname, dsprate);
+		Log_print("%s: cannot set %d sample rate", dspname, dsprate);
 		close(dsp_fd);
 		sound_enabled = FALSE;
 		return;
 	}
 	if (dsprate < 1000 || dsprate > 65535) {
-		Aprint("%s: %d sample rate is not supported", dspname, dsprate);
+		Log_print("%s: %d sample rate is not supported", dspname, dsprate);
 		close(dsp_fd);
 		sound_enabled = FALSE;
 		return;
@@ -124,7 +124,7 @@ void Sound_Initialise(int *argc, char *argv[])
 #else
 	pokey_chips = 1;
 #endif
-	Pokey_sound_init(FREQ_17_EXACT, dsprate, pokey_chips, 0);
+	POKEYSND_Init(POKEYSND_FREQ_17_EXACT, dsprate, pokey_chips, 0);
 }
 
 void Sound_Pause(void)
@@ -158,18 +158,18 @@ void Sound_Update(void)
 		return;
 	/* compute number of samples for one Atari frame
 	   (assuming 60Hz for NTSC and 50Hz for PAL) */
-	len = dsprate / (tv_mode == TV_NTSC ? 60 : 50) * pokey_chips;
+	len = dsprate / (Atari800_tv_mode == Atari800_TV_NTSC ? 60 : 50) * pokey_chips;
 
 #if 0
 	/* this code is not needed because buffer[] is big enough */
 	while (len > sizeof(buffer)) {
-		Pokey_process(buffer, sizeof(buffer));
+		POKEYSND_Process(buffer, sizeof(buffer));
 		write(dsp_fd, buffer, sizeof(buffer));
 		len -= sizeof(buffer);
 	}
 #endif
 
-	Pokey_process(buffer, len);
+	POKEYSND_Process(buffer, len);
 
 #if 0
 	/* For some unknown reason, this is needed
@@ -197,7 +197,7 @@ void Sound_Update(void)
 				buffer[pos] = buffer[pos+1] = buffer[i];
 			}
 		}
-		else if (! stereo_enabled) {
+		else if (! POKEYSND_stereo_enabled) {
 			/* only single Pokey plays - copy left channel to right channel */
 			int i;
 			for (i = 0; i < len; i+=2) {
@@ -212,7 +212,7 @@ void Sound_Update(void)
 			int i;
 			for (i = 0; i < len/2; i++) {
 				int pos = i * 2;
-				buffer[i] = (stereo_enabled ? buffer[pos]/2 + buffer[pos+1]/2 :
+				buffer[i] = (POKEYSND_stereo_enabled ? buffer[pos]/2 + buffer[pos+1]/2 :
 							 buffer[pos]);
 			}
 		}

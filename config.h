@@ -1,9 +1,6 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Define to use back slash as directory separator. */
-/* #undef BACK_SLASH */
-
 /* Target: standard I/O. */
 /* #undef BASIC */
 
@@ -20,10 +17,10 @@
 #define CONSOLE_SOUND 1
 
 /* Define to activate crash menu after CIM instruction. */
-/* #define CRASH_MENU 1 */
+/* #undef CRASH_MENU */
 
 /* Define to disable bitmap graphics emulation in CURSES target. */
-/* #define CURSES_BASIC 1 */
+/* #undef CURSES_BASIC */
 
 /* Alternate config filename due to 8+3 fs limit. */
 /* #undef DEFAULT_CFG_NAME */
@@ -31,11 +28,17 @@
 /* Target: Windows with DirectX. */
 /* #undef DIRECTX */
 
+/* Define to use back slash as directory separator. */
+/* #undef DIR_SEP_BACKSLASH */
+
 /* Target: DOS VGA. */
 /* #undef DOSVGA */
 
 /* Define to enable DOS style drives support. */
 /* #undef DOS_DRIVES */
+
+/* Define to enable event recording. */
+/* #undef EVENT_RECORDING */
 
 /* Target: Atari Falcon system. */
 /* #undef FALCON */
@@ -204,6 +207,9 @@
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
 
+/* Define to 1 if you have the `strncpy' function. */
+#define HAVE_STRNCPY 1
+
 /* Define to 1 if you have the `strrchr' function. */
 #define HAVE_STRRCHR 1
 
@@ -281,8 +287,14 @@
 /* Define to 1 if you have the `vsnprintf' function. */
 #define HAVE_VSNPRINTF 1
 
+/* Define to 1 if you have the <winsock2.h> header file. */
+/* #undef HAVE_WINSOCK2_H */
+
 /* Define to allow sound interpolation. */
 #define INTERPOLATE_SOUND 1
+
+/* Target: Java NestedVM. */
+/* #undef JAVANVM */
 
 /* Define to use LINUX joystick. */
 /* #undef LINUX_JOYSTICK */
@@ -315,6 +327,12 @@
 /* Define to allow color changes inside a scanline. */
 /* #undef NEW_CYCLE_EXACT */
 
+/* Define to use nonlinear POKEY mixing. */
+/* #undef NONLINEAR_MIXING */
+
+/* Use NTSC video filter. */
+/* #undef NTSC_FILTER */
+
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT "pstehlik@sophics.cz"
 
@@ -322,16 +340,28 @@
 #define PACKAGE_NAME "Atari800"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Atari800 2.0.3"
+#define PACKAGE_STRING "Atari800 2.1.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "atari800"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.3"
+#define PACKAGE_VERSION "2.1.0"
 
 /* Define to use page-based attribute array. */
 /* #undef PAGED_ATTRIB */
+
+/* Define to emulate the Black Box. */
+#define PBI_BB 1
+
+/* Define to emulate the MIO board. */
+#define PBI_MIO 1
+
+/* A prototype 80 column card for the 1090 expansion box. */
+/* #undef PBI_PROTO80 */
+
+/* Define to emulate the 1400XL/1450XLD. */
+#define PBI_XLD 1
 
 /* Target: Sony PlayStation 2. */
 /* #undef PS2 */
@@ -341,6 +371,12 @@
 
 /* Define to use R: device. */
 /* #undef R_IO_DEVICE */
+
+/* Define to use IP network connection with the R: device. */
+/* #undef R_NETWORK */
+
+/* Define to use the host serial port with the R: device. */
+/* #undef R_SERIAL */
 
 /* Target: SDL library. */
 /* #undef SDL */
@@ -370,19 +406,19 @@
 #define STEREO_SOUND 1
 
 /* Save additional config file options. */
-/* #undef SUPPORTS_ATARI_CONFIGSAVE */
+/* #undef SUPPORTS_PLATFORM_CONFIGSAVE */
 
 /* Additional config file options. */
-/* #undef SUPPORTS_ATARI_CONFIGURE */
+/* #undef SUPPORTS_PLATFORM_CONFIGURE */
 
-/* Target: Linux with SVGALib. */
-/* #undef SVGALIB */
+/* Update the Palette if it changed. */
+/* #undef SUPPORTS_PLATFORM_PALETTEUPDATE */
 
-/* Define to use Toshiba Joystick Mouse support. */
-/* #undef SVGA_JOYMOUSE */
+/* Platform-specific sleep function. */
+/* #undef SUPPORTS_PLATFORM_SLEEP */
 
-/* Define for drawing every 1/50 sec only 1/refresh of screen. */
-/* #undef SVGA_SPEEDUP */
+/* Reinitialise the sound system. */
+/* #undef SUPPORTS_SOUND_REINIT */
 
 /* Alternate system-wide config file for non-Unix OS. */
 /* #undef SYSTEM_WIDE_CFG_FILE */
@@ -393,11 +429,8 @@
 /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 /* #undef TM_IN_SYS_TIME */
 
-/* Define to use clock() instead of gettimeofday(). */
-/* #undef USE_CLOCK */
-
 /* Target: Curses-compatible library. */
-/* #define USE_CURSES 1 */
+/* #undef USE_CURSES */
 
 /* Define for using cursor/ctrl keys for keyboard joystick. */
 /* #undef USE_CURSORBLOCK */
@@ -420,6 +453,9 @@
 
 /* Target: Standard X11. */
 /* #undef X11 */
+
+/* Emulate the XEP80. */
+/* #undef XEP80_EMULATION */
 
 /* Target: X11 with XView. */
 /* #undef XVIEW */

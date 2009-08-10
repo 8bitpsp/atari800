@@ -25,6 +25,27 @@ Appending to existing tapes is not allowed. You have to re-insert (select
 again in the tape dialog) a just saved tape when you want to load from it
 in order to rewind it.
 
+MIO and Black Box
+==================
+You need ROM images (not provided.)
+Make a blank SCSI disk image (using dd for instance.)
+Set MIO_SCSI_DISK or BB_SCSI_DISK to the disk image name.
+Use 256 byte sectors for the Black Box.
+Don't use SASI.
+Use ALT-Backslash for the Black Box menu.
+Don't use the OS patches, use -nopatchall.  The patches conflict with D1xx
+
+1400XL/1450XLD
+==================
+You need ROM images (not provided.)
+Don't use the OS patches, use -nopatchall.  The patches conflict with D1xx
+The Self test can talk.
+You can use the V: device to talk.
+If you set the drives to empty, then a message appears on the 1450XLD screen
+asking you to insert a disk.
+If you press select when booting, the behavior of the 1450XLD disks is changed.
+I believe it slows down for compability.
+
 Command line options
 ====================
 
@@ -51,6 +72,10 @@ Command line options
 -b                    Use OS/B for Atari 800
 -c                    Enable RAM between 0xc000 and 0xcfff in Atari 800
 
+-axlon <n>            Use Atari 800 Axlon memory expansion: <n> k total RAM
+-axlon0f              Use Axlon shadow at 0x0fc0-0x0fff
+-mosaic <n>           Use 400/800 Mosaic memory expansion: <n> k total RAM
+
 -pal                  Emulate PAL TV mode
 -ntsc                 Emulate NTSC TV mode
 
@@ -66,8 +91,13 @@ Command line options
 -tape <filename>      Attach cassette image (CAS format or raw file)
 -boottape <filename>  Attach cassette image and boot it
 
+-1400                 Emulate the Atari 1400XL
+-xld                  Emulate the Atari 1450XLD
+-bb                   Emulate the CSS Black Box
+-mio                  Emulate the ICD MIO board
+
 -nopatch              Don't patch SIO routine in OS
--nopatchall           Don't patch OS at all, H: and P: devices won't work
+-nopatchall           Don't patch OS at all, H:, P: and R: devices won't work
 -H1 <path>            Set path for H1: device
 -H2 <path>            Set path for H2: device
 -H3 <path>            Set path for H3: device
@@ -78,6 +108,8 @@ Command line options
 
 -rtime                Enable R-Time 8 emulation
 -nortime              Disable R-Time 8 emulation
+
+-rdevice [<dev>]      Enable R: device (<dev> can be host serial device name)
 
 -mouse off            Do not use mouse
 -mouse pad            Emulate paddles
@@ -92,16 +124,29 @@ Command line options
 -mouseport <num>      Set mouse port 1-4 (default 1)
 -mousespeed <num>     Set mouse speed 1-9 (default 3)
 -multijoy             Emulate MultiJoy4 interface
+-directmouse          Use mouse's absolute position
+-cx85 <num>           Emulate CX85 numeric keypad on port <num>
+-grabmouse            SDL only, prevent mouse pointer from leaving the window
+
+-record <filename>    Record input to <filename>
+-playback <filename>  Playback input from <filename>
 
 -refresh <rate>       Set screen refresh rate
--artif <mode>         Set artifacting mode 0-4 (0 = disable)
--palette <filename>   Read Atari colors from ACT file
--black <num>          Set black level 0-255
--while <num>          Set white level 0-255
--colors <num>         Set color intensity
--genpal               Generate artifical palette
--colshift <num>       Set color shift (-genpal only)
+-artif <mode>         Set artifacting mode 0-4 (0 = disable) (see also -ntscemu)
+-paletten <filename>  Read Atari NTSC colors from ACT file
+-palettep <filename>  Read Atari PAL colors from ACT file
+-blackn <num>         Set NTSC black level 0-255
+-blackp <num>         Set PAL black level 0-255
+-whiten <num>         Set NTSC white level 0-255
+-whitep <num>         Set PAL white level 0-255
+-colorsn <num>        Set NTSC color intensity
+-colorsp <num>        Set PAL color intensity
+-genpaln              Generate artificial NTSC palette
+-genpalp              Generate artificial PAL palette
+-colshiftn <num>      Set color shift (-genpaln only)
+-colshiftp <num>      Set color shift (-genpalp only)
 -screenshots <pattern>Set filename pattern for screenshots
+-showspeed            Show percentage of actual speed
 
 -sound                Enable sound
 -nosound              Disable sound
@@ -147,6 +192,11 @@ Falcon version options
 -joyswap              Swap joysticks
 
 
+Java NestedVM version options
+----------------------
+-scale <n>            Scale width and height by <n>
+
+
 SDL version options
 -------------------
 
@@ -164,6 +214,10 @@ SDL version options
 -joy1 </dev/lp1>      --""-- only when LPTjoy support compiled in
 
 -ntscemu              Emulate NTSC composite video (640x480x16 only)
+This includes NTSC TV artifacts.  "-artif" is not needed in this mode and will
+not work.  This mode does not use a palette.  The video signal is emulated
+instead.  Palette options such as -genpaln have no effect in this mode.
+The following items are for -ntscemu only:
 -ntsc_hue <n>         Set NTSC hue -1..1 (like TV Tint control)
 -ntsc_sat <n>         Set NTSC saturation (like TV Colour control)
 -ntsc_cont <n>        Set NTSC contrast (also called white level)
@@ -177,12 +231,10 @@ SDL version options
 -ntsc_ramp <n>        Set NTSC saturation ramp factor (amount by which
                       bright colours become desaturated or washed out)
 -scanlines <n>        Set scanlines percentage (ntscemu only)
-
-
-SVGALIB version options
------------------------
-
--interlace            Generate screen with interlace
+-scanlinesnoint       Disable scanlines interpolation (ntscemu only)
+-proto80              Emulate a prototype 80 column board for the 1090
+-xep80                Emulate the XEP80
+-xep80port <n>        Use XEP80 on joystick port <n>
 
 
 X11 options
@@ -197,7 +249,6 @@ X11 options
 -clip_height          Height of the clipping area
 -private_cmap         Use private colormap
 
--fps                  Show framerate
 -sio                  Show SIO monitor
 -x11bug               Enable debug code in atari_x11.c
 
@@ -210,27 +261,64 @@ Keyboard, joystick and other controllers
 Unlike PC Xformer, I have not tried to emulate the exact keyboard layout,
 instead, I have tried to make your native keyboard work as normal.
 
-F1         Built in user interface
-F2         Option key
-F3         Select key
-F4         Start key
-F5         Reset key ("warm reset")
-Shift+F5   Reboot ("cold reset")
-F6         Help key (XL/XE only)
-F7         Break key
-F8         Enter monitor
-F9         Exit emulator
-F10        Save screenshot
-Shift+F10  Save interlaced screenshot
-Alt+R      Run Atari program
-Alt+D      Disk management
-Alt+C      Cartridge management
-Alt+Y      Select system
-Alt+O      Sound settings
-Alt+W      Sound recording start/stop
-Alt+S      Save state file
-Alt+L      Load state file
-Alt+A      About the emulator
+F1                   Built in user interface
+F2                   Option key
+F3                   Select key
+F4                   Start key
+F5                   Reset key ("warm reset")
+Shift+F5             Reboot ("cold reset")
+F6                   Help key (XL/XE only)
+F7                   Break key
+F8                   Enter monitor
+F9                   Exit emulator
+F10                  Save screenshot
+Shift+F10            Save interlaced screenshot
+Alt+R                Run Atari program
+Alt+D                Disk management
+Alt+C                Cartridge management
+Alt+Y                Select system
+Alt+O                Sound settings
+Alt+W                Sound recording start/stop
+Alt+S                Save state file
+Alt+L                Load state file
+Alt+A                About the emulator
+Insert               Insert line (Atari Shift+'>')
+Ctrl+Insert          Insert character (Atari Ctrl+'>')
+Shift+Ctrl+Insert    Shift+Ctrl+'>'
+Delete               Delete line (Atari Shift+Backspace)
+Shift+Backspace      Delete line (Atari Shift+Backspace)
+Ctrl+Delete          Delete character (Atari Ctrl+Backspace)
+Ctrl+Backspace       Delete character (Atari Ctrl+Backspace)
+Shift+Ctrl+Delete    Shift+Ctrl+Backspace
+Shift+Ctrl+Backspace Shift+Ctrl+Backspace
+Home                 Clear (Atari Shift+'<')
+Ctrl+Home            Ctrl+'<' (also clears screen)
+Shift+Ctrl+Home      Shift+Ctrl+'<'
+~                    Inverse video
+Up                   Up (Atari Ctrl+'-')
+Down                 Down (Atari Ctrl+'=')
+Left                 Left (Atari ctrl+'+')
+Right                Right (Atari ctrl+'*')
+Ctrl+Up              -
+Ctrl+Down            =
+Ctrl+Left            +
+Ctrl+Right           *
+Shift+Up             _ (Atari Shift+'-')
+Shift+Down           | (Atari Shift+'=')
+Shift+Left           \ (Atari Shift+'+')
+Shift+Right          ^ (Atari Shift+'*')
+Shift+Ctrl+Up        Shift+Ctrl+-
+Shift+Ctrl+Down      Shift+Ctrl+=
+Ctrl+'\'             Ctrl+Esc  (Workaround for Windows)
+Shift+Ctrl+'\'       Shift+Ctrl+Esc (Workaround for Windows)
+
+CX85 Keypad (if enabled):
+host keypad 0123456789-.   0123456789-.
+host keypad /              NO
+host keypad Ctrl+/         ESCAPE
+host keypad *              DELETE
+host keypad +              YES
+host keypad Enter          +ENTER
 
 Paddles, Atari touch tablet, Koala pad, light pen, light gun,
 ST/Amiga mouse, Atari trak-ball, joystick and Atari 5200 analog
@@ -302,8 +390,9 @@ RSUPER     CapsToggle (+Shift = CapsLock)
 LAlt+F     Switch fullscreen (probably doesn't work in Windows)
 LAlt+G     Switch WIDTH_MODE (so you can set 320x240)
 LAlt+B     Switch BLACK-AND-WHITE
-LAlt+J     Swap _keyboard_emulated_ joysticks
+LAlt+J     Swap joysticks 0 and 1
 LAlt+E     Switch bpp (for debug only, will be removed soon)
+LAlt+M     Grab mouse (prevents mouse pointer from leaving the window)
 
 These keys work with the NTSC composite video emualtion (-ntscemu):
 (This interface should be considered experimental and is subject to change)
@@ -325,61 +414,15 @@ LAlt+;     Decrease NTSC hue (like TV Tint control)
 LAlt+'     Increase NTSC hue (like TV Tint control)
 LAlt+Ins   Decrease NTSC saturation ramp(reduce saturation for bright colours) 
 LAlt+Ins   Increase NTSC saturation ramp(reduce saturation for bright colours) 
+LAlt+Shift+X Enable/disable XEP80 screen (use with -xep80)
 
-
-Apart from standard joysticks (handled by the SDL) two keyboard joysticks
-are supported.
-
-Keyboard joystick 0 is operated by the numeric keypad.
-
-        7 8 9
-         \|/
-        4 5 6
-         /|\
-        1 2 3
-
-        And left control is the fire key.
-
-Keyboard joystick 1 is by default mapped on the following keys:
-
-        q w e
-         \|/
-        a s d
-         /|\
-        z x c
-
-        And Tab is the fire key.
-
+Apart from standard joysticks (handled by the SDL) up to two keyboard joysticks
+are supported. The keys used for joystick directions and the trigger can be
+freely defined in the config UI (Controller Config -> Define layout).
 Keyboard joystick emulation can be enabled/disabled in the Controller Config.
 By default, joy 0 is enabled and joy 1 is disabled (to not steal normal
-qweadzxc keys in the emulator).
+AWDS keys in the emulator).
 
-To redefine keys for joystick emulation edit the Atari800 config file and
-modify the SDL_JOY_* options (see FAQ). You can also edit the default values
-in the atari_sdl.c, then recompile Atari800. In source you can also turn
-off sound or change defaults (FULLSCREEN, BW, SWAP_JOYSTICKS, WIDTH_MODE).
-
-
-SVGALIB keyboard, joystick and other controllers
-------------------------------------------------
-
-F11        Joystick autofire on/off
-`          Caps key
-
-The Ctrl+Shift keyboard combinations are implemented using the left Alt key.
-
-Joystick 0 is operated by the numeric keypad (make sure that the numeric
-keypad has been enabled).
-
-        7 8 9
-         \|/
-        4 5 6
-         /|\
-        1 2 3
-
-        And 0 is the fire key.
-
-Mouse not supported in this version.
 
 X11 keyboard, joystick and other controllers
 --------------------------------------------

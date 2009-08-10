@@ -2,7 +2,7 @@
  * ui_basic.c - Atari look&feel user interface driver
  *
  * Copyright (C) 1995-1998 David Firth
- * Copyright (C) 1998-2006 Atari800 development team (see DOC/CREDITS)
+ * Copyright (C) 1998-2008 Atari800 development team (see DOC/CREDITS)
  *
  * This file is part of the Atari800 emulator project which emulates
  * the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "config.h"
@@ -46,26 +46,24 @@
 #include "antic.h"
 #include "atari.h"
 #include "input.h"
+#include "akey.h"
 #include "log.h"
 #include "memory.h"
 #include "platform.h"
-#include "screen.h" /* atari_screen */
+#include "screen.h" /* Screen_atari */
 #include "ui.h"
 #include "util.h"
 
 #ifdef USE_CURSES
-void curses_clear_screen(void);
-void curses_clear_rectangle(int x1, int y1, int x2, int y2);
-void curses_putch(int x, int y, int ascii, UBYTE fg, UBYTE bg);
+extern void curses_clear_screen(void);
+extern void curses_clear_rectangle(int x1, int y1, int x2, int y2);
+extern void curses_putch(int x, int y, int ascii, UBYTE fg, UBYTE bg);
 #endif
 
 static int initialised = FALSE;
 static UBYTE charset[1024];
 
-#ifndef DREAMCAST
-static
-#endif
-const unsigned char key_to_ascii[256] =
+const unsigned char UI_BASIC_key_to_ascii[256] =
 {
 	0x6C, 0x6A, 0x3B, 0x00, 0x00, 0x6B, 0x2B, 0x2A, 0x6F, 0x00, 0x70, 0x75, 0x9B, 0x69, 0x2D, 0x3D,
 	0x76, 0x00, 0x63, 0x00, 0x00, 0x62, 0x78, 0x7A, 0x34, 0x00, 0x33, 0x36, 0x1B, 0x35, 0x32, 0x31,
@@ -95,14 +93,14 @@ static int GetKeyPress(void)
 {
 	int keycode;
 
-	if (alt_function >= 0)
+	if (UI_alt_function >= 0)
 		return 0x1b; /* escape - go to Main Menu */
 
-	Atari_DisplayScreen();
+	PLATFORM_DisplayScreen();
 
 	for (;;) {
 		static int rep = KB_DELAY;
-		if (Atari_Keyboard() == AKEY_NONE) {
+		if (PLATFORM_Keyboard() == AKEY_NONE) {
 			rep = KB_DELAY;
 			break;
 		}
@@ -111,39 +109,39 @@ static int GetKeyPress(void)
 			break;
 		}
 		rep--;
-		atari_sync();
+		Atari800_Sync();
 	}
 
 	do {
-		atari_sync();
-		keycode = Atari_Keyboard();
+		Atari800_Sync();
+		keycode = PLATFORM_Keyboard();
 		switch (keycode) {
 		case AKEY_WARMSTART:
-			alt_function = MENU_RESETW;
+			UI_alt_function = UI_MENU_RESETW;
 			return 0x1b; /* escape */
 		case AKEY_COLDSTART:
-			alt_function = MENU_RESETC;
+			UI_alt_function = UI_MENU_RESETC;
 			return 0x1b; /* escape */
 		case AKEY_EXIT:
-			alt_function = MENU_EXIT;
+			UI_alt_function = UI_MENU_EXIT;
 			return 0x1b; /* escape */
 		case AKEY_UI:
-			if (alt_function >= 0) /* Alt+letter, not F1 */
+			if (UI_alt_function >= 0) /* Alt+letter, not F1 */
 				return 0x1b; /* escape */
 			break;
 		case AKEY_SCREENSHOT:
-			alt_function = MENU_PCX;
+			UI_alt_function = UI_MENU_PCX;
 			return 0x1b; /* escape */
 		case AKEY_SCREENSHOT_INTERLACE:
-			alt_function = MENU_PCXI;
+			UI_alt_function = UI_MENU_PCXI;
 			return 0x1b; /* escape */
 		default:
-			alt_function = -1; /* forget previous Main Menu shortcut */
+			UI_alt_function = -1; /* forget previous Main Menu shortcut */
 			break;
 		}
 	} while (keycode < 0);
 
-	return key_to_ascii[keycode];
+	return UI_BASIC_key_to_ascii[keycode];
 }
 
 static void Plot(int fg, int bg, int ch, int x, int y)
@@ -152,7 +150,7 @@ static void Plot(int fg, int bg, int ch, int x, int y)
 	curses_putch(x, y, ch, (UBYTE) fg, (UBYTE) bg);
 #else /* USE_CURSES */
 	const UBYTE *font_ptr = charset + (ch & 0x7f) * 8;
-	UBYTE *ptr = (UBYTE *) atari_screen + 24 * ATARI_WIDTH + 32 + y * (8 * ATARI_WIDTH) + x * 8;
+	UBYTE *ptr = (UBYTE *) Screen_atari + 24 * Screen_WIDTH + 32 + y * (8 * Screen_WIDTH) + x * 8;
 	int i;
 	int j;
 
@@ -160,13 +158,13 @@ static void Plot(int fg, int bg, int ch, int x, int y)
 		UBYTE data = *font_ptr++;
 		for (j = 0; j < 8; j++) {
 #ifdef USE_COLOUR_TRANSLATION_TABLE
-			video_putbyte(ptr++, (UBYTE) colour_translation_table[data & 0x80 ? fg : bg]);
+			ANTIC_VideoPutByte(ptr++, (UBYTE) colour_translation_table[data & 0x80 ? fg : bg]);
 #else
-			video_putbyte(ptr++, (UBYTE) (data & 0x80 ? fg : bg));
+			ANTIC_VideoPutByte(ptr++, (UBYTE) (data & 0x80 ? fg : bg));
 #endif
 			data <<= 1;
 		}
-		ptr += ATARI_WIDTH - 8;
+		ptr += Screen_WIDTH - 8;
 	}
 #endif /* USE_CURSES */
 }
@@ -216,16 +214,16 @@ static void ClearRectangle(int bg, int x1, int y1, int x2, int y2)
 #ifdef USE_CURSES
 	curses_clear_rectangle(x1, y1, x2, y2);
 #else
-	UBYTE *ptr = (UBYTE *) atari_screen + ATARI_WIDTH * 24 + 32 + x1 * 8 + y1 * (ATARI_WIDTH * 8);
+	UBYTE *ptr = (UBYTE *) Screen_atari + Screen_WIDTH * 24 + 32 + x1 * 8 + y1 * (Screen_WIDTH * 8);
 	int bytesperline = (x2 - x1 + 1) << 3;
-	UBYTE *end_ptr = (UBYTE *) atari_screen + ATARI_WIDTH * 32 + 32 + y2 * (ATARI_WIDTH * 8);
+	UBYTE *end_ptr = (UBYTE *) Screen_atari + Screen_WIDTH * 32 + 32 + y2 * (Screen_WIDTH * 8);
 	while (ptr < end_ptr) {
 #ifdef USE_COLOUR_TRANSLATION_TABLE
-		video_memset(ptr, (UBYTE) colour_translation_table[bg], bytesperline);
+		ANTIC_VideoMemset(ptr, (UBYTE) colour_translation_table[bg], bytesperline);
 #else
-		video_memset(ptr, (UBYTE) bg, bytesperline);
+		ANTIC_VideoMemset(ptr, (UBYTE) bg, bytesperline);
 #endif
-		ptr += ATARI_WIDTH;
+		ptr += Screen_WIDTH;
 	}
 #endif /* USE_CURSES */
 }
@@ -236,9 +234,9 @@ static void ClearScreen(void)
 	curses_clear_screen();
 #else
 #ifdef USE_COLOUR_TRANSLATION_TABLE
-	video_memset((UBYTE *) atari_screen, colour_translation_table[0x00], ATARI_HEIGHT * ATARI_WIDTH);
+	ANTIC_VideoMemset((UBYTE *) Screen_atari, colour_translation_table[0x00], Screen_HEIGHT * Screen_WIDTH);
 #else
-	video_memset((UBYTE *) atari_screen, 0x00, ATARI_HEIGHT * ATARI_WIDTH);
+	ANTIC_VideoMemset((UBYTE *) Screen_atari, 0x00, Screen_HEIGHT * Screen_WIDTH);
 #endif
 	ClearRectangle(0x94, 0, 0, 39, 23);
 #endif /* USE_CURSES */
@@ -249,11 +247,26 @@ static void TitleScreen(const char *title)
 	CenterPrint(0x9a, 0x94, title, 0);
 }
 
-void BasicUIMessage(const char *msg)
+static void BasicUIMessage(const char *msg, int waitforkey)
 {
+	ClearRectangle(0x94, 1, 22, 38, 22);
 	CenterPrint(0x94, 0x9a, msg, 22);
-	GetKeyPress();
+	if (waitforkey)
+		GetKeyPress();
+	else
+		PLATFORM_DisplayScreen();
 }
+
+#ifdef SDL
+int GetRawKey(void)
+{
+	ClearRectangle(0x94, 13, 11, 25, 13);
+	Box(0x9a, 0x94, 13, 11, 25, 13);
+	CenterPrint(0x94, 0x9a, "Press a key", 12);
+	PLATFORM_DisplayScreen();
+	return PLATFORM_GetRawKey();
+}
+#endif
 
 static int Select(int default_item, int nitems, const char *item[],
                   const char *prefix[], const char *suffix[],
@@ -325,7 +338,7 @@ static int Select(int default_item, int nitems, const char *item[],
 			switch (ascii) {
 			case 0x1c:				/* Up */
 				if (drag) {
-					*seltype = USER_DRAG_UP;
+					*seltype = UI_USER_DRAG_UP;
 					return index;
 				}
 				tmp_index = index;
@@ -339,7 +352,7 @@ static int Select(int default_item, int nitems, const char *item[],
 				continue;
 			case 0x1d:				/* Down */
 				if (drag) {
-					*seltype = USER_DRAG_DOWN;
+					*seltype = UI_USER_DRAG_DOWN;
 					return index;
 				}
 				tmp_index = index;
@@ -364,13 +377,13 @@ static int Select(int default_item, int nitems, const char *item[],
 			case 0x7f:				/* Tab (for exchanging disk directories) */
 				return -2;			/* GOLDA CHANGED */
 			case 0x20:				/* Space */
-				*seltype = USER_TOGGLE;
+				*seltype = UI_USER_TOGGLE;
 				return index;
 			case 0x7e:				/* Backspace */
-				*seltype = USER_DELETE;
+				*seltype = UI_USER_DELETE;
 				return index;
 			case 0x9b:				/* Return=Select */
-				*seltype = USER_SELECT;
+				*seltype = UI_USER_SELECT;
 				return index;
 			case 0x1b:				/* Esc=Cancel */
 				return -1;
@@ -391,11 +404,11 @@ static int Select(int default_item, int nitems, const char *item[],
 	}
 }
 
-int BasicUISelect(const char *title, int flags, int default_item, const tMenuItem *menu, int *seltype)
+static int BasicUISelect(const char *title, int flags, int default_item, const UI_tMenuItem *menu, int *seltype)
 {
 	int nitems;
 	int index;
-	const tMenuItem *pmenu;
+	const UI_tMenuItem *pmenu;
 	static const char *prefix[100];
 	static const char *item[100];
 	static const char *suffix[100];
@@ -407,16 +420,16 @@ int BasicUISelect(const char *title, int flags, int default_item, const tMenuIte
 	nitems = 0;
 	index = 0;
 	for (pmenu = menu; pmenu->item != NULL; pmenu++) {
-		if (pmenu->flags != ITEM_HIDDEN) {
+		if (pmenu->flags != UI_ITEM_HIDDEN) {
 			prefix[nitems] = pmenu->prefix;
 			item[nitems] = pmenu->item;
-			if (pmenu->flags & ITEM_TIP) {
+			if (pmenu->flags & UI_ITEM_TIP) {
 				suffix[nitems] = NULL;
 				tip[nitems] = pmenu->suffix;
 			}
 			else {
-				if ((pmenu->flags & ITEM_TYPE) == ITEM_CHECK) {
-					if (pmenu->flags & ITEM_CHECKED)
+				if ((pmenu->flags & UI_ITEM_TYPE) == UI_ITEM_CHECK) {
+					if (pmenu->flags & UI_ITEM_CHECKED)
 						suffix[nitems] = "Yes";
 					else
 						suffix[nitems] = "No ";
@@ -435,7 +448,7 @@ int BasicUISelect(const char *title, int flags, int default_item, const tMenuIte
 	if (nitems == 0)
 		return -1; /* cancel immediately */
 
-	if (flags & SELECT_POPUP) {
+	if (flags & UI_SELECT_POPUP) {
 		int i;
 		w = 0;
 		for (i = 0; i < nitems; i++) {
@@ -468,11 +481,11 @@ int BasicUISelect(const char *title, int flags, int default_item, const tMenuIte
 	Box(0x9a, 0x94, x1, y1, x2, y2);
 	index = Select(index, nitems, item, prefix, suffix, tip, nonselectable,
 	                nitems, 1, x1 + 1, y1 + 1, w,
-	                (flags & SELECT_DRAG) ? TRUE : FALSE, NULL, seltype);
+	                (flags & UI_SELECT_DRAG) ? TRUE : FALSE, NULL, seltype);
 	if (index < 0)
 		return index;
 	for (pmenu = menu; pmenu->item != NULL; pmenu++) {
-		if (pmenu->flags != ITEM_HIDDEN) {
+		if (pmenu->flags != UI_ITEM_HIDDEN) {
 			if (index == 0)
 				return pmenu->retval;
 			index--;
@@ -482,7 +495,7 @@ int BasicUISelect(const char *title, int flags, int default_item, const tMenuIte
 	return -1;
 }
 
-int BasicUISelectInt(int default_value, int min_value, int max_value)
+static int BasicUISelectInt(int default_value, int min_value, int max_value)
 {
 	static char item_values[100][4];
 	static const char *items[100];
@@ -755,7 +768,7 @@ static void GetDirectory(const char *directory)
 		FilenamesSort(filenames, filenames + n_filenames);
 	}
 	else {
-		Aprint("Error opening '%s' directory", directory);
+		Log_print("Error opening '%s' directory", directory);
 	}
 #ifdef PS2
 	FilenamesAdd(Util_strdup("[mc0:]"));
@@ -850,14 +863,14 @@ static int FileSelector(char *path, int select_dir, char pDirectories[][FILENAME
 		   files in the directory. */
 		/* The extra spaces are needed to clear the previous window title. */
 		TitleScreen("            Please wait...            ");
-		Atari_DisplayScreen();
+		PLATFORM_DisplayScreen();
 
 		GetDirectory(current_dir);
 
 		if (n_filenames == 0) {
 			/* FIXME: change to a safe directory */
 			FilenamesFree();
-			BasicUIMessage("No files inside directory");
+			BasicUIMessage("No files inside directory", 1);
 			return FALSE;
 		}
 
@@ -912,7 +925,7 @@ static int FileSelector(char *path, int select_dir, char pDirectories[][FILENAME
 				FilenamesFree();
 				return FALSE;
 			}
-			if (seltype == USER_DELETE) {
+			if (seltype == UI_USER_DELETE) {
 				/* Backspace = parent directory */
 				char new_dir[FILENAME_MAX];
 				Util_splitpath(current_dir, new_dir, highlighted_file + 1);
@@ -922,10 +935,10 @@ static int FileSelector(char *path, int select_dir, char pDirectories[][FILENAME
 					strcatchr(highlighted_file, ']');
 					break;
 				}
-				BasicUIMessage("Cannot enter parent directory");
+				BasicUIMessage("Cannot enter parent directory", 1);
 				continue;
 			}
-			if (seltype == USER_TOGGLE && select_dir) {
+			if (seltype == UI_USER_TOGGLE && select_dir) {
 				/* Space = select current directory */
 				strcpy(path, current_dir);
 				FilenamesFree();
@@ -970,7 +983,7 @@ static int FileSelector(char *path, int select_dir, char pDirectories[][FILENAME
 					strcpy(current_dir, new_dir);
 					break;
 				}
-				BasicUIMessage("Cannot enter selected directory");
+				BasicUIMessage("Cannot enter selected directory", 1);
 				continue;
 			}
 			if (!select_dir) {
@@ -1060,15 +1073,15 @@ static int EditString(int fg, int bg, const char *title,
 				char temp_filename[FILENAME_MAX + 1];
 				char temp_path[FILENAME_MAX];
 				char temp_file[FILENAME_MAX];
-				char *p;
+				char *s;
 				/* FIXME: now we append '*' and then discard it
 				   just to workaround Util_splitpath() not recognizing
-				   DIR_SEP_CHAR when it's the last character */
+				   Util_DIR_SEP_CHAR when it's the last character */
 				strcpy(Util_stpcpy(temp_filename, string), "*");
 				Util_splitpath(temp_filename, temp_path, temp_file);
-				p = temp_file + strlen(temp_file) - 1;
-				if (*p == '*') { /* XXX: should be always... */
-					*p = '\0';
+				s = temp_file + strlen(temp_file) - 1;
+				if (*s == '*') { /* XXX: should be always... */
+					*s = '\0';
 					if (FileSelector(temp_path, TRUE, pDirectories, nDirectories)) {
 						Util_catpath(string, temp_path, temp_file);
 						caret = strlen(string);
@@ -1109,7 +1122,7 @@ static int EditFilename(const char *title, char *filename, char directories[][FI
 			if (edited_filename[0] != '\0' && strlen(edited_filename) < FILENAME_MAX - 1) {
 				char *p = edited_filename + strlen(edited_filename) - 1;
 				if (*p != '/' && *p != '\\') {
-					p[1] = DIR_SEP_CHAR;
+					p[1] = Util_DIR_SEP_CHAR;
 					p[2] = '\0';
 				}
 			}
@@ -1122,12 +1135,12 @@ static int EditFilename(const char *title, char *filename, char directories[][FI
 	return TRUE;
 }
 
-int BasicUIEditString(const char *title, char *string, int size)
+static int BasicUIEditString(const char *title, char *string, int size)
 {
 	return EditString(0x9a, 0x94, title, string, size, 3, 11, 32, NULL, -1);
 }
 
-int BasicUIGetSaveFilename(char *filename, char directories[][FILENAME_MAX], int n_directories)
+static int BasicUIGetSaveFilename(char *filename, char directories[][FILENAME_MAX], int n_directories)
 {
 #ifdef DO_DIR
 	return EditFilename("Save as ([Tab] = directory locator)", filename, directories, n_directories);
@@ -1136,7 +1149,7 @@ int BasicUIGetSaveFilename(char *filename, char directories[][FILENAME_MAX], int
 #endif
 }
 
-int BasicUIGetLoadFilename(char *filename, char directories[][FILENAME_MAX], int n_directories)
+static int BasicUIGetLoadFilename(char *filename, char directories[][FILENAME_MAX], int n_directories)
 {
 #ifdef DO_DIR
 	return FileSelector(filename, FALSE, directories, n_directories);
@@ -1145,7 +1158,7 @@ int BasicUIGetLoadFilename(char *filename, char directories[][FILENAME_MAX], int
 #endif
 }
 
-int BasicUIGetDirectoryPath(char *directory)
+static int BasicUIGetDirectoryPath(char *directory)
 {
 #ifdef DO_DIR
 	return FileSelector(directory, TRUE, NULL, 0);
@@ -1154,7 +1167,7 @@ int BasicUIGetDirectoryPath(char *directory)
 #endif
 }
 
-void BasicUIInfoScreen(const char *title, const char *message)
+static void BasicUIInfoScreen(const char *title, const char *message)
 {
 	int y = 2;
 	ClearScreen();
@@ -1164,18 +1177,18 @@ void BasicUIInfoScreen(const char *title, const char *message)
 		CenterPrint(0x9a, 0x94, message, y++);
 		while (*message++ != '\0');
 	}
-	BasicUIMessage("Press any key to continue");
+	BasicUIMessage("Press any key to continue", 1);
 }
 
-void BasicUIInit(void)
+static void BasicUIInit(void)
 {
 	if (!initialised) {
-		get_charset(charset);
+		MEMORY_GetCharset(charset);
 		initialised = TRUE;
 	}
 }
 
-tUIDriver basic_ui_driver = {
+UI_tDriver UI_BASIC_driver = {
 	&BasicUISelect,
 	&BasicUISelectInt,
 	&BasicUIEditString,
@@ -1187,9 +1200,9 @@ tUIDriver basic_ui_driver = {
 	&BasicUIInit
 };
 
-#ifdef KB_UI
+#ifdef USE_UI_BASIC_ONSCREEN_KEYBOARD
 
-int kb_ui(const char *title, int layout)
+int UI_BASIC_OnScreenKeyboard(const char *title, int layout)
 {
 #define LAYOUT_LEFT    2
 #define LAYOUT_TOP     5
@@ -1390,4 +1403,4 @@ int kb_ui(const char *title, int layout)
 	}
 }
 
-#endif /* KB_UI */
+#endif /* USE_UI_BASIC_ONSCREEN_KEYBOARD */

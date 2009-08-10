@@ -13,6 +13,8 @@
 #include "image.h"
 #include "pl_vk.h"
 
+#include "cpu.h"
+#include "akey.h"
 #include "config.h"
 #include "atari.h"
 #include "colours.h"
@@ -37,8 +39,6 @@ extern const int ButtonMapId[];
 extern int CropScreen;
 extern char *ScreenshotPath;
 
-extern UBYTE cim_encountered;
-
 static int ClearScreen;
 static int ScreenX;
 static int ScreenY;
@@ -56,7 +56,7 @@ static pl_perf_counter FpsCounter;
 static pl_vk_layout KeyboardLayout, KeypadLayout;
 static int JoyState[4] =  { 0xff, 0xff, 0xff, 0xff };
 static int TrigState[4] = { 1, 1, 1, 1 };
-static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - ATARI_WIDTH;
+static const int ScreenBufferSkip = SCREEN_BUFFER_WIDTH - Screen_WIDTH;
 
 PspImage *Screen;
 
@@ -70,22 +70,11 @@ int InitEmulation()
 {
   /* Create screen buffer */
   if (!(Screen = pspImageCreateVram(SCREEN_BUFFER_WIDTH, 
-  	ATARI_HEIGHT, PSP_IMAGE_INDEXED)))
+  	Screen_HEIGHT, PSP_IMAGE_INDEXED)))
     	return 0;
 
   Screen->Viewport.Width = 336;
-  Screen->Viewport.X = (ATARI_WIDTH - 336) >> 1;
-
-  /* Initialize palette */
-  int i, c;
-  for (i = 0; i < 256; i++)
-  {
-    c = colortable[i];
-    Screen->Palette[i] = 
-      RGB((c & 0x00ff0000) >> 16,
-          (c & 0x0000ff00) >> 8,
-          (c & 0x000000ff));
-  }
+  Screen->Viewport.X = (Screen_WIDTH - 336) >> 1;
 
   pl_vk_load(&KeyboardLayout, "vk-atari800.l2", "vk-atari800.png", NULL, 
              HandleKeyInput);
@@ -96,11 +85,26 @@ int InitEmulation()
   pl_perf_init_counter(&FpsCounter);
 
   /* Initialize emulator */
-  int foo = 0;
-  if (!Atari800_Initialise(&foo, NULL))
+  int argc = 0;
+  char exe_path[1024];
+  sprintf(exe_path, "%sEBOOT.PBP", pl_psp_get_app_directory());
+  char *argv[] = { exe_path };
+
+  if (!Atari800_Initialise(&argc, NULL))
   {
     pspImageDestroy(Screen);
     return 0;
+  }
+
+  /* Initialize palette */
+  int i, c;
+  for (i = 0; i < 256; i++)
+  {
+    c = Colours_table[i];
+    Screen->Palette[i] = 
+      RGB((c & 0x00ff0000) >> 16,
+          (c & 0x0000ff00) >> 8,
+          (c & 0x000000ff));
   }
 
   pl_snd_set_callback(0, AudioCallback, 0);
@@ -119,17 +123,18 @@ void TrashEmulation()
   Atari800_Exit(FALSE);
 }
 
-void Atari_Initialise(int *argc, char *argv[])
+int PLATFORM_Initialise(int *argc, char *argv[])
 {
 #ifdef SOUND
 	Sound_Initialise(argc, argv);
 #endif
+  return TRUE;
 }
 
-int Atari_Exit(int run_monitor)
+int PLATFORM_Exit(int run_monitor)
 {
-	Aflushlog();
-	return (cim_encountered) ? TRUE : FALSE;
+	Log_flushlog();
+	return (CPU_cim_encountered) ? TRUE : FALSE;
 }
 
 /* Copies the atari screen buffer to the image buffer */
@@ -138,17 +143,17 @@ void CopyScreenBuffer()
   int i, j;
   u8 *screen, *image;
 
-  screen = (u8*)atari_screen;
+  screen = (u8*)Screen_atari;
   image = (u8*)Screen->Pixels;
 
-  for (i = 0; i < ATARI_HEIGHT; i++)
+  for (i = 0; i < Screen_HEIGHT; i++)
   {
-    for (j = 0; j < ATARI_WIDTH; j++) *image++ = *screen++;
+    for (j = 0; j < Screen_WIDTH; j++) *image++ = *screen++;
     image += ScreenBufferSkip;
   }
 }
 
-void Atari_DisplayScreen(void)
+void PLATFORM_DisplayScreen(void)
 {
   CopyScreenBuffer();
 
@@ -165,7 +170,7 @@ void Atari_DisplayScreen(void)
   pspVideoPutImage(Screen, ScreenX, ScreenY, ScreenW, ScreenH);
 
   /* Draw keyboard */
-  if (KybdVis) pl_vk_render((machine_type == MACHINE_5200) 
+  if (KybdVis) pl_vk_render((Atari800_machine_type == Atari800_MACHINE_5200) 
     ? &KeypadLayout : &KeyboardLayout);
 
   if (Config.ShowFps)
@@ -196,17 +201,17 @@ void Atari_DisplayScreen(void)
   pspVideoSwapBuffers();
 }
 
-int Atari_Keyboard(void)
+int PLATFORM_Keyboard(void)
 {
-  return key_code;
+  return INPUT_key_code;
 }
 
-int Atari_PORT(int num)
+int PLATFORM_PORT(int num)
 {
   return JoyState[num];
 }
 
-int Atari_TRIG(int num)
+int PLATFORM_TRIG(int num)
 {
   return TrigState[num];
 }
@@ -215,13 +220,13 @@ int Atari_TRIG(int num)
 
 void Sound_Initialise(int *argc, char *argv[])
 {
-	enable_new_pokey = 0;
-  Pokey_sound_init(FREQ_17_EXACT, SOUND_FREQ, 1, SND_BIT16);
+	POKEYSND_enable_new_pokey = 0;
+  POKEYSND_Init(POKEYSND_FREQ_17_EXACT, SOUND_FREQ, 1, POKEYSND_BIT16);
 }
 
 static void AudioCallback(pl_snd_sample* buf, unsigned int samples, void *userdata)
 {
-  Pokey_process((short*)buf, samples);
+  POKEYSND_Process((short*)buf, samples);
 }
 
 void Sound_Update(void)
@@ -297,7 +302,7 @@ void RunEmulation()
   if (Config.FrameSync)
   {
     TicksPerUpdate = TicksPerSecond
-      / ((tv_mode == TV_NTSC) ? 60 : 50 / (Config.Frameskip + 1));
+      / ((Atari800_tv_mode == Atari800_TV_NTSC) ? 60 : 50 / (Config.Frameskip + 1));
     sceRtcGetCurrentTick(&LastTick);
   }
   Frame = 0;
@@ -319,7 +324,7 @@ void RunEmulation()
     /* Run the system emulation for a frame */
     if (++Frame > Config.Frameskip)
     {
-      Atari_DisplayScreen();
+      PLATFORM_DisplayScreen();
       Frame = 0;
     }
   }
@@ -332,31 +337,31 @@ void RunEmulation()
 
 inline void HandleKeyInput(unsigned int code, int on)
 {
-  key_code = AKEY_NONE;
-  key_consol = CONSOL_NONE;
+  INPUT_key_code = AKEY_NONE;
+  INPUT_key_consol = INPUT_CONSOL_NONE;
 
   if (code & KBD) /* Keyboard */
   { 
-    if (on) key_code = CODE_MASK(code); 
-    else key_code = AKEY_NONE;
+    if (on) INPUT_key_code = CODE_MASK(code); 
+    else INPUT_key_code = AKEY_NONE;
   }
   else if (code & CSL) /* Console */
   { 
-    if (on) key_consol ^= CODE_MASK(code); 
-    else key_consol = CONSOL_NONE;
+    if (on) INPUT_key_consol ^= CODE_MASK(code); 
+    else INPUT_key_consol = INPUT_CONSOL_NONE;
   }
   else if (code & STA) /* State-based (shift/ctrl) */
   {
     switch (CODE_MASK(code))
     {
-    case AKEY_SHFT: key_shift = on; break;
+    case AKEY_SHFT: INPUT_key_shift = on; break;
     case AKEY_CTRL: key_ctrl  = on; break;
     }
   }
   else if (code & SPC) /* Emulator-specific */
   {
-    if (on) key_code = -(int)CODE_MASK(code);
-    else key_code = AKEY_NONE;
+    if (on) INPUT_key_code = -(int)CODE_MASK(code);
+    else INPUT_key_code = AKEY_NONE;
   }
 }
 
@@ -368,9 +373,9 @@ int ParseInput()
 
   if (!KybdVis)
   {
-	  key_code = AKEY_NONE;
-	  key_consol = CONSOL_NONE;
-	  key_shift = key_ctrl = 0;
+	  INPUT_key_code = AKEY_NONE;
+	  INPUT_key_consol = INPUT_CONSOL_NONE;
+	  INPUT_key_shift = key_ctrl = 0;
 	}
 
   /* Get PSP input */
@@ -385,7 +390,7 @@ int ParseInput()
 #endif
 
   int i, on, code;
-  pl_vk_layout *layout = (machine_type == MACHINE_5200) 
+  pl_vk_layout *layout = (Atari800_machine_type == Atari800_MACHINE_5200) 
     ? &KeypadLayout : &KeyboardLayout;
 
   /* Navigate the virtual keyboard, if shown */
@@ -408,21 +413,21 @@ int ParseInput()
 	    else if (code & TRG) /* Trigger */
 	    { if (on) TrigState[0] = CODE_MASK(code); }
 	    else if (code & KBD) /* Keyboard */
-	    { if (on) key_code = CODE_MASK(code); }
+	    { if (on) INPUT_key_code = CODE_MASK(code); }
 	    else if (code & CSL) /* Console */
-	    { if (on) key_consol ^= CODE_MASK(code); }
+	    { if (on) INPUT_key_consol ^= CODE_MASK(code); }
 	    else if (code & STA) /* State-based (shift/ctrl) */
 	    {
         switch (CODE_MASK(code))
         {
-        case AKEY_SHFT: key_shift = on; break;
+        case AKEY_SHFT: INPUT_key_shift = on; break;
         case AKEY_CTRL: key_ctrl  = on; break;
         }
 	    }
 	    else if (code & SPC) /* Emulator-specific */
 	    {
-	      if (on && key_code == AKEY_NONE) 
-	        key_code = -(int)CODE_MASK(code);
+	      if (on && INPUT_key_code == AKEY_NONE) 
+	        INPUT_key_code = -(int)CODE_MASK(code);
 	    }
 	  }
 
@@ -466,18 +471,18 @@ int ParseInput()
       }
     }
 
-    if (key_code != AKEY_NONE)
+    if (INPUT_key_code != AKEY_NONE)
     {
-      if (machine_type == MACHINE_5200)
+      if (Atari800_machine_type == Atari800_MACHINE_5200)
       {
-        if (key_shift && 
-          !(key_code == AKEY_5200_HASH || key_code == AKEY_5200_ASTERISK))
-            key_code |= AKEY_SHFT;
+        if (INPUT_key_shift && 
+          !(INPUT_key_code == AKEY_5200_HASH || INPUT_key_code == AKEY_5200_ASTERISK))
+            INPUT_key_code |= AKEY_SHFT;
       }
       else
       {
-        if (key_shift) key_code |= AKEY_SHFT;
-        if (key_ctrl)  key_code |= AKEY_CTRL;
+        if (INPUT_key_shift) INPUT_key_code |= AKEY_SHFT;
+        if (key_ctrl)  INPUT_key_code |= AKEY_CTRL;
       }
     }
   }

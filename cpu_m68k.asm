@@ -18,7 +18,7 @@
 ;
 ;  You should have received a copy of the GNU General Public License
 ;  along with Atari800; if not, write to the Free Software
-;  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+;  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 ;
 ; Last changes    :   30th March 2003, gerhard.janka
 
@@ -99,6 +99,8 @@
   xdef _CPUPUT
   xdef _CPU_INIT
   xdef _cycles ;temporarily needed outside :)
+  xdef _cim_encountered
+  xdef _rts_handler
 
   ifd MONITOR_BREAK
 
@@ -157,6 +159,12 @@ _regS  ds.b 1   ; stack
 IRQ
 _IRQ  ds.b 1
       ds.b 1    ; dummy
+
+_cim_encountered
+      ds.b 1
+
+_rts_handler
+      ds.l 1
 
   even
 

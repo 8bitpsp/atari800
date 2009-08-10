@@ -1,8 +1,5 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Define to use back slash as directory separator. */
-#undef BACK_SLASH
-
 /* Target: standard I/O. */
 #undef BASIC
 
@@ -30,11 +27,17 @@
 /* Target: Windows with DirectX. */
 #undef DIRECTX
 
+/* Define to use back slash as directory separator. */
+#undef DIR_SEP_BACKSLASH
+
 /* Target: DOS VGA. */
 #undef DOSVGA
 
 /* Define to enable DOS style drives support. */
 #undef DOS_DRIVES
+
+/* Define to enable event recording. */
+#undef EVENT_RECORDING
 
 /* Target: Atari Falcon system. */
 #undef FALCON
@@ -203,6 +206,9 @@
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
 
+/* Define to 1 if you have the `strncpy' function. */
+#undef HAVE_STRNCPY
+
 /* Define to 1 if you have the `strrchr' function. */
 #undef HAVE_STRRCHR
 
@@ -280,8 +286,14 @@
 /* Define to 1 if you have the `vsnprintf' function. */
 #undef HAVE_VSNPRINTF
 
+/* Define to 1 if you have the <winsock2.h> header file. */
+#undef HAVE_WINSOCK2_H
+
 /* Define to allow sound interpolation. */
 #undef INTERPOLATE_SOUND
+
+/* Target: Java NestedVM. */
+#undef JAVANVM
 
 /* Define to use LINUX joystick. */
 #undef LINUX_JOYSTICK
@@ -305,6 +317,9 @@
 /* Define to activate 6502 opcode profiling. */
 #undef MONITOR_PROFILE
 
+/* Define to activate readline support in monitor. */
+#undef MONITOR_READLINE
+
 /* Define to activate TRACE command in monitor. */
 #undef MONITOR_TRACE
 
@@ -313,6 +328,12 @@
 
 /* Define to allow color changes inside a scanline. */
 #undef NEW_CYCLE_EXACT
+
+/* Define to use nonlinear POKEY mixing. */
+#undef NONLINEAR_MIXING
+
+/* Use NTSC video filter. */
+#undef NTSC_FILTER
 
 /* Define to the address where bug reports for this package should be sent. */
 #undef PACKAGE_BUGREPORT
@@ -332,6 +353,18 @@
 /* Define to use page-based attribute array. */
 #undef PAGED_ATTRIB
 
+/* Define to emulate the Black Box. */
+#undef PBI_BB
+
+/* Define to emulate the MIO board. */
+#undef PBI_MIO
+
+/* A prototype 80 column card for the 1090 expansion box. */
+#undef PBI_PROTO80
+
+/* Define to emulate the 1400XL/1450XLD. */
+#undef PBI_XLD
+
 /* Target: Sony PlayStation 2. */
 #undef PS2
 
@@ -340,6 +373,12 @@
 
 /* Define to use R: device. */
 #undef R_IO_DEVICE
+
+/* Define to use IP network connection with the R: device. */
+#undef R_NETWORK
+
+/* Define to use the host serial port with the R: device. */
+#undef R_SERIAL
 
 /* Target: SDL library. */
 #undef SDL
@@ -369,19 +408,19 @@
 #undef STEREO_SOUND
 
 /* Save additional config file options. */
-#undef SUPPORTS_ATARI_CONFIGSAVE
+#undef SUPPORTS_PLATFORM_CONFIGSAVE
 
 /* Additional config file options. */
-#undef SUPPORTS_ATARI_CONFIGURE
+#undef SUPPORTS_PLATFORM_CONFIGURE
 
-/* Target: Linux with SVGALib. */
-#undef SVGALIB
+/* Update the Palette if it changed. */
+#undef SUPPORTS_PLATFORM_PALETTEUPDATE
 
-/* Define to use Toshiba Joystick Mouse support. */
-#undef SVGA_JOYMOUSE
+/* Platform-specific sleep function. */
+#undef SUPPORTS_PLATFORM_SLEEP
 
-/* Define for drawing every 1/50 sec only 1/refresh of screen. */
-#undef SVGA_SPEEDUP
+/* Reinitialise the sound system. */
+#undef SUPPORTS_SOUND_REINIT
 
 /* Alternate system-wide config file for non-Unix OS. */
 #undef SYSTEM_WIDE_CFG_FILE
@@ -391,9 +430,6 @@
 
 /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 #undef TM_IN_SYS_TIME
-
-/* Define to use clock() instead of gettimeofday(). */
-#undef USE_CLOCK
 
 /* Target: Curses-compatible library. */
 #undef USE_CURSES
@@ -419,6 +455,9 @@
 
 /* Target: Standard X11. */
 #undef X11
+
+/* Emulate the XEP80. */
+#undef XEP80_EMULATION
 
 /* Target: X11 with XView. */
 #undef XVIEW
