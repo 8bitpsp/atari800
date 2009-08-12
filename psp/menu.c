@@ -25,6 +25,7 @@
 #include "pl_util.h"
 #include "pl_ini.h"
 #include "pl_file.h"
+#include "libmz/unzip.h"
 
 #define TAB_QUICKLOAD 0
 #define TAB_STATE     1
@@ -153,25 +154,28 @@ static pl_file_path GamePath;
 static pl_file_path SaveStatePath;
 static pl_file_path ConfigPath;
 static pl_file_path ScreenshotPath;
+static pl_file_path TempFile;
+static pl_file_path TempPath;
 
 static const char 
   *BasicName = "BASIC",
   *EmptyCartName = "5200",
-  *OptionsFile = "options.ini",
+  *OptionsFile = "system/options.ini",
   *ConfigDir = "config",
   *SaveStateDir = "savedata",
   *DefaultComputerConfigFile = "comp_def",
   *DefaultConsoleConfigFile = "cons_def",
   *QuickloadFilter[] = 
-    { "XEX", "EXE", "COM", "BIN", // Executables
-      "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", // Disk images
+    { "ZIP",
+      "XEX", "EXE", "COM", "BIN", // Executables
+      "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", "PRO", // Disk images
       "BAS", "LST", // Listings
       "CAR", "CART", "ROM", "A52", // Cartridges
       "CAS", // Cassette tapes
       '\0' },
   VacantText[] = "Off",
   *DiskFilter[] = 
-    { "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", '\0' },
+    { "ZIP", "ATR", "XFD", "ATR.GZ", "ATZ", "XFD.GZ", "XFZ", "DCM", "PRO", '\0' },
   PresentSlotText[] = "\026\244\020 Save\t\026\001\020 Load\t\026\243\020 Delete",
   EmptySlotText[] = "\026\244\020 Save",
   ControlHelpText[] = "\026\250\020 Change mapping\t\026\001\020 Save to \271\t"
@@ -217,12 +221,21 @@ PL_MENU_OPTIONS_BEGIN(FrameSkipOptions)
   PL_MENU_OPTION("Skip 5 frame", 5)
 PL_MENU_OPTIONS_END
 PL_MENU_OPTIONS_BEGIN(MachineTypeOptions)
-  PL_MENU_OPTION("800",  MACHINE_TYPE(Atari800_MACHINE_OSB,  48))
-  PL_MENU_OPTION("800 XL", MACHINE_TYPE(Atari800_MACHINE_XLXE, 64))
-  PL_MENU_OPTION("130 XE", MACHINE_TYPE(Atari800_MACHINE_XLXE, 128))
-  PL_MENU_OPTION("320 XE (Compy Shop)", MACHINE_TYPE(Atari800_MACHINE_XLXE, MEMORY_RAM_320_COMPY_SHOP))
-  PL_MENU_OPTION("320 XE (Rambo)", MACHINE_TYPE(Atari800_MACHINE_XLXE, MEMORY_RAM_320_RAMBO))
-  PL_MENU_OPTION("5200", MACHINE_TYPE(Atari800_MACHINE_5200, 16))
+  PL_MENU_OPTION("Atari OS/A (16 KB)",MACHINE_TYPE(Atari800_MACHINE_OSA,16))
+  PL_MENU_OPTION("Atari OS/A (48 KB)",MACHINE_TYPE(Atari800_MACHINE_OSA,48))
+  PL_MENU_OPTION("Atari OS/A (52 KB)",MACHINE_TYPE(Atari800_MACHINE_OSA,52))
+  PL_MENU_OPTION("Atari OS/B (16 KB)",MACHINE_TYPE(Atari800_MACHINE_OSB,16))
+  PL_MENU_OPTION("Atari OS/B (48 KB)",MACHINE_TYPE(Atari800_MACHINE_OSB,48))
+  PL_MENU_OPTION("Atari OS/B (52 KB)",MACHINE_TYPE(Atari800_MACHINE_OSB,52))
+  PL_MENU_OPTION("Atari 600XL (16 KB)",MACHINE_TYPE(Atari800_MACHINE_XLXE,16))
+  PL_MENU_OPTION("Atari 800XL (64 KB)",MACHINE_TYPE(Atari800_MACHINE_XLXE,64))
+  PL_MENU_OPTION("Atari 130XE (128 KB)",MACHINE_TYPE(Atari800_MACHINE_XLXE,128))
+  PL_MENU_OPTION("Atari XL/XE (192 KB)",MACHINE_TYPE(Atari800_MACHINE_XLXE,192))
+  PL_MENU_OPTION("Atari XL/XE (320 KB RAMBO)",MACHINE_TYPE(Atari800_MACHINE_XLXE,MEMORY_RAM_320_RAMBO))
+  PL_MENU_OPTION("Atari XL/XE (320 KB COMPY SHOP)",MACHINE_TYPE(Atari800_MACHINE_XLXE,MEMORY_RAM_320_COMPY_SHOP))
+  PL_MENU_OPTION("Atari XL/XE (576 KB)",MACHINE_TYPE(Atari800_MACHINE_XLXE,576))
+  PL_MENU_OPTION("Atari XL/XE (1088 KB)",MACHINE_TYPE(Atari800_MACHINE_XLXE,1088))
+  PL_MENU_OPTION("Atari 5200 (16 KB)",MACHINE_TYPE(Atari800_MACHINE_5200,16))
 PL_MENU_OPTIONS_END
 PL_MENU_OPTIONS_BEGIN(TVModeOptions)
   PL_MENU_OPTION("NTSC", Atari800_TV_NTSC)
@@ -520,6 +533,7 @@ static int LoadState(const char *path);
 static PspImage* SaveState(const char *path, PspImage *icon);
 
 int LoadDiskImage(const char *path);
+static const char *PrepareFile(const char *path);
 
 /* Interface callbacks */
 static int  OnGenericCancel(const void *uiobject, const void *param);
@@ -627,6 +641,13 @@ void InitMenu()
   sprintf(SaveStatePath, "%s%s/", pl_psp_get_app_directory(), SaveStateDir);
   sprintf(ScreenshotPath, "ms0:/PSP/PHOTO/%s/", PSP_APP_NAME);
   sprintf(ConfigPath, "%s%s/", pl_psp_get_app_directory(), ConfigDir);
+  sprintf(TempPath, "%stemp/", pl_psp_get_app_directory());
+
+  /* Create paths */
+  if (!pl_file_exists(SaveStatePath))
+    pl_file_mkdir_recursive(SaveStatePath);
+  if (!pl_file_exists(ConfigPath))
+    pl_file_mkdir_recursive(ConfigPath);
 
   /* Initialize UI components */
   UiMetric.Font = &PspStockFont;
@@ -667,7 +688,7 @@ void InitMenu()
   Atari800_InitialiseMachine();
 
   /* Load the background image */
-  Background = pspImageLoadPng("background.png");
+  Background = pspImageLoadPng("system/background.png");
   UiMetric.Background = Background;
 
   /* Init NoSaveState icon image */
@@ -954,9 +975,9 @@ void OnSplashRender(const void *splash, const void *null)
     PSP_APP_NAME" version "PSP_APP_VER" ("__DATE__")",
     "\026http://psp.akop.org/atari800",
     " ",
-    "2007 Akop Karapetyan (port)",
-    "1997-2007 Atari800 team (emulation)",
-    "1995-1997 David Firth (emulation)",
+    "2007 Akop Karapetyan",
+    "1997-2007 Atari800 team",
+    "1995-1997 David Firth",
     NULL
   };
 
@@ -1170,8 +1191,10 @@ static int OnMenuItemChanged(const struct PspUiMenu *uimenu, pl_menu_item* item,
   return 1;
 }
 
-static int OnSwitchDiskImageOk(const void *browser, const void *path)
+static int OnSwitchDiskImageOk(const void *browser, const void *file_path)
 {
+  const char *path = PrepareFile(file_path);
+
   /* Detect disk type */
   switch(AFILE_DetectFileType((char*)path))
   {
@@ -1216,10 +1239,10 @@ static int OnSwitchDiskImageOk(const void *browser, const void *path)
 
   /* Reset loaded game */
   if (LoadedGame) free(LoadedGame);
-  LoadedGame = strdup((char*)path);
+  LoadedGame = strdup((char*)file_path);
 
   /* Reset current game path */
-  pl_file_get_parent_directory(path, GamePath, sizeof(GamePath));
+  pl_file_get_parent_directory(LoadedGame, GamePath, sizeof(GamePath));
 
   /* Load control set */
   LoadGameConfig(LoadedGame, &ActiveGameConfig);
@@ -1591,11 +1614,129 @@ int LoadCartridge(const char *path)
   return 1;
 }
 
-int OnQuickloadOk(const void *browser, const void *path)
+static const char *PrepareFile(const char *path)
+{
+  const char *game_path = path;
+  void *file_buffer = NULL;
+  int file_size = 0;
+
+  if (pl_file_is_of_type(path, "ZIP"))
+  {
+    pspUiFlashMessage("Loading compressed file, please wait...");
+
+    char archived_file[512];
+    unzFile zipfile = NULL;
+    unz_global_info gi;
+    unz_file_info fi;
+
+    /* Open archive for reading */
+    if (!(zipfile = unzOpen(path)))
+      return NULL;
+
+    /* Get global ZIP file information */
+    if (unzGetGlobalInfo(zipfile, &gi) != UNZ_OK)
+    {
+      unzClose(zipfile);
+      return NULL;
+    }
+
+    const char *extension;
+    int i, j;
+
+    for (i = 0; i < (int)gi.number_entry; i++)
+    {
+      /* Get name of the archived file */
+      if (unzGetCurrentFileInfo(zipfile, &fi, archived_file, 
+          sizeof(archived_file), NULL, 0, NULL, 0) != UNZ_OK)
+      {
+        unzClose(zipfile);
+        return NULL;
+      }
+
+      extension = pl_file_get_extension(archived_file);
+      for (j = 1; QuickloadFilter[j]; j++)
+      {
+        if (strcasecmp(QuickloadFilter[j], extension) == 0)
+        {
+          file_size = fi.uncompressed_size;
+
+          /* Open archived file for reading */
+          if(unzOpenCurrentFile(zipfile) != UNZ_OK)
+          {
+            unzClose(zipfile); 
+            return NULL;
+          }
+
+          if (!(file_buffer = malloc(file_size)))
+          {
+            unzCloseCurrentFile(zipfile);
+            unzClose(zipfile); 
+            return NULL;
+          }
+
+          unzReadCurrentFile(zipfile, file_buffer, file_size);
+          unzCloseCurrentFile(zipfile);
+
+          goto close_archive;
+        }
+      }
+
+      /* Go to the next file in the archive */
+      if (i + 1 < (int)gi.number_entry)
+      {
+        if (unzGoToNextFile(zipfile) != UNZ_OK)
+        {
+          unzClose(zipfile);
+          return NULL;
+        }
+      }
+    }
+
+    /* No eligible files */
+    return NULL;
+
+close_archive:
+    unzClose(zipfile);
+
+    /* Create temp. path */
+		if (!pl_file_exists(TempPath))
+		  pl_file_mkdir_recursive(TempPath);
+
+    /* Remove temp. file (if any) */
+    if (*TempFile && pl_file_exists(TempFile))
+      pl_file_rm(TempFile);
+
+    /* Define temp filename */
+    sprintf(TempFile, "%s%s", TempPath, archived_file);
+
+    /* Write file to stick */
+    FILE *file = fopen(TempFile, "w");
+    if (!file)
+    {
+      *TempFile = '\0';
+      return NULL;
+    }
+    if (fwrite(file_buffer, 1, file_size, file) < file_size)
+    {
+      fclose(file);
+      *TempFile = '\0';
+      return NULL;
+    }
+    fclose(file);
+
+    game_path = TempFile;
+  }
+
+  return game_path;
+}
+
+int OnQuickloadOk(const void *browser, const void *file_path)
 {
   /* Eject disk and cartridge */
   CARTRIDGE_Remove();
   SIO_Dismount(1);
+
+  const char *path = PrepareFile(file_path);
 
   switch (AFILE_DetectFileType(path))
   {
@@ -1629,10 +1770,10 @@ int OnQuickloadOk(const void *browser, const void *path)
 
   /* Reset loaded game */
   if (LoadedGame) free(LoadedGame);
-  LoadedGame = strdup(path);
+  LoadedGame = strdup(file_path);
 
   /* Reset current game path */
-  pl_file_get_parent_directory(path, GamePath, sizeof(GamePath));
+  pl_file_get_parent_directory(LoadedGame, GamePath, sizeof(GamePath));
 
   /* Load control set */
   LoadGameConfig(LoadedGame, &ActiveGameConfig);
@@ -1723,5 +1864,9 @@ void TrashMenu()
   if (NoSaveIcon) pspImageDestroy(NoSaveIcon);
 
   if (LoadedGame) free(LoadedGame);
+
+  /* Remove temp. files (if any) */
+  if (*TempFile && pl_file_exists(TempFile))
+    pl_file_rm(TempFile);
 }
 

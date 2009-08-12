@@ -3,6 +3,7 @@ PSPSDK=$(shell psp-config --pspsdk-path)
 PSPAPP=./psp
 DATA=$(PSPAPP)/data
 PSPLIB=$(PSPAPP)/lib
+MZLIB=$(PSPAPP)/libmz
 
 PSP_APP_NAME=Atari800 PSP
 PSP_APP_VER=2.1.0.1
@@ -30,8 +31,8 @@ CFLAGS=-O2 -G0 -Wall $(BASE_DEFS) $(DEFINES)
 CXXFLAGS=$(CFLAGS) -fno-exceptions -fno-rtti
 ASFLAGS=$(CFLAGS)
 INCDIR=$(PSPLIB) $(PSPAPP)
-LIBDIR=. $(PSPLIB)
-LIBS=-lpsplib -lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc \
+LIBDIR=. $(PSPLIB) $(MZLIB)
+LIBS=-lminizip -lpsplib -lpng -lz -lm -lc -lpspgu -lpsppower -lpspaudio -lpsprtc \
      -lpspwlan -lpspnet_adhoc -lpspnet_adhocctl -lpspnet_adhocmatching
 
 all: build_libs
@@ -41,6 +42,8 @@ include $(PSPSDK)/lib/build.mak
 
 build_libs:
 	cd $(PSPLIB) ; $(MAKE)
+	cd $(MZLIB) ; $(MAKE) -f Makefile.psp
 clean_libs:
 	cd $(PSPLIB) ; $(MAKE) clean
+	cd $(MZLIB) ; $(MAKE) -f Makefile.psp clean
 

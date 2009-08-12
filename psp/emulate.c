@@ -76,20 +76,16 @@ int InitEmulation()
   Screen->Viewport.Width = 336;
   Screen->Viewport.X = (Screen_WIDTH - 336) >> 1;
 
-  pl_vk_load(&KeyboardLayout, "vk-atari800.l2", "vk-atari800.png", NULL, 
-             HandleKeyInput);
-  pl_vk_load(&KeypadLayout, "vk-atari5200.l2", "vk-atari5200.png", NULL, 
-             HandleKeyInput);
+  pl_vk_load(&KeyboardLayout, "system/vk-atari800.l2", 
+                              "system/vk-atari800.png", NULL, HandleKeyInput);
+  pl_vk_load(&KeypadLayout, "system/vk-atari5200.l2", 
+                            "system/vk-atari5200.png", NULL, HandleKeyInput);
 
   /* Initialize performance counter */
   pl_perf_init_counter(&FpsCounter);
 
   /* Initialize emulator */
   int argc = 0;
-  char exe_path[1024];
-  sprintf(exe_path, "%sEBOOT.PBP", pl_psp_get_app_directory());
-  char *argv[] = { exe_path };
-
   if (!Atari800_Initialise(&argc, NULL))
   {
     pspImageDestroy(Screen);
