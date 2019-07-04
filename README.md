@@ -10,11 +10,10 @@ Atari 800, 800XL, 130XE and 5200 emulator
 New Features
 ------------
 
-#### Version 2.1.0.1 (August 11 2009)
+#### Version 2.1.0.2 Jul 4 2019
 
-*   Emulator updated to version 2.1.0
-*   Added ZIP file support
-*   PSPLIB updated to latest version: images are now saved under PSP/PHOTOS/ATARI800 PSP; virtual keyboard updated; screenshot previews in file browser
+[Download](https://github.com/8bitpsp/atari800/releases/tag/v2.1.0.2)
+*   Added support for second fire button for Atari 5200 games
 
 Installation
 ------------
@@ -71,6 +70,12 @@ To compile, ensure that [zlib](svn://svn.pspdev.org/psp/trunk/zlib) and [libpng]
 
 Version History
 ---------------
+
+#### Version 2.1.0.1 (August 11 2009)
+
+*   Emulator updated to version 2.1.0
+*   Added ZIP file support
+*   PSPLIB updated to latest version: images are now saved under PSP/PHOTOS/ATARI800 PSP; virtual keyboard updated; screenshot previews in file browser
 
 #### 2.0.3.27 (October 09 2007)
 
