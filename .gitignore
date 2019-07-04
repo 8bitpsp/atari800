@@ -1,0 +1,7 @@
+*.o
+EBOOT.PBP
+*.a
+psp/lib/genfont
+psp/lib/stockfont.h
+*.SFO
+*.elf

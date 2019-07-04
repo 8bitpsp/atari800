@@ -97,7 +97,7 @@ DefaultConsoleConfig =
     JOY|INPUT_STICK_BACK,       /* D-pad Down   */
     JOY|INPUT_STICK_LEFT,       /* D-pad Left   */
     JOY|INPUT_STICK_RIGHT,      /* D-pad Right  */
-    0,                    /* Square       */
+    STA|AKEY_SHFT,        /* Square       */
     TRG|0,                /* Cross        */
     0,                    /* Circle       */
     0,                    /* Triangle     */
@@ -329,7 +329,8 @@ PL_MENU_OPTIONS_BEGIN(ConsoleButtonMapOptions)
   PL_MENU_OPTION("Joystick: Down", JOY|INPUT_STICK_BACK)
   PL_MENU_OPTION("Joystick: Left", JOY|INPUT_STICK_LEFT)
   PL_MENU_OPTION("Joystick: Right",JOY|INPUT_STICK_RIGHT)
-  PL_MENU_OPTION("Joystick: Fire", TRG|0)
+  PL_MENU_OPTION("Joystick: Fire (Low Button)", TRG|0)
+  PL_MENU_OPTION("Joystick: Fire (Top Button)", STA|AKEY_SHFT)
   /* Keypad */
   PL_MENU_OPTION("1", KBD|AKEY_5200_1) PL_MENU_OPTION("2", KBD|AKEY_5200_2)
   PL_MENU_OPTION("3", KBD|AKEY_5200_3) PL_MENU_OPTION("4", KBD|AKEY_5200_4)
