@@ -3,7 +3,7 @@ Atari800 PSP
 
 Atari 800, 800XL, 130XE and 5200 emulator
 
-&copy; 2007-2009 Akop Karapetyan  
+&copy; 2007-2019 Akop Karapetyan  
 &copy; 1997-2007 Perry McFarlane, Rich Lawrence, Thomas Richter, Radek Sterba, Robert Golias, Petr Stehlik  
 &copy; 1995-1997 David Firth
 
@@ -12,8 +12,9 @@ New Features
 
 #### Version 2.1.0.2 Jul 4 2019
 
-[Download](https://github.com/8bitpsp/atari800/releases/tag/v2.1.0.2)
 *   Added support for second fire button for Atari 5200 games
+
+[Download](https://github.com/8bitpsp/atari800/releases/tag/v2.1.0.2)
 
 Installation
 ------------
@@ -42,7 +43,8 @@ During emulation, Atari 5200:
 | ------------------------------- | ---------------------------- |
 | D-pad up/down/left/right        | Joystick up/down/left/right  |
 | Analog stick up/down/left/right | Joystick up/down/left/right  |
-| X (cross)                       | Joystick trigger             |
+| X (cross)                       | Joystick trigger (Low button)|
+| [ ] (square)                    | Joystick trigger (Top button)|
 | Select                          | Pause console button         |
 | Start                           | Start console button         |
 | [R]                             | Show virtual keypad          |
@@ -75,7 +77,7 @@ Version History
 
 *   Emulator updated to version 2.1.0
 *   Added ZIP file support
-*   PSPLIB updated to latest version: images are now saved under PSP/PHOTOS/ATARI800 PSP; virtual keyboard updated; screenshot previews in file browser
+*   PSPLIB updated to latest version: images are now saved under `PSP/PHOTOS/ATARI800 PSP`; virtual keyboard updated; screenshot previews in file browser
 
 #### 2.0.3.27 (October 09 2007)
 
